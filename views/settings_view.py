@@ -1,0 +1,137 @@
+"""⚙️ Einstellungen & Klausurtermine."""
+
+from __future__ import annotations
+
+from datetime import date
+
+import pandas as pd
+import streamlit as st
+
+from utils import ai
+from utils import spaced_repetition as sr
+from utils.config import WEEKDAYS, module_label
+from utils.storage import (days_until_exam, get_exam_date, get_schedule, load_settings, save_settings,
+                           semester_dates)
+
+
+def render(cfg: dict) -> None:
+    settings = load_settings()
+    st.title("⚙️ Einstellungen & Klausurtermine")
+    ids = [m["id"] for m in cfg["modules"]]
+
+    # --- Klausurtermine -----------------------------------------------------
+    st.subheader("📝 Klausurtermine")
+    st.caption("Je näher die Klausur, desto kürzer die Wiederholungsintervalle und desto höher die Priorität "
+               "der Lernkarten (≤ 45 Tage: mittel, ≤ 21: hoch, ≤ 7: kritisch).")
+    with st.form("exam_form"):
+        new_dates = {}
+        for mid in ids:
+            entry = settings["exam_dates"].get(mid) or {}
+            c1, c2, c3, c4 = st.columns([3, 2, 1, 2])
+            c1.markdown(f"**{module_label(cfg, mid)}**")
+            d = c2.date_input("Datum", value=get_exam_date(mid), key=f"exam_d_{mid}", format="DD.MM.YYYY",
+                              label_visibility="collapsed")
+            t = c3.text_input("Uhrzeit", entry.get("time", ""), key=f"exam_t_{mid}", placeholder="10:00",
+                              label_visibility="collapsed")
+            r = c4.text_input("Raum", entry.get("room", ""), key=f"exam_r_{mid}", placeholder="Raum",
+                              label_visibility="collapsed")
+            new_dates[mid] = {"date": d.isoformat() if d else "", "time": t, "room": r}
+        if st.form_submit_button("💾 Klausurtermine speichern", type="primary"):
+            settings["exam_dates"] = new_dates
+            save_settings()
+            st.success("Gespeichert.")
+            st.rerun()
+    for mid in ids:
+        days = days_until_exam(mid)
+        if days is not None and days >= 0:
+            st.caption(f"{module_label(cfg, mid, short=True)}: {sr.exam_pressure(days)['label']}")
+
+    # --- Semester -------------------------------------------------------------
+    st.subheader("🗓️ Semester")
+    start, end = semester_dates(cfg)
+    with st.form("semester_form"):
+        c1, c2 = st.columns(2)
+        new_start = c1.date_input("Vorlesungsbeginn", start, format="DD.MM.YYYY")
+        new_end = c2.date_input("Vorlesungsende", end, format="DD.MM.YYYY")
+        if st.form_submit_button("Speichern"):
+            if new_end <= new_start:
+                st.error("Das Vorlesungsende muss nach dem Beginn liegen.")
+            else:
+                settings["semester_start"], settings["semester_end"] = new_start.isoformat(), new_end.isoformat()
+                save_settings()
+                st.success("Gespeichert.")
+
+    # --- Stundenplan ----------------------------------------------------------
+    st.subheader("🕒 Stundenplan")
+    st.caption("Grundlage für Wochenübersicht und To-do-Fristen. Standardwerte stammen aus config.json – "
+               "bitte an deinen LSF-Stundenplan anpassen.")
+    names = {mid: module_label(cfg, mid, short=True) for mid in ids}
+    rows = [{"Modul": names.get(e["module_id"], e["module_id"]), "Typ": e.get("type", "Vorlesung"),
+             "Tag": WEEKDAYS[int(e.get("weekday", 0))], "Beginn": e.get("start", ""), "Ende": e.get("end", ""),
+             "Raum": e.get("room", "")} for e in get_schedule(cfg)]
+    edited = st.data_editor(
+        pd.DataFrame(rows), num_rows="dynamic", hide_index=True, width="stretch", key="schedule_editor",
+        column_config={
+            "Modul": st.column_config.SelectboxColumn(options=list(names.values()), required=True),
+            "Typ": st.column_config.SelectboxColumn(options=["Vorlesung", "Übung", "Tutorium", "Sonstiges"],
+                                                    required=True),
+            "Tag": st.column_config.SelectboxColumn(options=WEEKDAYS, required=True),
+            "Beginn": st.column_config.TextColumn(help="Format HH:MM"),
+            "Ende": st.column_config.TextColumn(help="Format HH:MM"),
+        })
+    c1, c2 = st.columns(2)
+    if c1.button("💾 Stundenplan speichern", type="primary"):
+        name_to_id = {v: k for k, v in names.items()}
+        schedule = []
+        for _, row in edited.iterrows():
+            if not row["Modul"] or not row["Tag"]:
+                continue
+            schedule.append({"module_id": name_to_id[row["Modul"]], "type": row["Typ"] or "Vorlesung",
+                             "weekday": WEEKDAYS.index(row["Tag"]), "start": row["Beginn"] or "",
+                             "end": row["Ende"] or "", "room": row["Raum"] or ""})
+        settings["schedule"] = schedule
+        save_settings()
+        st.success("Stundenplan gespeichert.")
+    if c2.button("↩️ Auf config.json zurücksetzen"):
+        settings["schedule"] = None
+        save_settings()
+        st.rerun()
+
+    # --- Lernparameter ----------------------------------------------------------
+    st.subheader("🧠 Lernparameter")
+    learning = settings["learning"]
+    with st.form("learning_form"):
+        c1, c2, c3 = st.columns(3)
+        limit = c1.number_input("Max. Wiederholungen pro Modul und Sitzung", 10, 500,
+                                int(learning["daily_review_limit"]), step=10)
+        prep = c2.number_input("Vorbereitung: Tage vor der Vorlesung", 0, 6, int(learning["prep_days_before"]))
+        review = c3.number_input("Nachbereitung: Tage nach der Vorlesung", 0, 6, int(learning["review_days_after"]))
+        if st.form_submit_button("Speichern"):
+            learning.update({"daily_review_limit": int(limit), "prep_days_before": int(prep),
+                             "review_days_after": int(review)})
+            save_settings()
+            st.success("Gespeichert.")
+
+    # --- KI -----------------------------------------------------------------------
+    st.subheader("🤖 KI-Einstellungen")
+    if ai.is_available():
+        st.success("API-Key aus `.env` geladen (wird aus Sicherheitsgründen nicht angezeigt).")
+    else:
+        st.warning("Kein API-Key gefunden. Lege im Projektordner eine Datei `.env` an:\n\n"
+                   "```\nANTHROPIC_API_KEY=sk-ant-...\n```\n\nund starte die App neu. Ohne Key laufen "
+                   "alle Funktionen im Offline-Modus (heuristische Analyse, keine Chats).")
+    with st.form("ai_form"):
+        c1, c2 = st.columns(2)
+        models = list(ai.MODELS)
+        model = c1.selectbox("Modell", models, index=models.index(settings["ai"].get("model", ai.DEFAULT_MODEL))
+                             if settings["ai"].get("model") in models else 0, format_func=ai.MODELS.get)
+        efforts = list(ai.EFFORTS)
+        effort = c2.selectbox("Gründlichkeit (Effort)", efforts,
+                              index=efforts.index(settings["ai"].get("effort", "medium"))
+                              if settings["ai"].get("effort") in efforts else 1, format_func=ai.EFFORTS.get)
+        if st.form_submit_button("Speichern"):
+            settings["ai"] = {"model": model, "effort": effort}
+            save_settings()
+            st.success("Gespeichert.")
+
+    st.caption(f"Stand: {date.today():%d.%m.%Y} · Daten liegen lokal im Ordner `data/`.")

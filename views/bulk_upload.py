@@ -1,0 +1,129 @@
+"""📂 Bulk-Upload & Moodle-Import: viele PDFs (oder ZIP-Ordner) automatisch zuordnen."""
+
+from __future__ import annotations
+
+import hashlib
+import zipfile
+
+import pandas as pd
+import streamlit as st
+
+from utils.config import module_label
+from utils.pdf_parser import (extract_pdf, find_formula_candidates, guess_chapter_index, guess_doc_type, guess_module,
+                              pdfs_from_zip)
+from utils.storage import add_document, add_formulas, load_module, save_module
+
+
+def _collect(files) -> tuple[list[dict], list[str]]:
+    items, errors = [], []
+    for f in files:
+        content = f.getvalue()
+        if f.name.lower().endswith(".zip"):
+            try:
+                for inner_path, inner_bytes in pdfs_from_zip(content):
+                    items.append({"path": f"{f.name}/{inner_path}", "name": inner_path.split("/")[-1],
+                                  "content": inner_bytes})
+            except zipfile.BadZipFile:
+                errors.append(f"{f.name}: kein gültiges ZIP-Archiv")
+        else:
+            items.append({"path": f.name, "name": f.name, "content": content})
+    return items, errors
+
+
+def render(cfg: dict) -> None:
+    st.title("📂 Bulk-Upload & Moodle-Import")
+    st.markdown(
+        "Lade ganze Wochenordner hoch – einzelne PDFs oder den **ZIP-Download eines Moodle-Ordners**. "
+        "Die App ordnet jede Datei anhand von Dateiname, Ordnerpfad und Inhalt automatisch **Modul**, "
+        "**Dokumenttyp** (Folien, Übungsblatt, Musterlösung, Altklausur) und **Kapitel** zu. "
+        "Du kannst die Zuordnung vor dem Import korrigieren.")
+    if result := st.session_state.pop("bulk_result", None):
+        st.success(f"✅ {result[0]} Datei(en) importiert"
+                   + (f", {result[1]} Duplikat(e) übersprungen." if result[1] else "."))
+
+    files = st.file_uploader("PDFs oder ZIP-Archive", type=["pdf", "zip"], accept_multiple_files=True,
+                             key=f"bulk_files_{st.session_state.get('bulk_round', 0)}")
+    if not files:
+        with st.expander("💡 Tipps für eine gute automatische Zuordnung"):
+            st.markdown(
+                "- Dateinamen wie `Mathe_VL03_Folien.pdf`, `ReWe_Uebungsblatt_4.pdf`, `IuF_Loesung_Blatt2.pdf`\n"
+                "- Ordnerpfade aus Moodle werden mit ausgewertet, z. B. `Statistik/Woche 5/…`\n"
+                "- Kapitelnummern werden aus `Kap`, `Kapitel`, `VL`, `Vorlesung`, `Blatt`, `Woche` … erkannt\n"
+                "- Schlüsselwörter pro Modul lassen sich in `config.json` (Feld `keywords`) erweitern")
+        return
+
+    items, errors = _collect(files)
+    for err in errors:
+        st.error(err)
+    if not items:
+        st.warning("Keine PDFs gefunden.")
+        return
+
+    ids = [m["id"] for m in cfg["modules"]]
+    module_names = {mid: module_label(cfg, mid, short=True) for mid in ids}
+    type_names = cfg["document_types"]
+    rows = []
+    progress = st.progress(0.0, text="Analysiere Dateien …")
+    for i, item in enumerate(items):
+        extracted = extract_pdf(item["content"])
+        item["extracted"] = extracted
+        text = "\n".join(extracted["pages"])
+        module_id, score = guess_module(item["path"], text, cfg["modules"])
+        module_id = module_id or ids[0]
+        chapters = load_module(module_id)["chapters"]
+        rows.append({
+            "Importieren": True,
+            "Datei": item["path"],
+            "Modul": module_names[module_id],
+            "Typ": type_names[guess_doc_type(item["path"], text)],
+            "Kapitel-Nr.": guess_chapter_index(item["path"], text, chapters),
+            "Seiten": len(extracted["pages"]),
+            "Sicherheit": "hoch" if score >= 5 else "mittel" if score >= 2 else "niedrig – bitte prüfen",
+            "_hash": hashlib.sha1(item["content"]).hexdigest(),
+        })
+        progress.progress((i + 1) / len(items), text=f"Analysiere {item['name']} …")
+    progress.empty()
+
+    st.markdown(f"#### Vorgeschlagene Zuordnung ({len(rows)} Datei(en))")
+    st.caption("Kapitel-Nr. 0 = keinem Kapitel zuordnen. Doppelte Dateien (gleicher Inhalt) werden übersprungen.")
+    edited = st.data_editor(
+        pd.DataFrame(rows), hide_index=True, width="stretch", key="bulk_editor",
+        column_config={
+            "_hash": None,
+            "Datei": st.column_config.TextColumn(disabled=True, width="large"),
+            "Modul": st.column_config.SelectboxColumn(options=list(module_names.values()), required=True),
+            "Typ": st.column_config.SelectboxColumn(options=list(type_names.values()), required=True),
+            "Kapitel-Nr.": st.column_config.NumberColumn(min_value=0, max_value=30, step=1),
+            "Seiten": st.column_config.NumberColumn(disabled=True),
+            "Sicherheit": st.column_config.TextColumn(disabled=True),
+        })
+    extract_formulas = st.checkbox("Formeln direkt heuristisch extrahieren (ohne KI, kostenlos)", value=True)
+
+    if st.button("📥 Ausgewählte Dateien importieren", type="primary"):
+        name_to_id = {v: k for k, v in module_names.items()}
+        type_to_key = {v: k for k, v in type_names.items()}
+        imported, skipped = 0, 0
+        for item, (_, row) in zip(items, edited.iterrows()):
+            if not row["Importieren"]:
+                continue
+            module_id = name_to_id[row["Modul"]]
+            data = load_module(module_id)
+            existing_hashes = {d.get("hash") for d in data["documents"]}
+            if row["_hash"] in existing_hashes:
+                skipped += 1
+                continue
+            chapter_nr = int(row["Kapitel-Nr."] or 0)
+            chapter_id = data["chapters"][chapter_nr - 1]["id"] if 1 <= chapter_nr <= len(data["chapters"]) else None
+            doc = add_document(module_id, item["name"], item["content"], type_to_key[row["Typ"]], chapter_id,
+                               extracted=item["extracted"])
+            doc["hash"] = row["_hash"]
+            save_module(module_id)
+            if extract_formulas and doc["doc_type"] in ("folien", "skript", "loesung"):
+                add_formulas(module_id, find_formula_candidates(item["extracted"]["pages"]),
+                             f"{item['name']} (heuristisch)", chapter_id)
+            imported += 1
+        st.session_state["bulk_round"] = st.session_state.get("bulk_round", 0) + 1
+        st.session_state["bulk_result"] = (imported, skipped)
+        st.rerun()
+
+

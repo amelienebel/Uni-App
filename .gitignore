@@ -1,0 +1,13 @@
+# Geheimnisse
+.env
+
+# Persönliche Lerndaten (Backups über die App: Export & Backup)
+data/*
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.streamlit/secrets.toml

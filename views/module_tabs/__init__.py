@@ -1,0 +1,1 @@
+"""Reiter eines Modul-Bereichs."""

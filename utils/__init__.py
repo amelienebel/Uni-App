@@ -1,0 +1,1 @@
+"""Hilfsmodule der BWL-Lernplattform."""

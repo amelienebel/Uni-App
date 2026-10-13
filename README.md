@@ -28,6 +28,8 @@ ablegen. Daten bleiben über einen privaten GitHub-Speicher erhalten, ein Passwo
 | Bereich | Inhalt |
 |---|---|
 | 🏠 **Wochenübersicht & Lernplan** | Klausur-Countdown, Wochenraster aus dem Stundenplan, generierte To-dos mit Fristen (Vorlesung vor-/nachbereiten, Übungsblatt, Wiederholung, Altklausur), Fortschrittsbalken pro Modul, priorisierter Lernfahrplan |
+| **Heute** | Termine, fällige To-dos, Karteikarten, Tages-Podcast, Klausurplan und Schwachstellen auf einen Blick |
+| **Klausur-Lernplan** | Verteilt Kapitel-Wiederholung, Schwachstellen und Altklausuren automatisch auf die Tage bis zu den Klausuren |
 | 📚 **Modul-Bereiche** | Pro Modul 3 Reiter: **Ablauf** (Kapitel mit Vorlesungen, Übungen und Tutorien – jede Vorlesung/Übung hat eine eigene Seite mit Dateien, Vorbereitung, Nachbereitung und Lernen) · **Lernen & Klausur** (mehrere Vorlesungen auswählen: Karteikarten, Quiz, Tutor, Altklausuren) · **Formeln & Notizen** |
 | 📐 **Zentrale Formelsammlung** | Alle Formeln modulübergreifend, filter- und durchsuchbar, LaTeX-Rendering mit `st.latex`, Markdown-Download |
 | 📂 **Bulk-Upload** | Viele PDFs oder Moodle-ZIP-Ordner auf einmal; automatische Zuordnung zu Modul, Dokumenttyp und Kapitel, vor dem Import korrigierbar |
@@ -81,3 +83,10 @@ data/                       Deine Lerndaten (nicht im Git, siehe .gitignore)
 
 Alle Daten liegen lokal im Ordner `data/`. An die Anthropic-API gehen nur die Inhalte, die du für eine KI-Funktion
 explizit auslöst (z. B. Folientext bei „Folien analysieren“). Der API-Key wird nur aus `.env` gelesen und nie angezeigt.
+
+## Push-Erinnerungen & Tages-Podcast
+
+- **Push:** über die kostenlose App *ntfy* (Thema steht unter Einstellungen). Die App plant beim Öffnen die
+  Erinnerungen der nächsten 3 Tage ein (nur wenn Karteikarten fällig sind).
+- **Podcast:** an Vorlesungstagen ca. 10 Minuten Audio (zwei Stimmen, edge-tts) zu den Vorlesungen des Tages,
+  erstellt aus Folien und Nachbereitung.

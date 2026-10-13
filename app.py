@@ -15,8 +15,9 @@ st.set_page_config(page_title="BWL-Lernplattform LMU", page_icon=":material/scho
 
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
 from utils.config import WEEKDAYS, get_module, get_secret, load_config, module_ids, module_label  # noqa: E402
-from views import bulk_upload, dashboard, export_view, formulas, module_view, settings_view  # noqa: E402
-from views.common import NAV_PAGES, micon, open_unit  # noqa: E402
+from views import (bulk_upload, dashboard, exam_plan_view, export_view, formulas, module_view,  # noqa: E402
+                   settings_view, today_view)
+from views.common import NAV_PAGES, PAGES, micon, open_unit  # noqa: E402
 
 
 
@@ -120,7 +121,7 @@ with st.sidebar:
     module_id = st.session_state["nav_module"]
     st.markdown("<div class='small-muted' style='margin:0.4rem 0 0.2rem 0'>Module</div>", unsafe_allow_html=True)
     for mid in ids:
-        active = page == NAV_PAGES[1] and mid == module_id
+        active = page == PAGES["module"] and mid == module_id
         st.button(module_label(cfg, mid, short=True), key=f"navmod_{mid}", type="primary" if active else "tertiary",
                   width="stretch", on_click=open_unit, args=(mid, None), icon=micon(get_module(cfg, mid)))
 
@@ -163,15 +164,19 @@ with st.sidebar:
     else:
         st.caption("Kein API-Key – Offline-Modus")
 
-if page == NAV_PAGES[0]:
+if page == PAGES["today"]:
+    today_view.render(cfg)
+elif page == PAGES["week"]:
     dashboard.render(cfg)
-elif page == NAV_PAGES[1]:
+elif page == PAGES["module"]:
     module_view.render(cfg, module_id)
-elif page == NAV_PAGES[2]:
+elif page == PAGES["examplan"]:
+    exam_plan_view.render(cfg)
+elif page == PAGES["formulas"]:
     formulas.render(cfg)
-elif page == NAV_PAGES[3]:
+elif page == PAGES["bulk"]:
     bulk_upload.render(cfg)
-elif page == NAV_PAGES[4]:
+elif page == PAGES["export"]:
     export_view.render(cfg)
 else:
     settings_view.render(cfg)

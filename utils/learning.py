@@ -82,7 +82,8 @@ def _notes_material(data: dict, unit: dict) -> str:
     parts = [f"{label}:\n{notes[field]}" for field, label in
              (("text", "Meine Notizen"), ("emphasized", "Vom Dozenten betont"),
               ("briefly", "Nur kurz angerissen"), ("examples", "Genannte Beispiele")) if notes[field].strip()]
-    parts += [f"Tafelbild „{img['name']}“:\n{img['transcript']}" for img in notes["images"] if img.get("transcript")]
+    parts += [f"Tafelbild „{img['name']}“:\n{img['transcript']}" for img in notes["images"]
+              if img.get("transcript") and not img.get("in_notes")]
     return "\n\n".join(parts)
 
 

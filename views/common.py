@@ -12,14 +12,17 @@ from utils import ai
 from utils.config import get_module, load_config
 from utils.storage import chapter_label, documents_of, get_document_text, get_notes, load_module
 
-NAV_PAGES = [
-    ":material/calendar_month: Wochenübersicht & Lernplan",
-    ":material/school: Modul-Bereiche",
-    ":material/functions: Zentrale Formelsammlung",
-    ":material/cloud_upload: Bulk-Upload",
-    ":material/download: Export & Backup",
-    ":material/settings: Einstellungen",
-]
+PAGES = {
+    "today": ":material/today: Heute",
+    "week": ":material/calendar_month: Wochenübersicht & Lernplan",
+    "module": ":material/school: Modul-Bereiche",
+    "examplan": ":material/event_note: Klausur-Lernplan",
+    "formulas": ":material/functions: Zentrale Formelsammlung",
+    "bulk": ":material/cloud_upload: Bulk-Upload",
+    "export": ":material/download: Export & Backup",
+    "settings": ":material/settings: Einstellungen",
+}
+NAV_PAGES = list(PAGES.values())
 
 MODULE_TABS = [":material/view_timeline: Ablauf", ":material/school: Lernen & Klausur",
                ":material/functions: Formeln & Notizen"]
@@ -36,9 +39,9 @@ def page_title(text: str, icon: str) -> None:
     st.title(f":material/{icon}: {text}")
 
 
-def goto(page_index: int, module_id: str | None = None) -> None:
+def goto(page: str, module_id: str | None = None) -> None:
     """Als on_click-Callback verwenden (ändert Widget-Zustand vor dem nächsten Rendern)."""
-    st.session_state["nav"] = NAV_PAGES[page_index]
+    st.session_state["nav"] = PAGES[page]
     if module_id:
         st.session_state["nav_module"] = module_id
 
@@ -68,7 +71,7 @@ def toggle_todo(todo: dict, widget_key: str) -> None:
 
 def open_unit(module_id: str, unit_id: str | None) -> None:
     """Callback: Vorlesung/Übung öffnen (None = zurück zum Ablauf)."""
-    goto(1, module_id)
+    goto("module", module_id)
     st.session_state[f"unit_{module_id}"] = unit_id
 
 

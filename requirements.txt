@@ -6,3 +6,4 @@ pypdf>=5.0
 pandas>=2.0
 fpdf2>=2.8
 requests>=2.31
+edge-tts>=7.0

@@ -136,7 +136,7 @@ def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: da
 def _open_event(ev: dict) -> None:
     """Klick auf eine Veranstaltung: Details merken und direkt ins Modul springen."""
     _select_event(ev)
-    goto(1, ev["module_id"])
+    goto("module", ev["module_id"])
 
 
 def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:

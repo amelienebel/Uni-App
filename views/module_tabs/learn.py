@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 from utils.learning import unit_material
 from utils.storage import load_module, today
 from utils.units import scope_cards, short_label, unit_cards
+from utils.weakness import chapter_stats
 from views.module_tabs import exams, study, tutor
 
 
@@ -32,15 +34,26 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
     b3.button("Keine", key=f"sel_none_{module_id}", on_click=_select_all, args=(key, []), width="stretch")
     selected = st.multiselect("Vorlesungen", all_ids, key=key, label_visibility="collapsed",
                               format_func=lambda i: f"{short_label(by_id[i])} – {by_id[i]['topic'][:40]}")
-    if not selected:
-        st.info("Wähle mindestens eine Vorlesung aus.")
-        return
     chosen = [by_id[i] for i in selected]
     cards = scope_cards(data, set(selected), exs, lecs)
     label = ", ".join(f"VL {lec['nr']}" for lec in chosen)
 
-    t_cards, t_quiz, t_chat, t_exam = st.tabs([":material/style: Karteikarten", ":material/quiz: Quiz", ":material/forum: Tutor",
-                                                       ":material/history_edu: Altklausuren"])
+    tab_labels = [":material/style: Karteikarten", ":material/quiz: Quiz", ":material/forum: Tutor",
+                  ":material/troubleshoot: Schwachstellen", ":material/history_edu: Altklausuren"]
+    tabs_key = f"learntabs_{module_id}"
+    if st.session_state.pop(study.WEAK_TAB_STATE.format(module_id), False):
+        st.session_state[tabs_key] = tab_labels[3]
+    if st.session_state.get(tabs_key) not in tab_labels:
+        st.session_state.pop(tabs_key, None)
+    t_cards, t_quiz, t_chat, t_weak, t_exam = st.tabs(tab_labels, key=tabs_key)
+    with t_weak:
+        _weak_tab(cfg, module_id, data)
+    with t_exam:
+        exams.altklausuren(cfg, module_id)
+    if not chosen:
+        for tab in (t_cards, t_quiz, t_chat):
+            tab.info("Wähle oben mindestens eine Vorlesung aus.")
+        return
     with t_cards:
         missing = [lec for lec in chosen if not unit_cards(data, lec)]
         if missing:
@@ -58,5 +71,25 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
                            context=context, chapter_ids=chapters)
     with t_chat:
         tutor.render(cfg, module_id, scope_key="learn", context=context, scope_label=label)
-    with t_exam:
-        exams.altklausuren(cfg, module_id)
+
+
+def _weak_tab(cfg: dict, module_id: str, data: dict) -> None:
+    stats = chapter_stats(data)
+    if not any(s["reviewed"] for s in stats):
+        st.info("Noch keine Daten: Sobald du Karteikarten bewertet oder Quizfragen korrigieren lassen hast, "
+                "siehst du hier, welche Kapitel noch nicht sitzen.")
+        return
+    st.caption("Grundlage: deine letzten Bewertungen der Karteikarten (und korrigierte Quizfragen).")
+    st.dataframe(pd.DataFrame([{
+        "Kapitel": s["label"],
+        "Sicherheit": s["mastery"] if s["mastery"] is not None else None,
+        "Abgefragt": f"{s['reviewed']}/{s['cards']}",
+        "Schwache Karten": len(s["weak_cards"]),
+    } for s in stats]), hide_index=True, width="stretch",
+        column_config={"Sicherheit": st.column_config.ProgressColumn(min_value=0, max_value=1, format="percent")})
+    weak_cards = [c for s in stats for c in s["weak_cards"]]
+    st.markdown(f"#### Schwache Karten üben ({len(weak_cards)})")
+    if weak_cards:
+        study.review_session(cfg, module_id, weak_cards, key=f"weak_{module_id}", default_all=True)
+    else:
+        st.caption("Keine schwachen Karten – alles im grünen Bereich.")

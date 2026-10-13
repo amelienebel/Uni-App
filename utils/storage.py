@@ -277,7 +277,7 @@ def save_module(module_id: str) -> None:
 def reload_all() -> None:
     """Verwirft den Laufzeit-Cache (z. B. nach dem Wiederherstellen eines Backups)."""
     for key in list(st.session_state.keys()):
-        if key.startswith("_module_") or key in ("_settings", "_todos"):
+        if key.startswith(("_module_", "_extra_")) or key in ("_settings", "_todos"):
             del st.session_state[key]
 
 
@@ -487,3 +487,19 @@ def load_todos() -> dict:
 
 def save_todos() -> None:
     _write_json(TODOS_PATH, load_todos())
+
+
+# ---------------------------------------------------------------------------
+# Weitere Datenbereiche (Podcasts, Klausur-Lernplan, Erinnerungen)
+# ---------------------------------------------------------------------------
+
+def load_extra(name: str) -> dict:
+    """Lädt data/<name>.json (z. B. podcasts, exam_plan) und hält es im Sitzungsspeicher."""
+    key = f"_extra_{name}"
+    if key not in st.session_state:
+        st.session_state[key] = _read_json(DATA_DIR / f"{name}.json", {})
+    return st.session_state[key]
+
+
+def save_extra(name: str) -> None:
+    _write_json(DATA_DIR / f"{name}.json", load_extra(name))

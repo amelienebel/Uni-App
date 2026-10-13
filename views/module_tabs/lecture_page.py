@@ -143,10 +143,52 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
                 st.rerun()
 
 
+HANDWRITING_PROMPT = """Das sind Fotos meiner handschriftlichen Mitschrift aus der Vorlesung „{topic}“ im Modul
+„{module}“. Tippe sie vollständig und originalgetreu ab, in der Reihenfolge der Fotos. Behalte Überschriften,
+Aufzählungen und Pfeile/Zusammenhänge bei (als Markdown), Formeln in LaTeX mit $...$, Skizzen kurz in [eckigen
+Klammern] beschreiben. Unleserliches mit [?] markieren. Nichts hinzuerfinden, nichts zusammenfassen."""
+
+
+def _handwriting(module: dict, module_id: str, lec: dict, notes: dict) -> None:
+    """Fotos der Papier-Mitschrift → KI tippt ab → Text landet in den Notizen."""
+    with st.expander("Mitschrift auf Papier? Fotos abtippen lassen", icon=":material/photo_camera:"):
+        if not ai.is_available():
+            st.caption("Dafür wird ein API-Key benötigt.")
+            return
+        round_key = f"hw_round_{lec['id']}"
+        photos = st.file_uploader("Fotos der Mitschrift (am Handy direkt mit der Kamera)", type=list(IMAGE_TYPES),
+                                  accept_multiple_files=True, key=f"hw_{lec['id']}_{st.session_state.get(round_key, 0)}")
+        if photos and st.button("Abtippen & in meine Notizen übernehmen", key=f"hw_go_{lec['id']}", type="primary",
+                                icon=":material/edit_note:"):
+            content = []
+            for photo in photos:
+                ext = Path(photo.name).suffix.lower().lstrip(".")
+                content.append(ai.image_block(photo.getvalue(), IMAGE_TYPES.get(ext, "image/jpeg")))
+            content.append({"type": "text", "text": HANDWRITING_PROMPT.format(topic=lec["topic"], module=module["name"])})
+            with st.spinner(f"Tippe {len(photos)} Foto(s) ab …"):
+                try:
+                    text = ai.complete(content, max_tokens=16000)
+                except ai.AIError as exc:
+                    st.error(str(exc))
+                    return
+            notes["text"] = (notes["text"].rstrip() + "\n\n" if notes["text"].strip() else "") + \
+                f"### Mitschrift (abgetippt)\n\n{text.strip()}"
+            for photo in photos:
+                notes["images"].append({"path": save_upload(module_id, photo.name, photo.getvalue(), "images"),
+                                        "name": photo.name, "transcript": "", "in_notes": True})
+            notes["updated_at"] = now_iso()
+            save_module(module_id)
+            st.session_state[round_key] = st.session_state.get(round_key, 0) + 1
+            st.session_state[f"upmsg_{module_id}"] = [("success", "Mitschrift abgetippt und in deine Notizen "
+                                                                  "übernommen – bitte kurz drüberlesen.")]
+            st.rerun()
+
+
 def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     module = get_module(cfg, module_id)
     data = load_module(module_id)
     notes = lecture_notes(data, lec["id"])
+    _handwriting(module, module_id, lec, notes)
     with st.form(f"lnotes_{module_id}_{lec['id']}"):
         text = st.text_area("Meine Notizen aus der Vorlesung", notes["text"], height=220,
                             placeholder="Was habe ich mitgeschrieben? Formeln gern in LaTeX: $C_0 = ...$")
@@ -196,7 +238,7 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
                 except Exception:  # noqa: BLE001
                     st.caption(f"{img['name']} (Vorschau nicht möglich)")
             b1, b2 = st.columns(2)
-            if ai.is_available() and not img.get("transcript") and b1.button("Abtippen", key=f"tr_{lec['id']}_{i}"):
+            if ai.is_available() and not img.get("transcript") and not img.get("in_notes") and b1.button("Abtippen", key=f"tr_{lec['id']}_{i}"):
                 ext = Path(img["name"]).suffix.lower().lstrip(".")
                 with st.spinner("Lese Tafelbild …"):
                     try:

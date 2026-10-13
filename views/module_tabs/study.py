@@ -11,6 +11,8 @@ from utils.config import get_module
 from utils.learning import generate_unit_cards
 from utils.storage import chapter_label, days_until_exam, load_module, load_settings, save_module
 
+WEAK_TAB_STATE = "learn_weak_{}"
+
 CARD_CHAT_SYSTEM = (
     ai.BASE_SYSTEM + "\n\nDer Studierende lernt gerade mit einer Lernkarte und hat eine Rückfrage dazu. "
     "Erkläre verständlich, nutze bei Bedarf ein kleines Zahlenbeispiel und weise auf typische Klausurfallen hin. "
@@ -43,7 +45,7 @@ def _card_chat(card: dict, module_name: str, key: str) -> bool:
     return False
 
 
-def review_session(cfg: dict, module_id: str, cards: list[dict], key: str) -> None:
+def review_session(cfg: dict, module_id: str, cards: list[dict], key: str, default_all: bool = False) -> None:
     """Abfrage der übergebenen Karten. Standard: fällige Karten; optional alle (z. B. vor der Klausur)."""
     module = get_module(cfg, module_id)
     days = days_until_exam(module_id)
@@ -58,7 +60,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str) -> No
     c[2].metric("Neu", stats["new"])
     c[3].metric("Beherrscht", stats["mastered"])
 
-    all_mode = st.toggle("Alle Karten üben (nicht nur die heute fälligen)", key=f"allmode_{key}")
+    all_mode = st.toggle("Alle Karten üben (nicht nur die heute fälligen)", key=f"allmode_{key}", value=default_all)
     done_key = f"sessiondone_{key}"
     if all_mode:
         done = set(st.session_state.get(done_key, []))

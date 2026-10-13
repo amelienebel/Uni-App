@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, time
 
 import pandas as pd
+import requests
 import streamlit as st
 
-from utils import ai
+from utils import ai, notify
 from utils.config import WEEKDAYS, module_label
 from utils.storage import (get_exam_date, get_schedule, load_settings, save_settings,
                            semester_dates)
@@ -109,6 +110,40 @@ def render(cfg: dict) -> None:
             learning.update({"daily_review_limit": int(limit)})
             save_settings()
             st.success("Gespeichert.")
+
+    # --- Push-Erinnerungen & Podcast ----------------------------------------------
+    st.subheader(":material/notifications: Push-Erinnerungen")
+    conf = notify.settings()
+    st.markdown(
+        "Erinnerungen ans Karteikarten-Lernen kommen über die kostenlose App **ntfy** aufs Handy:\n"
+        "1. Lade **ntfy** aus dem App Store (Symbol: weiße Glocke auf grünem Grund) und öffne sie.\n"
+        "2. Tippe auf **+**, gib als Thema genau das hier ein und tippe auf **Subscribe**:")
+    st.code(conf["topic"], language=None)
+    st.caption("Das Thema ist dein persönlicher, zufälliger Kanal – gib es nicht weiter.")
+    with st.form("notify_form"):
+        c1, c2 = st.columns(2)
+        enabled = c1.toggle("Tägliche Erinnerung aktiv", value=conf["enabled"])
+        hh, mm = (int(x) for x in conf["time"].split(":"))
+        at = c2.time_input("Uhrzeit", value=time(hh, mm), step=900)
+        if st.form_submit_button("Speichern", type="primary"):
+            conf.update({"enabled": enabled, "time": f"{at:%H:%M}", "scheduled": {}})
+            save_settings()
+            st.success("Gespeichert. Die Erinnerungen der nächsten Tage werden beim nächsten Öffnen eingeplant.")
+    if st.button("Testnachricht senden", icon=":material/send:"):
+        try:
+            notify.send(conf["topic"], "BWL-Lernplattform", "Es klappt! Ab jetzt erinnere ich dich ans Lernen.")
+            st.success("Gesendet – kommt sie auf dem Handy an?")
+        except requests.RequestException as exc:
+            st.error(f"Senden fehlgeschlagen: {exc}")
+    st.caption("Die App plant beim Öffnen immer die nächsten 3 Tage ein. Öffnest du sie länger nicht, pausieren die "
+               "Erinnerungen. Es wird nur erinnert, wenn Karteikarten fällig sind.")
+
+    podcast_conf = settings.setdefault("podcast", {"auto": True})
+    auto = st.toggle("Tages-Podcast automatisch erstellen, wenn ich „Heute“ öffne", value=podcast_conf.get("auto", True),
+                     help="An Vorlesungstagen: ca. 10 Minuten Audio zu den Vorlesungen des Tages.")
+    if auto != podcast_conf.get("auto", True):
+        podcast_conf["auto"] = auto
+        save_settings()
 
     # --- KI -----------------------------------------------------------------------
     st.subheader("KI-Einstellungen")

@@ -24,6 +24,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from utils import cloud_sync
 from utils.config import BASE_DIR, get_module, load_config
 
 DATA_DIR = BASE_DIR / "data"
@@ -90,6 +91,7 @@ def _write_json(path: Path, data) -> None:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, default=str)
         os.replace(tmp, path)
+        cloud_sync.notify_changed(path)
     except BaseException:
         if os.path.exists(tmp):
             os.remove(tmp)
@@ -261,6 +263,7 @@ def save_upload(module_id: str, filename: str, content: bytes, subdir: str = "pd
     target_dir.mkdir(parents=True, exist_ok=True)
     path = target_dir / f"{new_id()}_{safe_filename(filename)}"
     path.write_bytes(content)
+    cloud_sync.notify_changed(path)
     return str(path.relative_to(DATA_DIR))
 
 
@@ -275,7 +278,9 @@ def delete_data_file(rel_path: str | None) -> None:
     if not rel_path:
         return
     try:
-        abs_data_path(rel_path).unlink(missing_ok=True)
+        path = abs_data_path(rel_path)
+        path.unlink(missing_ok=True)
+        cloud_sync.notify_changed(path)
     except (ValueError, OSError):
         pass
 
@@ -323,6 +328,7 @@ def delete_document(module_id: str, doc_id: str) -> None:
         if doc["id"] == doc_id:
             delete_data_file(doc.get("path"))
             (TEXT_DIR / f"{doc_id}.json").unlink(missing_ok=True)
+            cloud_sync.notify_changed(TEXT_DIR / f"{doc_id}.json")
             data["documents"].remove(doc)
     save_module(module_id)
 

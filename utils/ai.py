@@ -1,6 +1,6 @@
 """Anthropic-API-Anbindung (Claude).
 
-- Der API-Key wird ausschließlich über python-dotenv aus der .env-Datei bzw. der Umgebung geladen.
+- Der API-Key wird über python-dotenv aus der .env-Datei geladen (online: aus den Streamlit-Secrets).
 - Alle Aufrufe laufen gestreamt (keine Timeouts bei langen Antworten).
 - Für Opus/Sonnet ist der serverseitige Refusal-Fallback aktiviert (fallbacks="default").
 - Ohne API-Key bleibt die App nutzbar: Die Views greifen dann auf heuristische Verfahren zurück.
@@ -10,16 +10,11 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 from collections.abc import Iterator
 
 import anthropic
 import streamlit as st
-from dotenv import load_dotenv
-
-from utils.config import BASE_DIR
-
-load_dotenv(BASE_DIR / ".env")
+from utils.config import get_secret
 
 MODELS = {
     "claude-opus-5-5": "Claude Opus 5.5 – beste Qualität (Standard)",
@@ -50,8 +45,7 @@ class AIError(Exception):
 
 
 def api_key() -> str | None:
-    key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-    return key or None
+    return get_secret("ANTHROPIC_API_KEY")
 
 
 def is_available() -> bool:

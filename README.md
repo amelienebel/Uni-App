@@ -17,6 +17,12 @@ Ohne API-Key läuft die App im **Offline-Modus**: Textextraktion, heuristische F
 Lernkarten aus Formeln/Notizen, Quiz aus Formelsammlung und Karten, Signalwort-Analyse, Export und Planung
 funktionieren vollständig. Chats, KI-Zusammenfassungen und KI-Korrektur benötigen den Key.
 
+## Auf Handy und Mac nutzen
+
+Die App lässt sich kostenlos online stellen (Streamlit Community Cloud) und als App-Symbol auf Handy und Mac
+ablegen. Daten bleiben über einen privaten GitHub-Speicher erhalten, ein Passwort schützt den Zugang.
+👉 Schritt-für-Schritt ohne Programmierkenntnisse: **[ANLEITUNG.md](ANLEITUNG.md)**
+
 ## Navigation
 
 | Bereich | Inhalt |
@@ -54,6 +60,7 @@ utils/
   exam_analysis.py          Operatoren-/Signalwort-Analyse
   ai.py                     Anthropic-API (Streaming, strukturierte Ausgaben, Fehlerbehandlung)
   export.py                 Markdown-/PDF-Export, Backup/Restore
+  cloud_sync.py             Optionaler Cloud-Speicher: spiegelt data/ in ein privates GitHub-Repository
 views/
   dashboard.py, module_view.py, formulas.py, bulk_upload.py, export_view.py, settings_view.py, common.py
   module_tabs/              syllabus, preparation, review, flashcards, formulas_tab, exams, tutor

@@ -8,6 +8,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
+from utils import cloud_sync
 from utils.config import get_module
 from utils.storage import DATA_DIR, chapter_label, get_notes
 
@@ -225,5 +226,6 @@ def restore_zip(content: bytes) -> int:
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(zf.read(info))
+            cloud_sync.notify_changed(target)
             restored += 1
     return restored

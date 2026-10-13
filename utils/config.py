@@ -3,13 +3,32 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = BASE_DIR / "config.json"
 
+load_dotenv(BASE_DIR / ".env")
+
 WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 WEEKDAYS_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+
+def get_secret(name: str) -> str | None:
+    """Liest einen geheimen Wert: zuerst aus der .env/Umgebung, sonst aus den Streamlit-Secrets (Cloud)."""
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    try:
+        import streamlit as st
+
+        value = st.secrets.get(name)
+    except Exception:  # noqa: BLE001 - keine secrets.toml vorhanden
+        return None
+    return str(value).strip() if value else None
 
 
 def load_config() -> dict:

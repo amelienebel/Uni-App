@@ -33,9 +33,9 @@ def _lecture_row(module: dict, data: dict, lec: dict, state: dict, is_next: bool
     with st.container(key=f"row_{module_id}_{lec['id'].replace(':', '_')}"):
         c1, c2, c3 = st.columns([6, 2, 2], vertical_alignment="center")
         c1.button(f"{short_label(lec)} – {lec['topic']}" + ("  als Nächstes" if is_next else ""),
-                  key=f"open_{module_id}_{lec['id']}", type="tertiary", on_click=open_unit,
+                  key=f"open_{module_id}_{lec['id']}", type="tertiary", on_click=open_unit, icon=":material/co_present:",
                   args=(module_id, lec["id"]))
-        c1.caption(f"{'Folien' if docs else 'keine Folien'}" + (f" · 🃏 {len(cards)} Karten" if cards else "")
+        c1.caption(f"{'Folien' if docs else 'keine Folien'}" + (f" · {len(cards)} Karten" if cards else "")
                    + f" · vorbereiten bis {_due(planner.prep_due(module, lec['date']))}"
                    + f" · nachbereiten bis {_due(planner.review_due(module, lec['date']))}")
         for col, field, label in ((c2, "vorbereitet", "Vorbereitet"), (c3, "nachbereitet", "Nachbereitet")):
@@ -50,7 +50,7 @@ def _exercise_row(module: dict, data: dict, ex: dict, state: dict, is_next: bool
     with st.container(key=f"row_{module_id}_{ex['id'].replace(':', '_')}"):
         c1, c2, c3 = st.columns([6, 2, 2], vertical_alignment="center")
         c1.button(f"{ex['title']}" + ("  als Nächstes" if is_next else ""),
-                  key=f"open_{module_id}_{ex['id']}", type="tertiary", on_click=open_unit,
+                  key=f"open_{module_id}_{ex['id']}", type="tertiary", on_click=open_unit, icon=":material/edit_note:",
                   args=(module_id, ex["id"]))
         files = " · ".join(label for key, label in (("uebung", "Blatt"), ("loesung", "Lösung"),
                                                      ("eigene_loesung", "meine Lösung")) if key in have)
@@ -105,12 +105,12 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
     st.caption("Tippe auf eine Vorlesung oder Übung, um Dateien hochzuladen, vor- und nachzubereiten und zu lernen. "
                "Erledigtes kannst du direkt hier abhaken.")
     groups = [(ch["id"], chapter_label(data, ch["id"])) for ch in data["chapters"]] + [(None, "Weitere Termine")]
-    for chapter_id, label in groups:
+    for gi, (chapter_id, label) in enumerate(groups):
         ch_lecs = [lec for lec in lecs if lec.get("chapter_id") == chapter_id]
         ch_exs = [ex for ex in exs if ex.get("chapter_id") == chapter_id]
         if not ch_lecs and not ch_exs:
             continue
-        with st.container(border=True):
+        with st.container(border=True, key=f"chap_{module_id}_{gi}"):
             st.markdown(f"**{label}**")
             items = sorted(ch_lecs + ch_exs, key=lambda u: u["date"] if u["kind"] == "lecture" else u["session"])
             for u in items:

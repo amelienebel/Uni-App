@@ -29,7 +29,7 @@
       "name": "Grundlagen der Mathematik für Wirtschaftswissenschaftler",
       "short": "Mathe",
       "icon": "🧮",
-      "color": "#1f77b4",
+      "color": "#3B6FD8",
       "ects": 6,
       "exam_date": "2027-02-12",
       "keywords": [
@@ -265,14 +265,15 @@
         "prep_weekday": 6,
         "review_weekday": 2,
         "exercise_weekday": 6
-      }
+      },
+      "symbol": "functions"
     },
     {
       "id": "rewe",
       "name": "Externes Rechnungswesen",
       "short": "ReWe",
       "icon": "📒",
-      "color": "#2ca02c",
+      "color": "#1E9C75",
       "ects": 6,
       "exam_date": "2027-02-15",
       "keywords": [
@@ -547,14 +548,15 @@
         "prep_weekday": 6,
         "review_weekday": 2,
         "exercise_weekday": 2
-      }
+      },
+      "symbol": "receipt_long"
     },
     {
       "id": "invfin",
       "name": "Investition und Finanzierung",
       "short": "I&F",
       "icon": "💶",
-      "color": "#ff7f0e",
+      "color": "#D9822B",
       "ects": 6,
       "exam_date": "2027-02-08",
       "keywords": [
@@ -771,14 +773,15 @@
         "prep_weekday": 0,
         "review_weekday": 3,
         "exercise_weekday": 2
-      }
+      },
+      "symbol": "account_balance"
     },
     {
       "id": "vwl",
       "name": "Grundlagen der VWL",
       "short": "VWL",
       "icon": "🌍",
-      "color": "#9467bd",
+      "color": "#8B5CF6",
       "ects": 6,
       "exam_date": "2027-02-09",
       "keywords": [
@@ -1055,14 +1058,15 @@
         "prep_weekday": 0,
         "review_weekday": 3,
         "exercise_weekday": 2
-      }
+      },
+      "symbol": "public"
     },
     {
       "id": "statistik",
       "name": "Grundlagen der Statistik",
       "short": "Statistik",
       "icon": "📊",
-      "color": "#d62728",
+      "color": "#D6455D",
       "ects": 6,
       "exam_date": "2027-02-17",
       "keywords": [
@@ -1301,7 +1305,8 @@
         "prep_weekday": 2,
         "review_weekday": 5,
         "exercise_weekday": 6
-      }
+      },
+      "symbol": "bar_chart"
     }
   ],
   "document_types": {

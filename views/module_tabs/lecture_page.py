@@ -13,7 +13,7 @@ from utils.learning import run_analysis, unit_material
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
                            load_todos, now_iso, save_module, save_todos, save_upload)
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
-from views.common import ai_hint, open_unit, render_formula, toggle_todo
+from views.common import LECTURE_TABS, ai_hint, open_unit, render_formula, toggle_todo
 from views.module_tabs import exams, study, tutor
 from views.module_tabs.files import file_list, show_messages, uploader
 
@@ -53,7 +53,7 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
     when = f"{WEEKDAYS[lec['date'].weekday()]}, {lec['date']:%d.%m.%Y}"
     if slot:
         when += f" · {slot.get('start', '')}–{slot.get('end', '')} · {slot.get('room', '')}"
-    st.markdown(f"## Vorlesung {lec['nr']}: {lec['topic']}")
+    st.markdown(f"## :material/co_present: Vorlesung {lec['nr']}: {lec['topic']}")
     st.caption(when + (f" · {chapter_label(data, lec['chapter_id'])}" if lec.get("chapter_id") else "")
                + (" · vorlesungsfrei" if lec["is_break"] else ""))
 
@@ -167,7 +167,7 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
         if finish:
             _set_done(module_id, lec, "nachbereitet")
             st.session_state[f"autogen_{module_id}_{lec['id']}"] = True
-            st.session_state[f"ltab_next_{lec['id']}"] = "🃏 Lernen"
+            st.session_state[f"ltab_next_{lec['id']}"] = LECTURE_TABS[3]
         st.rerun()
     if notes["text"].strip():
         with st.expander("Vorschau der Notizen (mit Formeln)"):
@@ -261,7 +261,7 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
                      scope_label=label)
 
 
-LEC_TABS = ["Dateien", "Vorbereiten", "Nachbereiten", "🃏 Lernen"]
+LEC_TABS = LECTURE_TABS
 
 
 def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[dict]) -> None:

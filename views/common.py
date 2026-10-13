@@ -13,13 +13,27 @@ from utils.config import get_module, load_config
 from utils.storage import chapter_label, documents_of, get_document_text, get_notes, load_module
 
 NAV_PAGES = [
-    "Wochenübersicht & Lernplan",
-    "Modul-Bereiche",
-    "Zentrale Formelsammlung",
-    "Bulk-Upload",
-    "Export & Backup",
-    "Einstellungen & Klausurtermine",
+    ":material/calendar_month: Wochenübersicht & Lernplan",
+    ":material/school: Modul-Bereiche",
+    ":material/functions: Zentrale Formelsammlung",
+    ":material/cloud_upload: Bulk-Upload",
+    ":material/download: Export & Backup",
+    ":material/settings: Einstellungen",
 ]
+
+MODULE_TABS = [":material/view_timeline: Ablauf", ":material/school: Lernen & Klausur",
+               ":material/functions: Formeln & Notizen"]
+LECTURE_TABS = [":material/folder_open: Dateien", ":material/menu_book: Vorbereiten",
+                ":material/edit_note: Nachbereiten", ":material/style: Lernen"]
+
+
+def micon(module: dict) -> str:
+    """Material-Symbol des Moduls (config.json → symbol)."""
+    return f":material/{module.get('symbol') or 'school'}:"
+
+
+def page_title(text: str, icon: str) -> None:
+    st.title(f":material/{icon}: {text}")
 
 
 def goto(page_index: int, module_id: str | None = None) -> None:
@@ -65,11 +79,11 @@ def open_todo(todo: dict) -> None:
     unit_id = None
     if len(parts) >= 4 and parts[1] == "vl":
         unit_id = f"vl:{parts[2]}"
-        st.session_state[f"ltab_next_{unit_id}"] = "Nachbereiten" if parts[3] == "nachbereitet" else "Vorbereiten"
+        st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TABS[2] if parts[3] == "nachbereitet" else LECTURE_TABS[1]
     elif len(parts) >= 4 and parts[1] == "ex":
         unit_id = f"ex:{parts[2]}:{parts[3]}"
     elif todo.get("kind") in ("Wiederholung", "Klausurvorbereitung"):
-        st.session_state[f"mtabs_{module_id}"] = "Lernen & Klausur"
+        st.session_state[f"mtabs_{module_id}"] = MODULE_TABS[1]
     open_unit(module_id, unit_id)
 
 

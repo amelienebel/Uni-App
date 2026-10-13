@@ -15,7 +15,7 @@ from utils.storage import (get_exam_date, get_schedule, load_settings, save_sett
 
 def render(cfg: dict) -> None:
     settings = load_settings()
-    st.title("Einstellungen & Klausurtermine")
+    st.title(":material/settings: Einstellungen & Klausurtermine")
     ids = [m["id"] for m in cfg["modules"]]
 
     # --- Klausurtermine -----------------------------------------------------

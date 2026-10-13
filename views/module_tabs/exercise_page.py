@@ -64,7 +64,7 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
         nav[2].button("nächste Übung ▶", key=f"next_{ex['id']}", on_click=open_unit,
                       args=(module_id, exs[idx + 1]["id"]), width="stretch")
 
-    st.markdown(f"## {ex['title']}")
+    st.markdown(f"## :material/edit_note: {ex['title']}")
     st.caption(f"Besprechung: {session_text(ex)}")
 
     wkey = f"exdone_{module_id}_{ex['id']}"
@@ -118,7 +118,7 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
     st.markdown("#### Fragen fürs Tutorium / die Übung")
     question_list(module_id, data, key_prefix=f"exq_{ex['id']}", unit=ex["id"])
 
-    st.markdown("#### 🃏 Karteikarten zu dieser Übung")
+    st.markdown("#### :material/style: Karteikarten zu dieser Übung")
     cards = unit_cards(data, ex)
     study.show_generation_message(ex["id"])
     if docs:

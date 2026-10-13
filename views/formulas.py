@@ -11,7 +11,7 @@ from views.common import render_formula
 
 
 def render(cfg: dict) -> None:
-    st.title("Zentrale Formelsammlung")
+    st.title(":material/functions: Zentrale Formelsammlung")
     ids = [m["id"] for m in cfg["modules"]]
     c1, c2 = st.columns([2, 3])
     selected = c1.multiselect("Module", ids, default=ids, format_func=lambda mid: module_label(cfg, mid, short=True))

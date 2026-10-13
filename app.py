@@ -14,9 +14,9 @@ st.set_page_config(page_title="BWL-Lernplattform LMU", page_icon=":material/scho
                    initial_sidebar_state="auto")
 
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
-from utils.config import WEEKDAYS, get_secret, load_config, module_ids, module_label  # noqa: E402
+from utils.config import WEEKDAYS, get_module, get_secret, load_config, module_ids, module_label  # noqa: E402
 from views import bulk_upload, dashboard, export_view, formulas, module_view, settings_view  # noqa: E402
-from views.common import NAV_PAGES, open_unit  # noqa: E402
+from views.common import NAV_PAGES, micon, open_unit  # noqa: E402
 
 
 
@@ -80,8 +80,37 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Modulfarben: Symbole, Aufgaben, Kapitel und Kopfzeilen tragen die Farbe ihres Moduls
+_rules = [
+    "[data-testid='stIconMaterial'] {vertical-align: -0.18em;}",
+    "h1 [data-testid='stIconMaterial'], h2 [data-testid='stIconMaterial'], h3 [data-testid='stIconMaterial'] "
+    "{color: #5B7FCC; margin-right: 0.15em;}",
+    ".exam-row {display: flex; align-items: center; gap: 0.55rem; padding: 0.2rem 0; font-size: 0.95rem;}",
+    ".exam-row b {margin-left: auto; font-weight: 600;}",
+    ".exam-row .dot {width: 0.6rem; height: 0.6rem; border-radius: 50%; display: inline-block;}",
+]
+for _m in cfg["modules"]:
+    _id, _c = _m["id"], _m["color"]
+    _rules += [
+        f".st-key-navmod_{_id} button:not([kind='primary']) [data-testid='stIconMaterial'] {{color: {_c};}}",
+        f".st-key-navmod_{_id} button[kind='primary'] {{background: {_c}; border-color: {_c};}}",
+        f"[class*='st-key-evcard_{_id}_'] [data-testid='stIconMaterial'], "
+        f"[class*='st-key-chip_open_{_id}_'] [data-testid='stIconMaterial'], "
+        f"[class*='st-key-chip_done_{_id}_'] [data-testid='stIconMaterial'], "
+        f"[class*='st-key-tdrow_{_id}_'] [data-testid='stIconMaterial'], "
+        f"[class*='st-key-row_{_id}_'] [data-testid='stIconMaterial'], "
+        f".st-key-modhead_{_id} h1 [data-testid='stIconMaterial'] {{color: {_c};}}",
+        f"[class*='st-key-tdrow_{_id}_'] {{border-left: 3px solid {_c}; padding-left: 0.6rem;}}",
+        f"[class*='st-key-chap_{_id}_'] {{border-left: 4px solid {_c} !important;}}",
+        f"[class*='st-key-chip_open_{_id}_'] {{background: {_c}14;}}",
+        f"[class*='st-key-chip_open_{_id}_'] strong, [class*='st-key-chip_done_{_id}_'] strong, "
+        f"[class*='st-key-tdrow_{_id}_'] strong {{color: {_c};}}",
+        f".st-key-modhead_{_id} {{border-bottom: 3px solid {_c}; padding-bottom: 0.3rem; margin-bottom: 0.4rem;}}",
+    ]
+st.markdown(f"<style>{' '.join(_rules)}</style>", unsafe_allow_html=True)
+
 with st.sidebar:
-    st.title("BWL @ LMU")
+    st.title(":material/school: BWL @ LMU")
     st.caption(f"{cfg['app'].get('semester_label', '')} · {WEEKDAYS[storage.today().weekday()]}, {storage.today():%d.%m.%Y}")
     page = st.radio("Hauptnavigation", NAV_PAGES, key="nav", label_visibility="collapsed")
 
@@ -93,7 +122,7 @@ with st.sidebar:
     for mid in ids:
         active = page == NAV_PAGES[1] and mid == module_id
         st.button(module_label(cfg, mid, short=True), key=f"navmod_{mid}", type="primary" if active else "tertiary",
-                  width="stretch", on_click=open_unit, args=(mid, None))
+                  width="stretch", on_click=open_unit, args=(mid, None), icon=micon(get_module(cfg, mid)))
 
     st.divider()
     st.markdown("**Nächste Klausuren**")
@@ -104,7 +133,10 @@ with st.sidebar:
             upcoming.append((days, mid))
     if upcoming:
         for days, mid in sorted(upcoming)[:5]:
-            st.markdown(f"{module_label(cfg, mid, short=True)}: **{days}** Tage")
+            color = get_module(cfg, mid)["color"]
+            st.markdown(f"<div class='exam-row'><span class='dot' style='background:{color}'></span>"
+                        f"<span>{module_label(cfg, mid, short=True)}</span><b>{days} Tage</b></div>",
+                        unsafe_allow_html=True)
     else:
         st.caption("Noch keine Klausurtermine – unter Einstellungen eintragen.")
 

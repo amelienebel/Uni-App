@@ -12,7 +12,7 @@ from utils import planner
 from utils.config import WEEKDAYS, get_module, module_label
 from utils.storage import (get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
-from views.common import goto, open_todo, toggle_todo
+from views.common import goto, micon, open_todo, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -109,14 +109,13 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
     key = f"todo_{place}_{t['key']}_{monday.isoformat()}"
     done = planner.todo_done(t, modules_data, todo_state)
     st.session_state[key] = done
-    overdue = not done and t["due"] < now
     _, slot = _placement(t, monday)
     with st.container(key=f"tdrow_{t['module_id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
         c0, c1, c2, c3 = st.columns([0.5, 7, 3, 1], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
-        c1.button(f"**{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary",
+        c1.button(f"**{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary", icon=micon(module),
                   on_click=open_todo, args=(t,), help="Öffnen")
-        c2.caption(("Überfällig · " if overdue else "") + f"Frist: {planner.format_due(t['due'], now)}"
+        c2.caption(f"Frist: {planner.format_due(t['due'], now)}"
                    + (f" · geplant {SLOT_LABELS[slot]} Uhr" if slot else ""))
         with c3:
             _move_popover(t, monday, place)
@@ -195,7 +194,7 @@ def render(cfg: dict) -> None:
     week_now = planner.semester_week(sem_start, now, breaks)
     _grid_css(cfg)
 
-    st.title("Wochenübersicht & Lernplan")
+    st.title(":material/calendar_month: Wochenübersicht & Lernplan")
     if week_now < 1:
         st.caption(f"Vorlesungsbeginn am {sem_start:%d.%m.%Y}.")
     elif now > sem_end:
@@ -258,7 +257,7 @@ def render(cfg: dict) -> None:
                         st.warning(entry)
         for slot in SLOTS + [None]:
             row = st.columns(widths)
-            row[0].markdown(f"**{SLOT_LABELS[slot]}**" if slot is not None else "**Aufgaben**")
+            row[0].markdown(f"**{SLOT_LABELS[slot]}**" if slot is not None else "**To-dos**")
             for col, day in zip(row[1:], days):
                 with col:
                     with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_{slot or 'x'}"):
@@ -284,7 +283,7 @@ def render(cfg: dict) -> None:
                     _todo_chip(t, cfg, modules_data, todo_state, now, f"{day:%Y%m%d}_l{j}")
 
     # --- Aufgaben dieser Woche (abhaken & verschieben) ---------------------------
-    st.subheader("Aufgaben dieser Woche")
+    st.subheader(":material/checklist: Aufgaben dieser Woche")
     if not todos:
         st.caption("Für diese Woche sind keine Aufgaben geplant.")
     else:
@@ -301,7 +300,7 @@ def render(cfg: dict) -> None:
 
     st.divider()
     with st.container():
-        st.subheader("Fortschritt pro Modul")
+        st.subheader(":material/trending_up: Fortschritt pro Modul")
         for module in cfg["modules"]:
             progress = planner.module_progress(modules_data[module["id"]])
             stats = progress["card_stats"]
@@ -309,7 +308,7 @@ def render(cfg: dict) -> None:
                         text=f"{module['short']} – {progress['overall'] * 100:.0f} % "
                              f"({progress['chapters_done']}/{progress['n_chapters']} Kapitel komplett, "
                              f"{stats['due']} Karten fällig)")
-        st.subheader("Lernfahrplan für heute")
+        st.subheader(":material/route: Lernfahrplan für heute")
         recs = planner.study_recommendations(cfg, modules_data, now)
         for rank, rec in enumerate(recs[:3], start=1):
             c_a, c_b = st.columns([4, 1])
@@ -318,7 +317,7 @@ def render(cfg: dict) -> None:
             c_b.button("Öffnen", key=f"rec_{rec['module_id']}", on_click=goto, args=(1, rec["module_id"]))
         due_total = sum(r["due"] for r in recs)
         if due_total:
-            st.info(f"🃏 Heute insgesamt **{due_total}** Lernkarten fällig.")
+            st.info(f"Heute insgesamt **{due_total}** Lernkarten fällig.")
 
     with st.expander("Kapitelstatus aller Module", expanded=False):
         rows = []

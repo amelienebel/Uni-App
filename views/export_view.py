@@ -12,7 +12,7 @@ from utils.storage import load_module, reload_all
 
 
 def render(cfg: dict) -> None:
-    st.title("Export & Backup")
+    st.title(":material/download: Export & Backup")
 
     st.subheader("Lernunterlagen exportieren (Offline-Lernen)")
     ids = [m["id"] for m in cfg["modules"]]

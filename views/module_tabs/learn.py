@@ -39,7 +39,8 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
     cards = scope_cards(data, set(selected), exs, lecs)
     label = ", ".join(f"VL {lec['nr']}" for lec in chosen)
 
-    t_cards, t_quiz, t_chat, t_exam = st.tabs(["🃏 Karteikarten", "Quiz", "Tutor", "Altklausuren"])
+    t_cards, t_quiz, t_chat, t_exam = st.tabs([":material/style: Karteikarten", ":material/quiz: Quiz", ":material/forum: Tutor",
+                                                       ":material/history_edu: Altklausuren"])
     with t_cards:
         missing = [lec for lec in chosen if not unit_cards(data, lec)]
         if missing:

@@ -34,7 +34,7 @@ def _collect(files) -> tuple[list[dict], list[str]]:
 
 
 def render(cfg: dict) -> None:
-    st.title("Bulk-Upload")
+    st.title(":material/cloud_upload: Bulk-Upload")
     _upload_tab(cfg)
 
 

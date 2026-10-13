@@ -10,10 +10,10 @@ from utils import planner, units
 from utils.config import WEEKDAYS, get_module
 from utils.storage import (chapter_label, days_until_exam, get_exam_date, get_schedule, load_module, load_todos,
                            semester_dates, today)
-from views.common import open_unit
+from views.common import LECTURE_TABS, MODULE_TABS, micon, open_unit
 from views.module_tabs import ablauf, exercise_page, formulas_tab, learn, lecture_page, notes
 
-TABS = ["Ablauf", "Lernen & Klausur", "Formeln & Notizen"]
+TABS = MODULE_TABS
 
 
 def _stats(module: dict, data: dict) -> None:
@@ -32,9 +32,9 @@ def _stats(module: dict, data: dict) -> None:
     st.progress(progress["overall"])
 
 
-def _go_task(module_id: str, unit_id: str, tab: str | None) -> None:
+def _go_task(module_id: str, unit_id: str, tab: int | None) -> None:
     if tab:
-        st.session_state[f"ltab_next_{unit_id}"] = tab
+        st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TABS[tab]
     open_unit(module_id, unit_id)
 
 
@@ -45,7 +45,8 @@ def _short_date(d: date) -> str:
 def _header(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dict]) -> None:
     module_id = module["id"]
     now = today()
-    st.title(f"{module['name']}")
+    with st.container(key=f"modhead_{module_id}"):
+        st.title(f"{micon(module)} {module['name']}")
     sem_start, _ = semester_dates(cfg)
     tasks = units.open_tasks(cfg, module, lecs, exs, load_todos(), sem_start)
     nxt = planner.next_session(cfg, module, get_schedule(cfg), now)
@@ -53,7 +54,7 @@ def _header(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dic
     with st.container(border=True, key=f"nextbox_{module_id}"):
         c1, c2 = st.columns(2, gap="large")
         with c1:
-            st.markdown("**Nächstes To-do**")
+            st.markdown(":material/task_alt: **Nächstes To-do**")
             if tasks:
                 t = tasks[0]
                 overdue = t["due"] < now
@@ -69,7 +70,7 @@ def _header(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dic
             else:
                 st.markdown("Alles erledigt ")
         with c2:
-            st.markdown("**Nächster Termin**")
+            st.markdown(":material/event: **Nächster Termin**")
             if nxt:
                 time = nxt.get("start", "") + (f"–{nxt['end']}" if nxt.get("end") else "")
                 st.markdown(f"#### {nxt.get('type', '')}")

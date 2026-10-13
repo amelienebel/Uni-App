@@ -8,9 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from utils import ai
-from utils import spaced_repetition as sr
 from utils.config import WEEKDAYS, module_label
-from utils.storage import (days_until_exam, get_exam_date, get_schedule, load_settings, save_settings,
+from utils.storage import (get_exam_date, get_schedule, load_settings, save_settings,
                            semester_dates)
 
 
@@ -21,8 +20,7 @@ def render(cfg: dict) -> None:
 
     # --- Klausurtermine -----------------------------------------------------
     st.subheader("📝 Klausurtermine")
-    st.caption("Je näher die Klausur, desto kürzer die Wiederholungsintervalle und desto höher die Priorität "
-               "der Lernkarten (≤ 45 Tage: mittel, ≤ 21: hoch, ≤ 7: kritisch).")
+    st.caption("Je näher die Klausur, desto häufiger fragt dich die App die Lernkarten des Fachs ab.")
     with st.form("exam_form"):
         new_dates = {}
         for mid in ids:
@@ -41,10 +39,6 @@ def render(cfg: dict) -> None:
             save_settings()
             st.success("Gespeichert.")
             st.rerun()
-    for mid in ids:
-        days = days_until_exam(mid)
-        if days is not None and days >= 0:
-            st.caption(f"{module_label(cfg, mid, short=True)}: {sr.exam_pressure(days)['label']}")
 
     # --- Semester -------------------------------------------------------------
     st.subheader("🗓️ Semester")

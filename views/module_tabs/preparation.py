@@ -79,6 +79,10 @@ def render(cfg: dict, module_id: str) -> None:
         st.caption("Noch keine Folien vorhanden.")
         return
 
+    focus = st.session_state.pop(f"prep_focus_{module_id}", None)
+    if focus:
+        docs = sorted(docs, key=lambda d: d.get("chapter_id") != focus)
+        st.session_state.pop(f"prep_doc_{module_id}", None)
     doc = st.selectbox("Foliensatz", docs, key=f"prep_doc_{module_id}",
                        format_func=lambda d: f"{d['filename']} – {chapter_label(data, d.get('chapter_id'))}")
     pages = get_document_pages(doc)

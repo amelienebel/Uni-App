@@ -5,20 +5,12 @@ from __future__ import annotations
 import streamlit as st
 
 from utils import planner
-from utils import spaced_repetition as sr
 from utils.config import get_module
 from utils.storage import days_until_exam, get_exam_date, load_module
-from views.module_tabs import exams, flashcards, formulas_tab, preparation, review, syllabus, tutor
+from views.common import MODULE_TAB_LABELS
+from views.module_tabs import exams, flashcards, formulas_tab, notes, preparation, review, syllabus, tutor
 
-TABS = [
-    "📖 Syllabus & Kapitel",
-    "🎬 Vorlesungsvorbereitung",
-    "📝 Nachbereitung",
-    "🃏 Spaced Repetition",
-    "📐 Formelsammlung",
-    "🎯 Klausuren & Quiz",
-    "💬 Verständnis-Chat",
-]
+TABS = list(MODULE_TAB_LABELS.values())
 
 
 def render(cfg: dict, module_id: str) -> None:
@@ -35,11 +27,11 @@ def render(cfg: dict, module_id: str) -> None:
     exam = get_exam_date(module_id)
     c4.metric("Klausur", f"{days} Tage" if days is not None and days >= 0 else "–",
               help=f"Termin: {exam:%d.%m.%Y}" if exam else "Unter ⚙️ Einstellungen eintragen")
-    if days is not None and days >= 0:
-        st.caption(f"Klausurdruck: {sr.exam_pressure(days)['label']} – beeinflusst Intervalle und Priorität der Wiederholungen.")
     st.progress(progress["overall"])
 
-    tabs = st.tabs(TABS)
+    if st.session_state.get(f"mtabs_{module_id}") not in TABS:
+        st.session_state.pop(f"mtabs_{module_id}", None)
+    tabs = st.tabs(TABS, key=f"mtabs_{module_id}")
     with tabs[0]:
         syllabus.render(cfg, module_id)
     with tabs[1]:
@@ -53,4 +45,6 @@ def render(cfg: dict, module_id: str) -> None:
     with tabs[5]:
         exams.render(cfg, module_id)
     with tabs[6]:
+        notes.render(cfg, module_id)
+    with tabs[7]:
         tutor.render(cfg, module_id)

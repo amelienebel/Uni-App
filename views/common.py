@@ -29,6 +29,27 @@ def goto(page_index: int, module_id: str | None = None) -> None:
         st.session_state["nav_module"] = module_id
 
 
+MODULE_TAB_LABELS = {
+    "syllabus": "📖 Syllabus & Kapitel",
+    "prep": "🎬 Vorlesungsvorbereitung",
+    "review": "📝 Nachbereitung",
+    "cards": "🃏 Spaced Repetition",
+    "formulas": "📐 Formelsammlung",
+    "exams": "🎯 Klausuren & Quiz",
+    "notes": "🗒️ Notizen",
+    "chat": "💬 Verständnis-Chat",
+}
+
+
+def open_module_tab(module_id: str, tab: str, chapter_id: str | None = None) -> None:
+    """Callback: springt in ein Modul, öffnet einen Reiter und wählt (falls angegeben) das Kapitel vor."""
+    goto(1, module_id)
+    st.session_state[f"mtabs_{module_id}"] = MODULE_TAB_LABELS[tab]
+    if chapter_id:
+        st.session_state[f"rev_ch_{module_id}"] = chapter_id
+        st.session_state[f"prep_focus_{module_id}"] = chapter_id
+
+
 def ai_hint(feature: str = "Diese Funktion") -> bool:
     """Zeigt einen Hinweis, wenn kein API-Key vorhanden ist. Gibt True zurück, wenn KI verfügbar ist."""
     if ai.is_available():
@@ -41,6 +62,10 @@ def ai_hint(feature: str = "Diese Funktion") -> bool:
 def chapter_select(module_data: dict, key: str, label: str = "Kapitel", include_none: bool = False,
                    default: str | None = None) -> str | None:
     options = ([None] if include_none else []) + [ch["id"] for ch in module_data["chapters"]]
+    if key in st.session_state and st.session_state[key] in options:
+        # Vorauswahl kommt z. B. aus der Wochenübersicht (Sprung zu einer Veranstaltung)
+        return st.selectbox(label, options, key=key, format_func=lambda cid: chapter_label(module_data, cid))
+    st.session_state.pop(key, None)
     index = options.index(default) if default in options else 0
     return st.selectbox(label, options, index=index, key=key,
                         format_func=lambda cid: chapter_label(module_data, cid))

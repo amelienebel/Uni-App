@@ -121,12 +121,11 @@ def render(cfg: dict, module_id: str) -> None:
     limit = int(load_settings()["learning"].get("daily_review_limit", 60))
 
     st.subheader("🃏 Spaced Repetition")
-    c = st.columns(5)
+    c = st.columns(4)
     c[0].metric("Karten", stats["total"])
     c[1].metric("Heute fällig", stats["due"])
     c[2].metric("Neu", stats["new"])
     c[3].metric("Beherrscht", stats["mastered"])
-    c[4].metric("Klausurdruck", sr.exam_pressure(days)["label"].split(" ")[0] + " " + sr.exam_pressure(days)["level"])
 
     # --- Generierung -------------------------------------------------------
     with st.expander("✨ Lernkarten automatisch generieren", expanded=not data["cards"]):

@@ -14,7 +14,6 @@ st.set_page_config(page_title="BWL-Lernplattform LMU", page_icon="🎓", layout=
                    initial_sidebar_state="auto")
 
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
-from utils import spaced_repetition as sr  # noqa: E402
 from utils.config import WEEKDAYS, get_secret, load_config, module_ids, module_label  # noqa: E402
 from views import bulk_upload, dashboard, export_view, formulas, module_view, settings_view  # noqa: E402
 from views.common import NAV_PAGES  # noqa: E402
@@ -94,8 +93,7 @@ with st.sidebar:
             upcoming.append((days, mid))
     if upcoming:
         for days, mid in sorted(upcoming)[:5]:
-            st.markdown(f"{sr.exam_pressure(days)['label'].split(' ')[0]} {module_label(cfg, mid, short=True)}: "
-                        f"**{days}** Tage")
+            st.markdown(f"📝 {module_label(cfg, mid, short=True)}: **{days}** Tage")
     else:
         st.caption("Noch keine Klausurtermine – unter ⚙️ Einstellungen eintragen.")
 

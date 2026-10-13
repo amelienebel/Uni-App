@@ -64,7 +64,7 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
         nav[2].button("nächste Übung ▶", key=f"next_{ex['id']}", on_click=open_unit,
                       args=(module_id, exs[idx + 1]["id"]), width="stretch")
 
-    st.markdown(f"## ✏️ {ex['title']}")
+    st.markdown(f"## {ex['title']}")
     st.caption(f"Besprechung: {session_text(ex)}")
 
     wkey = f"exdone_{module_id}_{ex['id']}"
@@ -88,15 +88,15 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
                      key=ckey, format_func=lambda cid: chapter_label(data, cid))
         st.button("Übernehmen", key=f"exchb_{ex['id']}", on_click=_set_chapter, args=(module_id, ex["id"], ckey))
     for lec in lectures:
-        st.button(f"🎬 {short_label(lec)} – {lec['topic']}", key=f"tolec_{ex['id']}_{lec['id']}", type="tertiary",
+        st.button(f"{short_label(lec)} – {lec['topic']}", key=f"tolec_{ex['id']}_{lec['id']}", type="tertiary",
                   on_click=open_unit, args=(module_id, lec["id"]))
 
     show_messages(module_id)
     all_units = lecs + exs
     docs = unit_docs(data, ex)
     cols = st.columns(3)
-    for col, doc_type, title in ((cols[0], "uebung", "📄 Übungsblatt"), (cols[1], "loesung", "📗 Musterlösung"),
-                                 (cols[2], "eigene_loesung", "✍️ Meine Lösung")):
+    for col, doc_type, title in ((cols[0], "uebung", "Übungsblatt"), (cols[1], "loesung", "Musterlösung"),
+                                 (cols[2], "eigene_loesung", "Meine Lösung")):
         with col.container(border=True):
             st.markdown(f"**{title}**")
             file_list(module_id, [d for d in docs if d["doc_type"] == doc_type], key=f"{ex['id']}_{doc_type}",
@@ -107,15 +107,15 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
     mine = [d for d in docs if d["doc_type"] == "eigene_loesung"]
     feedback = data.get("exercise_feedback", {}).get(ex["id"])
     if ai.is_available() and mine:
-        label = "🔄 Erneut vergleichen" if feedback else "🤖 Meine Lösung mit der Musterlösung vergleichen"
+        label = "Erneut vergleichen" if feedback else "Meine Lösung mit der Musterlösung vergleichen"
         if st.button(label, key=f"cmp_{ex['id']}", type="secondary" if feedback else "primary"):
             _compare(cfg, module_id, ex, docs)
             feedback = data.get("exercise_feedback", {}).get(ex["id"])
     if feedback:
-        with st.expander(f"🤖 Rückmeldung zu deiner Lösung (vom {feedback['created_at'][:10]})", expanded=True):
+        with st.expander(f"Rückmeldung zu deiner Lösung (vom {feedback['created_at'][:10]})", expanded=True):
             st.markdown(feedback["text"])
 
-    st.markdown("#### ❓ Fragen fürs Tutorium / die Übung")
+    st.markdown("#### Fragen fürs Tutorium / die Übung")
     question_list(module_id, data, key_prefix=f"exq_{ex['id']}", unit=ex["id"])
 
     st.markdown("#### 🃏 Karteikarten zu dieser Übung")
@@ -123,6 +123,6 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
     study.show_generation_message(ex["id"])
     if docs:
         study.generate_button(cfg, module_id, ex, cards, key=ex["id"],
-                              label="✨ Karteikarten zu den Lösungswegen erstellen" if not cards else None)
+                              label="Karteikarten zu den Lösungswegen erstellen" if not cards else None)
     study.review_session(cfg, module_id, cards, key=f"ex_{ex['id']}")
     study.manage_cards(module_id, data, cards, key=ex["id"])

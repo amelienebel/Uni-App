@@ -1,4 +1,4 @@
-"""📂 Bulk-Upload: viele PDFs (oder ZIP-Ordner) automatisch Modul, Vorlesung bzw. Übung zuordnen."""
+"""Bulk-Upload: viele PDFs (oder ZIP-Ordner) automatisch Modul, Vorlesung bzw. Übung zuordnen."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def _collect(files) -> tuple[list[dict], list[str]]:
 
 
 def render(cfg: dict) -> None:
-    st.title("📂 Bulk-Upload")
+    st.title("Bulk-Upload")
     _upload_tab(cfg)
 
 
@@ -46,7 +46,7 @@ def _upload_tab(cfg: dict) -> None:
         "passenden **Vorlesung bzw. Übung**. Du kannst die Zuordnung vor dem Import korrigieren. "
         "Von Folien wird direkt die Zusammenfassung erstellt.")
     if result := st.session_state.pop("bulk_result", None):
-        st.success(f"✅ {result[0]} Datei(en) importiert"
+        st.success(f"✓ {result[0]} Datei(en) importiert"
                    + (f", {result[1]} Duplikat(e) übersprungen." if result[1] else "."))
         for err in result[2]:
             st.error(err)
@@ -54,7 +54,7 @@ def _upload_tab(cfg: dict) -> None:
     files = st.file_uploader("PDFs oder ZIP-Archive", type=["pdf", "zip"], accept_multiple_files=True,
                              key=f"bulk_files_{st.session_state.get('bulk_round', 0)}")
     if not files:
-        with st.expander("💡 Tipps für eine gute automatische Zuordnung"):
+        with st.expander("Tipps für eine gute automatische Zuordnung"):
             st.markdown(
                 "- Dateinamen wie `Mathe_VL03_Folien.pdf`, `ReWe_Uebungsblatt_4.pdf`, `IuF_Loesung_Blatt2.pdf`\n"
                 "- Ordnerpfade aus Moodle werden mit ausgewertet, z. B. `Statistik/Woche 5/…`\n"
@@ -112,7 +112,7 @@ def _upload_tab(cfg: dict) -> None:
             "Sicherheit": st.column_config.TextColumn(disabled=True),
         })
 
-    if st.button("📥 Ausgewählte Dateien importieren", type="primary"):
+    if st.button("Ausgewählte Dateien importieren", type="primary"):
         name_to_id = {v: k for k, v in module_names.items()}
         type_to_key = {v: k for k, v in type_names.items()}
         imported, skipped, to_analyse, errors = 0, 0, [], []

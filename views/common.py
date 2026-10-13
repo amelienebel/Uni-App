@@ -13,12 +13,12 @@ from utils.config import get_module, load_config
 from utils.storage import chapter_label, documents_of, get_document_text, get_notes, load_module
 
 NAV_PAGES = [
-    "🏠 Wochenübersicht & Lernplan",
-    "📚 Modul-Bereiche",
-    "📐 Zentrale Formelsammlung",
-    "📂 Bulk-Upload",
-    "📥 Export & Backup",
-    "⚙️ Einstellungen & Klausurtermine",
+    "Wochenübersicht & Lernplan",
+    "Modul-Bereiche",
+    "Zentrale Formelsammlung",
+    "Bulk-Upload",
+    "Export & Backup",
+    "Einstellungen & Klausurtermine",
 ]
 
 
@@ -65,11 +65,11 @@ def open_todo(todo: dict) -> None:
     unit_id = None
     if len(parts) >= 4 and parts[1] == "vl":
         unit_id = f"vl:{parts[2]}"
-        st.session_state[f"ltab_next_{unit_id}"] = "📝 Nachbereiten" if parts[3] == "nachbereitet" else "🎬 Vorbereiten"
+        st.session_state[f"ltab_next_{unit_id}"] = "Nachbereiten" if parts[3] == "nachbereitet" else "Vorbereiten"
     elif len(parts) >= 4 and parts[1] == "ex":
         unit_id = f"ex:{parts[2]}:{parts[3]}"
     elif todo.get("kind") in ("Wiederholung", "Klausurvorbereitung"):
-        st.session_state[f"mtabs_{module_id}"] = "🎓 Lernen & Klausur"
+        st.session_state[f"mtabs_{module_id}"] = "Lernen & Klausur"
     open_unit(module_id, unit_id)
 
 
@@ -77,8 +77,8 @@ def ai_hint(feature: str = "Diese Funktion") -> bool:
     """Zeigt einen Hinweis, wenn kein API-Key vorhanden ist. Gibt True zurück, wenn KI verfügbar ist."""
     if ai.is_available():
         return True
-    st.info(f"🔌 {feature} nutzt ohne API-Key ein vereinfachtes Offline-Verfahren. "
-            "Für KI-Funktionen `ANTHROPIC_API_KEY` in der `.env` hinterlegen.", icon="ℹ️")
+    st.info(f"{feature} nutzt ohne API-Key ein vereinfachtes Offline-Verfahren. "
+            "Für KI-Funktionen `ANTHROPIC_API_KEY` in der `.env` hinterlegen.", icon=":material/info:")
     return False
 
 
@@ -174,7 +174,7 @@ def tts_player(text: str, key: str) -> None:
     payload = json.dumps(text)
     components.html(f"""
     <div style="font-family:sans-serif;display:flex;gap:8px;align-items:center">
-      <button id="play-{key}" style="padding:6px 14px;border-radius:6px;border:1px solid #ccc;cursor:pointer">▶️ Vorlesen</button>
+      <button id="play-{key}" style="padding:6px 14px;border-radius:6px;border:1px solid #ccc;cursor:pointer">▶ Vorlesen</button>
       <button id="stop-{key}" style="padding:6px 14px;border-radius:6px;border:1px solid #ccc;cursor:pointer">⏹ Stopp</button>
       <label style="font-size:13px">Tempo
         <input id="rate-{key}" type="range" min="0.7" max="1.5" step="0.1" value="1.0">

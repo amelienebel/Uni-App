@@ -18,10 +18,10 @@ from datetime import date, timedelta
 from utils.storage import new_id, now_iso
 
 GRADES = [
-    {"value": 0, "label": "Gar nicht kann", "icon": "🔴"},
-    {"value": 1, "label": "Etwas kann", "icon": "🟠"},
-    {"value": 2, "label": "Gut kann", "icon": "🟢"},
-    {"value": 3, "label": "Perfekt kann", "icon": "💚"},
+    {"value": 0, "label": "Gar nicht kann", "icon": ""},
+    {"value": 1, "label": "Etwas kann", "icon": ""},
+    {"value": 2, "label": "Gut kann", "icon": ""},
+    {"value": 3, "label": "Perfekt kann", "icon": ""},
 ]
 # Abbildung auf die SM-2-Qualitätsskala (0–5)
 _QUALITY = {0: 1, 1: 3, 2: 4, 3: 5}
@@ -53,14 +53,14 @@ def new_card(front: str, back: str, source: str = "manuell", chapter_id: str | N
 def exam_pressure(days_to_exam: int | None) -> dict:
     """Liefert Intervallfaktor, Prioritätsgewicht und eine Beschreibung."""
     if days_to_exam is None or days_to_exam < 0:
-        return {"factor": 1.0, "weight": 1.0, "level": "keine", "label": "⚪ Kein Klausurtermin"}
+        return {"factor": 1.0, "weight": 1.0, "level": "keine", "label": "Kein Klausurtermin"}
     if days_to_exam <= 7:
-        return {"factor": 0.4, "weight": 3.0, "level": "kritisch", "label": f"🔥 Kritisch ({days_to_exam} T.)"}
+        return {"factor": 0.4, "weight": 3.0, "level": "kritisch", "label": f"Kritisch ({days_to_exam} T.)"}
     if days_to_exam <= 21:
-        return {"factor": 0.6, "weight": 2.2, "level": "hoch", "label": f"🔴 Hoch ({days_to_exam} T.)"}
+        return {"factor": 0.6, "weight": 2.2, "level": "hoch", "label": f"Hoch ({days_to_exam} T.)"}
     if days_to_exam <= 45:
-        return {"factor": 0.8, "weight": 1.5, "level": "mittel", "label": f"🟠 Mittel ({days_to_exam} T.)"}
-    return {"factor": 1.0, "weight": 1.0, "level": "niedrig", "label": f"🟢 Niedrig ({days_to_exam} T.)"}
+        return {"factor": 0.8, "weight": 1.5, "level": "mittel", "label": f"Mittel ({days_to_exam} T.)"}
+    return {"factor": 1.0, "weight": 1.0, "level": "niedrig", "label": f"Niedrig ({days_to_exam} T.)"}
 
 
 def _cap_for_exam(interval: int, days_to_exam: int | None) -> int:

@@ -96,7 +96,7 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
         n = c2.slider("Anzahl", 3, 20, 6)
         difficulty = c3.select_slider("Schwierigkeit", ["leicht", "mittel", "klausurnah", "schwer"], value="klausurnah")
         use_exams = st.checkbox("Stil der hochgeladenen Altklausuren berücksichtigen", value=True, disabled=not has_ai)
-        submitted = st.form_submit_button("🎲 Quiz erstellen", type="primary")
+        submitted = st.form_submit_button("Quiz erstellen", type="primary")
     if submitted:
         with st.spinner("Erstelle Quiz …"):
             try:
@@ -136,7 +136,7 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
     if not quizzes:
         return
     quiz = quizzes[-1]
-    st.markdown(f"#### 📝 Aktuelles Quiz ({len(quiz['questions'])} Fragen, erstellt {quiz['created_at'][:16].replace('T', ' ')})")
+    st.markdown(f"#### Aktuelles Quiz ({len(quiz['questions'])} Fragen, erstellt {quiz['created_at'][:16].replace('T', ' ')})")
     total, reached = 0, 0
     for i, q in enumerate(quiz["questions"]):
         qkey = f"quiz_{quiz['id']}_{i}"
@@ -150,16 +150,16 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
                     total += q.get("points", 1)
                     if choice == q["correct_index"]:
                         reached += q.get("points", 1)
-                        st.success("✅ Richtig!")
+                        st.success("✓ Richtig!")
                     else:
-                        st.error(f"❌ Richtig wäre: {q['options'][q['correct_index']]}")
+                        st.error(f"Richtig wäre: {q['options'][q['correct_index']]}")
                     if q.get("explanation"):
                         st.caption(q["explanation"])
             else:
                 answer = st.text_area("Deine Lösung", key=qkey, height=120, label_visibility="collapsed",
                                       placeholder="Lösung mit Rechenweg …")
                 if st.session_state.get(f"{qkey}_checked"):
-                    with st.expander("📗 Musterlösung", expanded=True):
+                    with st.expander("Musterlösung", expanded=True):
                         st.markdown(q.get("sample_answer") or "–")
                         if q.get("explanation"):
                             st.caption(q["explanation"])
@@ -171,7 +171,7 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
                         for miss in grading.get("missing_points", []):
                             st.markdown(f"- {miss}")
                     elif ai.is_available() and answer.strip():
-                        if st.button("🤖 Korrigieren lassen", key=f"{qkey}_grade"):
+                        if st.button("Korrigieren lassen", key=f"{qkey}_grade"):
                             with st.spinner("Korrigiere …"):
                                 try:
                                     quiz["results"][str(i)] = ai.complete_json(GRADING_PROMPT.format(
@@ -201,9 +201,9 @@ def _altklausuren_section(cfg: dict, module_id: str, data: dict) -> None:
     if not exams:
         st.caption("Noch keine Altklausuren hochgeladen.")
     for doc in exams:
-        with st.expander(f"📄 {doc['filename']} ({doc['n_pages']} Seiten)"):
+        with st.expander(f"{doc['filename']} ({doc['n_pages']} Seiten)"):
             st.text(get_document_text(doc)[:6000] + ("\n…" if doc["n_chars"] > 6000 else ""))
-            if st.button("🗑️ Löschen", key=f"del_exam_{doc['id']}"):
+            if st.button("Löschen", key=f"del_exam_{doc['id']}"):
                 delete_document(module_id, doc["id"])
                 st.rerun()
 
@@ -218,7 +218,7 @@ def _signal_section(cfg: dict, module_id: str, data: dict) -> None:
     text = "\n\n".join(get_document_text(d, with_page_markers=False) for d in selected) + "\n\n" + pasted
     if not text.strip():
         st.caption("Wähle Dokumente oder füge Text ein.")
-        with st.expander("📚 Operatoren-Glossar"):
+        with st.expander("Operatoren-Glossar"):
             st.dataframe(pd.DataFrame([{"Operator": o["name"], "AFB": o["afb"], "So antworten": o["how"],
                                         "Beispiel": o["example"]} for o in OPERATORS]),
                          hide_index=True, width="stretch")
@@ -245,7 +245,7 @@ def _signal_section(cfg: dict, module_id: str, data: dict) -> None:
             for s in r["snippets"]:
                 st.caption(s)
 
-    st.markdown("#### 🤖 Tiefenanalyse")
+    st.markdown("#### Tiefenanalyse")
     if not ai_hint("Die Tiefenanalyse"):
         return
     if st.button("Altklausuren mit KI analysieren", key=f"sig_ai_{module_id}", type="primary"):
@@ -275,7 +275,7 @@ def _signal_section(cfg: dict, module_id: str, data: dict) -> None:
 
 def altklausuren(cfg: dict, module_id: str) -> None:
     data = load_module(module_id)
-    t1, t2 = st.tabs(["📄 Altklausuren", "🔎 Signalwort-Analyse"])
+    t1, t2 = st.tabs(["Altklausuren", "Signalwort-Analyse"])
     with t1:
         _altklausuren_section(cfg, module_id, data)
     with t2:

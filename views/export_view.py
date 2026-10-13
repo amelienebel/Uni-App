@@ -1,4 +1,4 @@
-"""📥 Export & Backup."""
+"""Export & Backup."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ from utils.storage import load_module, reload_all
 
 
 def render(cfg: dict) -> None:
-    st.title("📥 Export & Backup")
+    st.title("Export & Backup")
 
-    st.subheader("📄 Lernunterlagen exportieren (Offline-Lernen)")
+    st.subheader("Lernunterlagen exportieren (Offline-Lernen)")
     ids = [m["id"] for m in cfg["modules"]]
     selected = st.multiselect("Module", ids, default=ids, format_func=lambda mid: module_label(cfg, mid))
     c = st.columns(4)
@@ -32,32 +32,32 @@ def render(cfg: dict) -> None:
         stamp = datetime.now().strftime("%Y-%m-%d")
         markdown = to_markdown(blocks)
         c1, c2 = st.columns(2)
-        c1.download_button("⬇️ Markdown (.md)", markdown.encode("utf-8"), file_name=f"lernexport_{stamp}.md",
+        c1.download_button("Markdown (.md)", markdown.encode("utf-8"), file_name=f"lernexport_{stamp}.md",
                            mime="text/markdown", width="stretch",
                            help="Formeln als $$LaTeX$$ – ideal für Obsidian, Notion, Typora oder VS Code.")
-        if c2.button("📑 PDF erzeugen", width="stretch"):
+        if c2.button("PDF erzeugen", width="stretch"):
             with st.spinner("Erzeuge PDF …"):
                 st.session_state["export_pdf"] = to_pdf(blocks)
         if pdf := st.session_state.get("export_pdf"):
-            c2.download_button("⬇️ PDF herunterladen", pdf, file_name=f"lernexport_{stamp}.pdf",
+            c2.download_button("PDF herunterladen", pdf, file_name=f"lernexport_{stamp}.pdf",
                                mime="application/pdf", width="stretch")
             st.caption("Hinweis: Im PDF erscheinen Formeln als LaTeX-Quelltext. Für gerenderte Formeln den "
                        "Markdown-Export in einem Markdown-Editor mit Mathe-Unterstützung öffnen.")
-        with st.expander("👁️ Vorschau"):
+        with st.expander("Vorschau"):
             st.markdown(markdown[:20000] + ("\n\n…" if len(markdown) > 20000 else ""))
 
     st.divider()
-    st.subheader("💾 Vollständiges Backup")
+    st.subheader("Vollständiges Backup")
     st.markdown("Sichert den kompletten Ordner `data/` (Einstellungen, Notizen, Karten inkl. Lernstand, Uploads) als ZIP.")
-    if st.button("📦 Backup erstellen"):
+    if st.button("Backup erstellen"):
         with st.spinner("Packe Daten …"):
             st.session_state["backup_zip"] = backup_zip()
     if backup := st.session_state.get("backup_zip"):
-        st.download_button("⬇️ Backup herunterladen", backup,
+        st.download_button("Backup herunterladen", backup,
                            file_name=f"lernplattform_backup_{datetime.now():%Y-%m-%d_%H%M}.zip",
                            mime="application/zip")
 
-    with st.expander("♻️ Backup wiederherstellen"):
+    with st.expander("Backup wiederherstellen"):
         st.warning("Vorhandene Dateien mit gleichem Namen werden überschrieben.")
         upload = st.file_uploader("Backup-ZIP", type=["zip"], key="restore_zip")
         confirm = st.checkbox("Ich habe verstanden, dass aktuelle Daten überschrieben werden.")

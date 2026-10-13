@@ -170,13 +170,13 @@ def stream_chat(messages: list[dict], system: str = BASE_SYSTEM, max_tokens: int
                 yield text
             message = stream.get_final_message()
         if message.stop_reason == "refusal":
-            yield "\n\n⚠️ Die Anfrage wurde vom Modell abgelehnt. Bitte formuliere sie anders."
+            yield "\n\nDie Anfrage wurde vom Modell abgelehnt. Bitte formuliere sie anders."
         elif message.stop_reason == "max_tokens":
             yield "\n\n_(Antwort wegen Längenbegrenzung abgeschnitten.)_"
     except AIError as exc:
-        yield f"⚠️ {exc}"
+        yield f"{exc}"
     except anthropic.APIError as exc:
-        yield f"⚠️ {_translate_error(exc)}"
+        yield f"{_translate_error(exc)}"
 
 
 def image_block(content: bytes, media_type: str) -> dict:

@@ -53,7 +53,7 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
     when = f"{WEEKDAYS[lec['date'].weekday()]}, {lec['date']:%d.%m.%Y}"
     if slot:
         when += f" · {slot.get('start', '')}–{slot.get('end', '')} · {slot.get('room', '')}"
-    st.markdown(f"## 🎬 Vorlesung {lec['nr']}: {lec['topic']}")
+    st.markdown(f"## Vorlesung {lec['nr']}: {lec['topic']}")
     st.caption(when + (f" · {chapter_label(data, lec['chapter_id'])}" if lec.get("chapter_id") else "")
                + (" · vorlesungsfrei" if lec["is_break"] else ""))
 
@@ -71,8 +71,8 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
     if related:
         st.markdown("**Zugehörige Übungen:**")
         for ex in related:
-            done = "✅" if state.get(ex["plan_key"]) else "⬜"
-            st.button(f"{done} ✏️ {short_label(ex)} – {ex['title']}", key=f"toex_{lec['id']}_{ex['id']}",
+            done = "✓" if state.get(ex["plan_key"]) else "○"
+            st.button(f"{done} {short_label(ex)} – {ex['title']}", key=f"toex_{lec['id']}_{ex['id']}",
                       type="tertiary", on_click=open_unit, args=(module_id, ex["id"]))
 
 
@@ -83,11 +83,11 @@ def _files_tab(cfg: dict, module_id: str, lec: dict, exs: list[dict], all_units:
     docs = unit_docs(data, lec)
     file_list(module_id, docs, key=lec["id"], all_units=all_units,
               empty="Noch keine Folien für diese Vorlesung.")
-    with st.expander("➕ Weitere Unterlagen (Skript, Literatur …)"):
+    with st.expander("Weitere Unterlagen (Skript, Literatur …)"):
         uploader(cfg, module_id, lec, "skript", "Skript / Literatur (PDF)", key=f"skr_{lec['id']}")
     for ex in related_exercises(lec, exs):
         ex_docs = unit_docs(data, ex)
-        st.markdown(f"**✏️ {short_label(ex)} – {ex['title']}**")
+        st.markdown(f"**{short_label(ex)} – {ex['title']}**")
         file_list(module_id, ex_docs, key=f"{lec['id']}_{ex['id']}", empty="Noch keine Dateien zur Übung.")
 
 
@@ -95,14 +95,14 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
     slides = [d for d in unit_docs(data, lec) if d.get("kind") != "image"]
     if not slides:
-        st.info("Lade unter „📂 Dateien“ die Folien hoch – die Zusammenfassung wird dann automatisch erstellt.")
+        st.info("Lade unter „Dateien“ die Folien hoch – die Zusammenfassung wird dann automatisch erstellt.")
         return
     for doc in slides:
         analysis = doc.get("analysis")
         if len(slides) > 1:
-            st.markdown(f"### 📄 {doc['filename']}")
+            st.markdown(f"### {doc['filename']}")
         if not analysis:
-            if st.button("✨ Zusammenfassung erstellen", key=f"an_{doc['id']}", type="primary"):
+            if st.button("Zusammenfassung erstellen", key=f"an_{doc['id']}", type="primary"):
                 with st.spinner("Erstelle Zusammenfassung …"):
                     try:
                         st.session_state[f"upmsg_{module_id}"] = [("success", run_analysis(cfg, module_id, doc))]
@@ -112,28 +112,28 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
             continue
         st.markdown(analysis.get("summary", ""))
         if analysis.get("key_concepts"):
-            with st.expander(f"🧠 Fachbegriffe ({len(analysis['key_concepts'])})"):
+            with st.expander(f"Fachbegriffe ({len(analysis['key_concepts'])})"):
                 for concept in analysis["key_concepts"]:
                     st.markdown(f"- **{concept['term']}** – {concept['explanation']}")
         if analysis.get("important_slides"):
-            with st.expander("🖼️ Diese Folien genau ansehen"):
+            with st.expander("Diese Folien genau ansehen"):
                 for s in analysis["important_slides"]:
                     st.markdown(f"- **Folie {s['page']}**: {s['reason']}")
         if analysis.get("formulas"):
-            with st.expander(f"📐 Formeln auf den Folien ({len(analysis['formulas'])})"):
+            with st.expander(f"Formeln auf den Folien ({len(analysis['formulas'])})"):
                 st.caption("In die Formelsammlung kommen sie erst, wenn du sie unter „Formeln & Notizen“ bestätigst.")
                 for f in analysis["formulas"]:
                     render_formula(f)
         questions = analysis.get("check_questions", [])[:3]
         if questions:
-            st.markdown("#### ❓ 3 schnelle Verständnisfragen")
+            st.markdown("#### 3 schnelle Verständnisfragen")
             for i, q in enumerate(questions, start=1):
                 st.markdown(f"**{i}. {q['question']}**")
                 st.text_area("Deine Antwort", key=f"cq_{doc['id']}_{i}", height=70, label_visibility="collapsed",
                              placeholder="Erst selbst antworten, dann auflösen …")
                 with st.expander("Lösung anzeigen"):
                     st.markdown(q["answer"])
-        with st.expander("🔄 Zusammenfassung neu erstellen"):
+        with st.expander("Zusammenfassung neu erstellen"):
             if st.button("Neu erstellen", key=f"rean_{doc['id']}"):
                 with st.spinner("Erstelle Zusammenfassung …"):
                     try:
@@ -148,18 +148,18 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
     notes = lecture_notes(data, lec["id"])
     with st.form(f"lnotes_{module_id}_{lec['id']}"):
-        text = st.text_area("🗒️ Meine Notizen aus der Vorlesung", notes["text"], height=220,
+        text = st.text_area("Meine Notizen aus der Vorlesung", notes["text"], height=220,
                             placeholder="Was habe ich mitgeschrieben? Formeln gern in LaTeX: $C_0 = ...$")
         c1, c2, c3 = st.columns(3)
-        emphasized = c1.text_area("📢 Vom Dozenten betont", notes["emphasized"], height=130,
+        emphasized = c1.text_area("Vom Dozenten betont", notes["emphasized"], height=130,
                                   placeholder="„Das kommt dran!“, Wiederholungen, Tafelanschrieb …")
-        briefly = c2.text_area("💨 Nur kurz angerissen", notes["briefly"], height=130,
+        briefly = c2.text_area("Nur kurz angerissen", notes["briefly"], height=130,
                                placeholder="Folien übersprungen, „nur zur Info“ …")
-        examples = c3.text_area("💡 Genannte Beispiele", notes["examples"], height=130,
+        examples = c3.text_area("Genannte Beispiele", notes["examples"], height=130,
                                 placeholder="Rechenbeispiele, Unternehmen, Fallstudien …")
         b1, b2 = st.columns(2)
-        save = b1.form_submit_button("💾 Speichern", width="stretch")
-        finish = b2.form_submit_button("✅ Speichern & Nachbereitung abschließen", type="primary", width="stretch")
+        save = b1.form_submit_button("Speichern", width="stretch")
+        finish = b2.form_submit_button("✓ Speichern & Nachbereitung abschließen", type="primary", width="stretch")
     if save or finish:
         notes.update({"text": text, "emphasized": emphasized, "briefly": briefly, "examples": examples,
                       "updated_at": now_iso()})
@@ -170,10 +170,10 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
             st.session_state[f"ltab_next_{lec['id']}"] = "🃏 Lernen"
         st.rerun()
     if notes["text"].strip():
-        with st.expander("👁️ Vorschau der Notizen (mit Formeln)"):
+        with st.expander("Vorschau der Notizen (mit Formeln)"):
             st.markdown(notes["text"])
 
-    st.markdown("#### 📸 Tafelbilder & Screenshots")
+    st.markdown("#### Tafelbilder & Screenshots")
     images = st.file_uploader("Bilder hochladen", type=list(IMAGE_TYPES), accept_multiple_files=True,
                               key=f"img_up_{lec['id']}_{len(notes['images'])}")
     if images and st.button("Bilder speichern", key=f"img_save_{lec['id']}"):
@@ -196,7 +196,7 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
                 except Exception:  # noqa: BLE001
                     st.caption(f"{img['name']} (Vorschau nicht möglich)")
             b1, b2 = st.columns(2)
-            if ai.is_available() and not img.get("transcript") and b1.button("🔍 Abtippen", key=f"tr_{lec['id']}_{i}"):
+            if ai.is_available() and not img.get("transcript") and b1.button("Abtippen", key=f"tr_{lec['id']}_{i}"):
                 ext = Path(img["name"]).suffix.lower().lstrip(".")
                 with st.spinner("Lese Tafelbild …"):
                     try:
@@ -210,7 +210,7 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
                         save_module(module_id)
                     except ai.AIError as exc:
                         st.error(str(exc))
-            if b2.button("🗑️", key=f"del_img_{lec['id']}_{i}"):
+            if b2.button("Löschen", key=f"del_img_{lec['id']}_{i}"):
                 delete_data_file(img["path"])
                 notes["images"].remove(img)
                 save_module(module_id)
@@ -221,7 +221,7 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
 
     old = data["notes"].get(lec.get("chapter_id") or "")
     if old and any((old.get(k) or "").strip() for k in ("text", "emphasized", "briefly", "examples")):
-        with st.expander("🗂️ Ältere Notizen zu diesem Kapitel"):
+        with st.expander("Ältere Notizen zu diesem Kapitel"):
             old = get_notes(data, lec["chapter_id"])
             for field, label in (("text", "Notizen"), ("emphasized", "Betont"), ("briefly", "Kurz angerissen"),
                                  ("examples", "Beispiele")):
@@ -253,15 +253,15 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
     st.divider()
     context = unit_material(data, lec)
     label = f"Vorlesung {lec['nr']} ({lec['date']:%d.%m.}): {lec['topic']}"
-    with st.expander("🎲 Quiz zu dieser Vorlesung"):
+    with st.expander("Quiz zu dieser Vorlesung"):
         exams.quiz_section(cfg, module_id, data, scope_key=lec["id"], scope_label=label,
                            context=context or "(noch keine Unterlagen)", chapter_ids=[lec.get("chapter_id")] if lec.get("chapter_id") else [])
-    with st.expander("💬 Fragen an den Tutor zu dieser Vorlesung"):
+    with st.expander("Fragen an den Tutor zu dieser Vorlesung"):
         tutor.render(cfg, module_id, scope_key=lec["id"], context=context or "(noch keine Unterlagen)",
                      scope_label=label)
 
 
-LEC_TABS = ["📂 Dateien", "🎬 Vorbereiten", "📝 Nachbereiten", "🃏 Lernen"]
+LEC_TABS = ["Dateien", "Vorbereiten", "Nachbereiten", "🃏 Lernen"]
 
 
 def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[dict]) -> None:

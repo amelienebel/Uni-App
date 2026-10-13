@@ -1,4 +1,4 @@
-"""📚 Modul-Bereich: Ablauf (Vorlesungen & Übungen) → Detailseiten; Lernen & Klausur; Formeln & Notizen."""
+"""Modul-Bereich: Ablauf (Vorlesungen & Übungen) → Detailseiten; Lernen & Klausur; Formeln & Notizen."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from utils.storage import (chapter_label, days_until_exam, get_exam_date, get_sc
 from views.common import open_unit
 from views.module_tabs import ablauf, exercise_page, formulas_tab, learn, lecture_page, notes
 
-TABS = ["📋 Ablauf", "🎓 Lernen & Klausur", "📐 Formeln & Notizen"]
+TABS = ["Ablauf", "Lernen & Klausur", "Formeln & Notizen"]
 
 
 def _stats(module: dict, data: dict) -> None:
@@ -28,7 +28,7 @@ def _stats(module: dict, data: dict) -> None:
     c3.metric("Karten fällig", progress["card_stats"]["due"], help=f"{progress['card_stats']['total']} Karten insgesamt")
     exam = get_exam_date(module_id)
     c4.metric("Klausur", f"{days} Tage" if days is not None and days >= 0 else "–",
-              help=f"Termin: {exam:%d.%m.%Y}" if exam else "Unter ⚙️ Einstellungen eintragen")
+              help=f"Termin: {exam:%d.%m.%Y}" if exam else "Unter Einstellungen eintragen")
     st.progress(progress["overall"])
 
 
@@ -45,7 +45,7 @@ def _short_date(d: date) -> str:
 def _header(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dict]) -> None:
     module_id = module["id"]
     now = today()
-    st.title(f"{module['icon']} {module['name']}")
+    st.title(f"{module['name']}")
     sem_start, _ = semester_dates(cfg)
     tasks = units.open_tasks(cfg, module, lecs, exs, load_todos(), sem_start)
     nxt = planner.next_session(cfg, module, get_schedule(cfg), now)
@@ -53,13 +53,13 @@ def _header(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dic
     with st.container(border=True, key=f"nextbox_{module_id}"):
         c1, c2 = st.columns(2, gap="large")
         with c1:
-            st.markdown("**✅ Nächstes To-do**")
+            st.markdown("**Nächstes To-do**")
             if tasks:
                 t = tasks[0]
                 overdue = t["due"] < now
                 when = "heute" if t["due"] == now else _short_date(t["due"])
                 st.markdown(f"#### {t['label']}")
-                st.markdown(("⚠️ **überfällig** – war fällig " if overdue else "fällig ") + f"**{when}**")
+                st.markdown(("**überfällig** – war fällig " if overdue else "fällig ") + f"**{when}**")
                 st.caption(t["about"])
                 st.button("Jetzt öffnen →", key=f"gotask_{module_id}", type="primary",
                           on_click=_go_task, args=(module_id, t["unit"]["id"], t["tab"]))
@@ -67,9 +67,9 @@ def _header(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dic
                 if more:
                     st.caption(f"Außerdem überfällig: {len(more)} weitere Aufgabe(n)")
             else:
-                st.markdown("Alles erledigt 🎉")
+                st.markdown("Alles erledigt ")
         with c2:
-            st.markdown("**📅 Nächster Termin**")
+            st.markdown("**Nächster Termin**")
             if nxt:
                 time = nxt.get("start", "") + (f"–{nxt['end']}" if nxt.get("end") else "")
                 st.markdown(f"#### {nxt.get('type', '')}")
@@ -101,7 +101,7 @@ def render(cfg: dict, module_id: str) -> None:
     unit_id = st.session_state.get(f"unit_{module_id}")
     unit = next((u for u in lecs + exs if u["id"] == unit_id), None) if unit_id else None
     if unit:
-        st.caption(f"{module['icon']} {module['name']}")
+        st.caption(f"{module['name']}")
         if unit["kind"] == "lecture":
             lecture_page.render(cfg, module_id, unit, lecs, exs)
         else:

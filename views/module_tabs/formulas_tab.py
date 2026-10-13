@@ -29,7 +29,7 @@ def _review_inbox(module_id: str, data: dict) -> None:
     if not inbox:
         return
     with st.container(border=True):
-        st.markdown(f"#### 📥 Formel-Vorschläge prüfen ({len(inbox)})")
+        st.markdown(f"#### Formel-Vorschläge prüfen ({len(inbox)})")
         st.caption("Automatisch erkannte Formeln können Fehler enthalten. Hake nur an, was übernommen werden soll – "
                    "Name und LaTeX kannst du vorher korrigieren.")
         for f in inbox:
@@ -46,7 +46,7 @@ def _review_inbox(module_id: str, data: dict) -> None:
                     st.caption(f"Quelle: {f.get('source', '–')}" + (f" · Seite {f['page']}" if f.get("page") else "")
                                + (f" · {f['explanation']}" if f.get("explanation") else ""))
         b1, b2 = st.columns(2)
-        if b1.button("✅ Angehakte übernehmen", type="primary", key=f"inb_take_{module_id}"):
+        if b1.button("✓ Angehakte übernehmen", type="primary", key=f"inb_take_{module_id}"):
             chosen = [f for f in inbox if st.session_state.get(f"inb_ok_{f['id']}")]
             for f in chosen:
                 f["name"] = st.session_state.get(f"inb_name_{f['id']}", f["name"])
@@ -56,7 +56,7 @@ def _review_inbox(module_id: str, data: dict) -> None:
             added = add_formulas(module_id, chosen, "geprüft")
             st.session_state["inbox_msg"] = f"{added} Formel(n) übernommen, {len(inbox) - len(chosen)} verworfen."
             st.rerun()
-        if b2.button("🗑️ Alle Vorschläge verwerfen", key=f"inb_drop_{module_id}"):
+        if b2.button("Alle Vorschläge verwerfen", key=f"inb_drop_{module_id}"):
             data["formula_inbox"] = []
             save_module(module_id)
             st.rerun()
@@ -66,10 +66,10 @@ def render(cfg: dict, module_id: str) -> None:
     module = get_module(cfg, module_id)
     data = load_module(module_id)
 
-    st.subheader("📐 Formelsammlung")
+    st.subheader("Formelsammlung")
     _review_inbox(module_id, data)
 
-    with st.expander("🔎 Formeln aus Dokumenten extrahieren"):
+    with st.expander("Formeln aus Dokumenten extrahieren"):
         has_ai = ai_hint("Die Formelextraktion")
         docs = data["documents"]
         selected = st.multiselect("Dokumente", docs, format_func=lambda d: d["filename"], key=f"fx_docs_{module_id}")
@@ -92,7 +92,7 @@ def render(cfg: dict, module_id: str) -> None:
                         st.error(str(exc))
             st.success(f"{total} Vorschlag/Vorschläge gefunden – bitte unten prüfen.")
 
-    with st.expander("➕ Formel manuell hinzufügen"):
+    with st.expander("Formel manuell hinzufügen"):
         name = st.text_input("Name", key=f"f_name_{module_id}")
         latex = st.text_area("LaTeX", key=f"f_latex_{module_id}", height=80,
                              placeholder=r"C_0 = -I_0 + \sum_{t=1}^{T} \frac{CF_t}{(1+i)^t}")
@@ -106,7 +106,7 @@ def render(cfg: dict, module_id: str) -> None:
                                  "manuell", chapter_id)
             st.success("Formel hinzugefügt." if added else "Diese Formel existiert bereits.")
 
-    search = st.text_input("🔍 Suchen", key=f"f_search_{module_id}", placeholder="z. B. Kapitalwert, Varianz …")
+    search = st.text_input("Suchen", key=f"f_search_{module_id}", placeholder="z. B. Kapitalwert, Varianz …")
     formulas = [f for f in data["formulas"]
                 if not search or search.lower() in (f["name"] + f["latex"] + f.get("explanation", "")).lower()]
     if not formulas:
@@ -127,9 +127,9 @@ def render(cfg: dict, module_id: str) -> None:
                     st.caption(f"Quelle: {f.get('source', '–')}" + (f" · S. {f['page']}" if f.get("page") else ""))
                 with c2:
                     edit_key = f"edit_f_{f['id']}"
-                    if st.button("✏️", key=f"btn_{edit_key}", help="Bearbeiten"):
+                    if st.button("Bearbeiten", key=f"btn_{edit_key}", help="Bearbeiten"):
                         st.session_state[edit_key] = not st.session_state.get(edit_key, False)
-                    if st.button("🗑️", key=f"del_f_{f['id']}", help="Löschen"):
+                    if st.button("Löschen", key=f"del_f_{f['id']}", help="Löschen"):
                         data["formulas"].remove(f)
                         save_module(module_id)
                         st.rerun()

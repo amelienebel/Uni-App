@@ -1,4 +1,4 @@
-"""📐 Zentrale, modulübergreifende Formelsammlung."""
+"""Zentrale, modulübergreifende Formelsammlung."""
 
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ from views.common import render_formula
 
 
 def render(cfg: dict) -> None:
-    st.title("📐 Zentrale Formelsammlung")
+    st.title("Zentrale Formelsammlung")
     ids = [m["id"] for m in cfg["modules"]]
     c1, c2 = st.columns([2, 3])
     selected = c1.multiselect("Module", ids, default=ids, format_func=lambda mid: module_label(cfg, mid, short=True))
-    search = c2.text_input("🔍 Suche in Name, LaTeX und Erklärung", placeholder="z. B. Elastizität, Barwert, \\sum")
+    search = c2.text_input("Suche in Name, LaTeX und Erklärung", placeholder="z. B. Elastizität, Barwert, \\sum")
     compact = st.toggle("Kompaktansicht (zwei Spalten, ohne Erklärungen)")
 
     blocks = [("title", "Zentrale Formelsammlung")]
@@ -29,7 +29,7 @@ def render(cfg: dict) -> None:
             continue
         total += len(formulas)
         blocks.append(("h1", module["name"]))
-        with st.expander(f"{module['icon']} {module['name']} – {len(formulas)} Formel(n)", expanded=True):
+        with st.expander(f"{module['name']} – {len(formulas)} Formel(n)", expanded=True):
             order = {ch["id"]: i for i, ch in enumerate(data["chapters"])}
             formulas.sort(key=lambda f: order.get(f.get("chapter_id"), 999))
             current = object()
@@ -46,5 +46,5 @@ def render(cfg: dict) -> None:
     if not total:
         st.info("Keine Formeln gefunden.")
         return
-    st.download_button("⬇️ Gefilterte Formelsammlung als Markdown", to_markdown(blocks).encode("utf-8"),
+    st.download_button("Gefilterte Formelsammlung als Markdown", to_markdown(blocks).encode("utf-8"),
                        file_name="formelsammlung.md", mime="text/markdown")

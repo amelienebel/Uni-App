@@ -35,11 +35,11 @@ def file_list(module_id: str, docs: list[dict], key: str, all_units: list[dict] 
             content = None
         c1, c2, c3 = st.columns([6, 1, 1], vertical_alignment="center")
         legacy = "" if doc.get("unit") else " · aus dem Kapitel"
-        c1.markdown(f"📄 **{doc['filename']}**  \n<span class='small-muted'>{doc_type_label(doc['doc_type'])}"
+        c1.markdown(f"**{doc['filename']}**  \n<span class='small-muted'>{doc_type_label(doc['doc_type'])}"
                     f"{' · ' + str(doc['n_pages']) + ' Seiten' if doc.get('n_pages') else ''}{legacy}</span>",
                     unsafe_allow_html=True)
         if content is not None:
-            c2.download_button("⬇️", content, file_name=doc["filename"], key=f"dl_{key}_{doc['id']}",
+            c2.download_button("Download", content, file_name=doc["filename"], key=f"dl_{key}_{doc['id']}",
                                mime=doc.get("mime", "application/pdf"), help="Herunterladen / öffnen")
         with c3.popover("⋯", help="Verschieben oder löschen"):
             if units_by_id:
@@ -51,14 +51,14 @@ def file_list(module_id: str, docs: list[dict], key: str, all_units: list[dict] 
                                                      f"{units_by_id[uid].get('topic') or units_by_id[uid].get('title', '')}"[:80])
                 st.button("Verschieben", key=f"mvb_{key}_{doc['id']}", on_click=_move,
                           args=(module_id, doc["id"], wkey, units_by_id))
-            if st.button("🗑️ Löschen", key=f"del_{key}_{doc['id']}", type="primary"):
+            if st.button("Löschen", key=f"del_{key}_{doc['id']}", type="primary"):
                 delete_document(module_id, doc["id"])
                 st.rerun()
         if doc.get("kind") == "image" and content is not None:
             try:
                 st.image(content, width=320)
             except Exception:  # noqa: BLE001 - beschädigtes/unbekanntes Bildformat
-                st.caption("(Vorschau nicht möglich – Datei über ⬇️ öffnen)")
+                st.caption("(Vorschau nicht möglich – Datei über öffnen)")
 
 
 def uploader(cfg: dict, module_id: str, unit: dict, doc_type: str, label: str, key: str,

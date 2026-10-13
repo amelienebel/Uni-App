@@ -14,7 +14,7 @@ from views.common import open_unit, toggle_todo
 
 
 def _mark(ok: bool) -> str:
-    return "✅" if ok else "⬜"
+    return "✓" if ok else "○"
 
 
 def _due(d) -> str:
@@ -32,10 +32,10 @@ def _lecture_row(module: dict, data: dict, lec: dict, state: dict, is_next: bool
     cards = unit_cards(data, lec)
     with st.container(key=f"row_{module_id}_{lec['id'].replace(':', '_')}"):
         c1, c2, c3 = st.columns([6, 2, 2], vertical_alignment="center")
-        c1.button(f"🎬 {short_label(lec)} – {lec['topic']}" + ("  ⬅ als Nächstes" if is_next else ""),
+        c1.button(f"{short_label(lec)} – {lec['topic']}" + ("  als Nächstes" if is_next else ""),
                   key=f"open_{module_id}_{lec['id']}", type="tertiary", on_click=open_unit,
                   args=(module_id, lec["id"]))
-        c1.caption(f"{'📄 Folien' if docs else 'keine Folien'}" + (f" · 🃏 {len(cards)} Karten" if cards else "")
+        c1.caption(f"{'Folien' if docs else 'keine Folien'}" + (f" · 🃏 {len(cards)} Karten" if cards else "")
                    + f" · vorbereiten bis {_due(planner.prep_due(module, lec['date']))}"
                    + f" · nachbereiten bis {_due(planner.review_due(module, lec['date']))}")
         for col, field, label in ((c2, "vorbereitet", "Vorbereitet"), (c3, "nachbereitet", "Nachbereitet")):
@@ -49,18 +49,18 @@ def _exercise_row(module: dict, data: dict, ex: dict, state: dict, is_next: bool
     have = {d["doc_type"] for d in unit_docs(data, ex)}
     with st.container(key=f"row_{module_id}_{ex['id'].replace(':', '_')}"):
         c1, c2, c3 = st.columns([6, 2, 2], vertical_alignment="center")
-        c1.button(f"✏️ {ex['title']}" + ("  ⬅ als Nächstes" if is_next else ""),
+        c1.button(f"{ex['title']}" + ("  als Nächstes" if is_next else ""),
                   key=f"open_{module_id}_{ex['id']}", type="tertiary", on_click=open_unit,
                   args=(module_id, ex["id"]))
-        files = " · ".join(label for key, label in (("uebung", "📄 Blatt"), ("loesung", "📗 Lösung"),
-                                                     ("eigene_loesung", "✍️ meine Lösung")) if key in have)
+        files = " · ".join(label for key, label in (("uebung", "Blatt"), ("loesung", "Lösung"),
+                                                     ("eigene_loesung", "meine Lösung")) if key in have)
         c1.caption(f"{session_text(ex)}" + (f" · {files}" if files else "") + f" · lösen bis {_due(due)}")
         todo = {"key": ex["plan_key"], "module_id": module_id, "chapter_id": ex.get("chapter_id"), "sync": "uebung"}
         _check(c2, "Gelöst", todo, state, f"abl_ex_{module_id}_{ex['id']}")
 
 
 def _chapter_editor(module_id: str, data: dict) -> None:
-    with st.expander("⚙️ Kapitel bearbeiten"):
+    with st.expander("Kapitel bearbeiten"):
         df = pd.DataFrame([{
             "id": ch["id"], "Titel": ch["title"], "Woche": ch.get("week"),
             **{label: ch["status"][key] for key, label in CHAPTER_STATUS_FIELDS.items()},
@@ -69,7 +69,7 @@ def _chapter_editor(module_id: str, data: dict) -> None:
             df, key=f"syllabus_{module_id}", num_rows="dynamic", hide_index=True, width="stretch",
             column_config={"id": None, "Titel": st.column_config.TextColumn(required=True, width="large"),
                            "Woche": st.column_config.NumberColumn(min_value=1, max_value=20, step=1)})
-        if st.button("💾 Kapitel speichern", key=f"save_syllabus_{module_id}"):
+        if st.button("Kapitel speichern", key=f"save_syllabus_{module_id}"):
             old = {ch["id"]: ch for ch in data["chapters"]}
             new_chapters = []
             for _, row in edited.iterrows():

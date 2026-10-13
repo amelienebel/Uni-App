@@ -1,4 +1,4 @@
-"""⚙️ Einstellungen & Klausurtermine."""
+"""Einstellungen & Klausurtermine."""
 
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ from utils.storage import (get_exam_date, get_schedule, load_settings, save_sett
 
 def render(cfg: dict) -> None:
     settings = load_settings()
-    st.title("⚙️ Einstellungen & Klausurtermine")
+    st.title("Einstellungen & Klausurtermine")
     ids = [m["id"] for m in cfg["modules"]]
 
     # --- Klausurtermine -----------------------------------------------------
-    st.subheader("📝 Klausurtermine")
+    st.subheader("Klausurtermine")
     st.caption("Je näher die Klausur, desto häufiger fragt dich die App die Lernkarten des Fachs ab.")
     with st.form("exam_form"):
         new_dates = {}
@@ -34,14 +34,14 @@ def render(cfg: dict) -> None:
             r = c4.text_input("Raum", entry.get("room", ""), key=f"exam_r_{mid}", placeholder="Raum",
                               label_visibility="collapsed")
             new_dates[mid] = {"date": d.isoformat() if d else "", "time": t, "room": r}
-        if st.form_submit_button("💾 Klausurtermine speichern", type="primary"):
+        if st.form_submit_button("Klausurtermine speichern", type="primary"):
             settings["exam_dates"] = new_dates
             save_settings()
             st.success("Gespeichert.")
             st.rerun()
 
     # --- Semester -------------------------------------------------------------
-    st.subheader("🗓️ Semester")
+    st.subheader("Semester")
     start, end = semester_dates(cfg)
     with st.form("semester_form"):
         c1, c2 = st.columns(2)
@@ -56,7 +56,7 @@ def render(cfg: dict) -> None:
                 st.success("Gespeichert.")
 
     # --- Stundenplan ----------------------------------------------------------
-    st.subheader("🕒 Stundenplan")
+    st.subheader("Stundenplan")
     st.caption("Grundlage für Wochenübersicht und To-do-Fristen. Standardwerte stammen aus config.json – "
                "bitte an deinen LSF-Stundenplan anpassen.")
     names = {mid: module_label(cfg, mid, short=True) for mid in ids}
@@ -74,7 +74,7 @@ def render(cfg: dict) -> None:
             "Ende": st.column_config.TextColumn(help="Format HH:MM"),
         })
     c1, c2 = st.columns(2)
-    if c1.button("💾 Stundenplan speichern", type="primary"):
+    if c1.button("Stundenplan speichern", type="primary"):
         name_to_id = {v: k for k, v in names.items()}
         schedule = []
         for _, row in edited.iterrows():
@@ -86,13 +86,13 @@ def render(cfg: dict) -> None:
         settings["schedule"] = schedule
         save_settings()
         st.success("Stundenplan gespeichert.")
-    if c2.button("↩️ Auf config.json zurücksetzen"):
+    if c2.button("↩ Auf config.json zurücksetzen"):
         settings["schedule"] = None
         save_settings()
         st.rerun()
 
     # --- Lernparameter ----------------------------------------------------------
-    st.subheader("🧠 Lernparameter")
+    st.subheader("Lernparameter")
     learning = settings["learning"]
     with st.form("learning_form"):
         limit = st.number_input("Max. Wiederholungen pro Modul und Sitzung", 10, 500,
@@ -111,7 +111,7 @@ def render(cfg: dict) -> None:
             st.success("Gespeichert.")
 
     # --- KI -----------------------------------------------------------------------
-    st.subheader("🤖 KI-Einstellungen")
+    st.subheader("KI-Einstellungen")
     if ai.is_available():
         st.success("API-Key aus `.env` geladen (wird aus Sicherheitsgründen nicht angezeigt).")
     else:

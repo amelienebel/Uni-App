@@ -1,4 +1,4 @@
-"""🏠 Wochenübersicht & Lernplan."""
+"""Wochenübersicht & Lernplan."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def _short_label(t: dict) -> str:
 
 
 def _move_popover(t: dict, monday: date, place: str) -> None:
-    with st.popover("↔️", help="Verschieben", type="tertiary"):
+    with st.popover("↔", help="Verschieben", type="tertiary"):
         st.markdown(f"**{t['title']}**")
         days = [monday + timedelta(days=i) for i in range(7)]
         current_day, current_slot = _placement(t, monday)
@@ -114,9 +114,9 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
     with st.container(key=f"tdrow_{t['module_id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
         c0, c1, c2, c3 = st.columns([0.5, 7, 3, 1], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
-        c1.button(f"{module['icon']} **{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary",
+        c1.button(f"**{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary",
                   on_click=open_todo, args=(t,), help="Öffnen")
-        c2.caption(("⚠️ " if overdue else "") + f"Frist: {planner.format_due(t['due'], now)}"
+        c2.caption(("Überfällig · " if overdue else "") + f"Frist: {planner.format_due(t['due'], now)}"
                    + (f" · geplant {SLOT_LABELS[slot]} Uhr" if slot else ""))
         with c3:
             _move_popover(t, monday, place)
@@ -127,7 +127,7 @@ def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: da
     module = get_module(cfg, t["module_id"])
     done = planner.todo_done(t, modules_data, todo_state)
     overdue = not done and t["due"] < now
-    mark = "✓ " if done else ("⚠ " if overdue else "")
+    mark = "✓ " if done else ("! " if overdue else "")
     state = "done" if done else "open"
     with st.container(key=f"chip_{state}_{t['module_id']}_{key}"):
         st.button(f"{mark}**{module['short']}**  \n{_short_label(t)}", key=f"chipbtn_{key}", type="tertiary",
@@ -143,7 +143,7 @@ def _open_event(ev: dict) -> None:
 def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:
     module = get_module(cfg, ev["module_id"])
     with st.container(key=f"evcard_{ev['module_id']}_{key}"):
-        st.button(f"{module['icon']} {module['short']} · {ev.get('type', '')}", key=f"evbtn_{key}",
+        st.button(f"{module['short']} · {ev.get('type', '')}", key=f"evbtn_{key}",
                   type="tertiary", on_click=_open_event, args=(ev,), help="Vorlesung bzw. Übung mit allen Unterlagen öffnen")
         when = f"{ev.get('start', '')}–{ev.get('end', '')}"
         st.caption(f"{when}  \n{ev.get('room', '')}" if ev.get("room") else when)
@@ -195,7 +195,7 @@ def render(cfg: dict) -> None:
     week_now = planner.semester_week(sem_start, now, breaks)
     _grid_css(cfg)
 
-    st.title("🏠 Wochenübersicht & Lernplan")
+    st.title("Wochenübersicht & Lernplan")
     if week_now < 1:
         st.caption(f"Vorlesungsbeginn am {sem_start:%d.%m.%Y}.")
     elif now > sem_end:
@@ -208,7 +208,7 @@ def render(cfg: dict) -> None:
     monday = planner.monday_of(now) + timedelta(weeks=offset)
     week_no = planner.semester_week(sem_start, monday, breaks)
     st.markdown(f"#### Woche {monday:%d.%m.} – {monday + timedelta(days=6):%d.%m.%Y}"
-                + (" · 🎄 vorlesungsfrei" if planner.is_break_week(monday, breaks)
+                + (" · vorlesungsfrei" if planner.is_break_week(monday, breaks)
                    else f" · Vorlesungswoche {week_no}" if 1 <= week_no and monday <= sem_end else ""))
     c1, c2, c3, _ = st.columns([1, 1, 1, 4])
     if c1.button("◀ Vorwoche", width="stretch"):
@@ -238,7 +238,7 @@ def render(cfg: dict) -> None:
         except (KeyError, ValueError):
             continue
 
-    list_view = st.toggle("📱 Listenansicht (fürs Handy)", key="dash_list_view")
+    list_view = st.toggle("Listenansicht (fürs Handy)", key="dash_list_view")
 
     # --- Stundenplan-Raster ---------------------------------------------------
     if not list_view:
@@ -250,7 +250,7 @@ def render(cfg: dict) -> None:
                 with st.container(key=f"head_{'today' if day == now else 'day'}_{day:%Y%m%d}"):
                     st.markdown(f"**{WEEKDAYS[day.weekday()][:2]} {day:%d.%m.}**")
                     if planner.break_for(day, breaks):
-                        st.caption("🎄 frei")
+                        st.caption("frei")
                     for mid in modules_data:
                         if get_exam_date(mid) == day:
                             st.error(f"Klausur {get_module(cfg, mid)['short']}")
@@ -301,15 +301,15 @@ def render(cfg: dict) -> None:
 
     st.divider()
     with st.container():
-        st.subheader("📈 Fortschritt pro Modul")
+        st.subheader("Fortschritt pro Modul")
         for module in cfg["modules"]:
             progress = planner.module_progress(modules_data[module["id"]])
             stats = progress["card_stats"]
             st.progress(progress["overall"],
-                        text=f"{module['icon']} {module['short']} – {progress['overall'] * 100:.0f} % "
+                        text=f"{module['short']} – {progress['overall'] * 100:.0f} % "
                              f"({progress['chapters_done']}/{progress['n_chapters']} Kapitel komplett, "
                              f"{stats['due']} Karten fällig)")
-        st.subheader("🎯 Lernfahrplan für heute")
+        st.subheader("Lernfahrplan für heute")
         recs = planner.study_recommendations(cfg, modules_data, now)
         for rank, rec in enumerate(recs[:3], start=1):
             c_a, c_b = st.columns([4, 1])
@@ -320,7 +320,7 @@ def render(cfg: dict) -> None:
         if due_total:
             st.info(f"🃏 Heute insgesamt **{due_total}** Lernkarten fällig.")
 
-    with st.expander("📋 Kapitelstatus aller Module", expanded=False):
+    with st.expander("Kapitelstatus aller Module", expanded=False):
         rows = []
         for module in cfg["modules"]:
             for i, ch in enumerate(modules_data[module["id"]]["chapters"], start=1):

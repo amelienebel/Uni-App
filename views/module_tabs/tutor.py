@@ -25,7 +25,7 @@ def render(cfg: dict, module_id: str, scope_key: str = "main", context: str | No
     history = data["chat"] if scope_key == "main" else data.setdefault("chats", {}).setdefault(scope_key, [])
 
     if not ai.is_available():
-        st.info("Der Tutor-Chat benötigt einen API-Key (`ANTHROPIC_API_KEY` in `.env`).", icon="🔌")
+        st.info("Der Tutor-Chat benötigt einen API-Key (`ANTHROPIC_API_KEY` in `.env`).", icon=":material/info:")
         return
 
     c1, c2 = st.columns([3, 1])
@@ -37,7 +37,7 @@ def render(cfg: dict, module_id: str, scope_key: str = "main", context: str | No
         size = len(context)
         if scope_label:
             c1.caption(f"Bezieht sich auf: {scope_label}")
-    if c2.button("🧹 Chat leeren", key=f"tutor_clear_{module_id}_{scope_key}"):
+    if c2.button("Chat leeren", key=f"tutor_clear_{module_id}_{scope_key}"):
         history.clear()
         save_module(module_id)
         st.rerun()

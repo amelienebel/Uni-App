@@ -10,7 +10,7 @@ import hmac
 
 import streamlit as st
 
-st.set_page_config(page_title="BWL-Lernplattform LMU", page_icon="🎓", layout="wide",
+st.set_page_config(page_title="BWL-Lernplattform LMU", page_icon=":material/school:", layout="wide",
                    initial_sidebar_state="auto")
 
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
@@ -34,7 +34,7 @@ def require_login() -> None:
     if st.session_state.get("auth_ok") or hmac.compare_digest(url_token.encode(), token.encode()):
         st.session_state["auth_ok"] = True
         return
-    st.title("🔒 BWL-Lernplattform")
+    st.title("BWL-Lernplattform")
     with st.form("login"):
         entered = st.text_input("Passwort", type="password")
         remember = st.checkbox("Auf diesem Gerät angemeldet bleiben", value=True)
@@ -52,7 +52,7 @@ def require_login() -> None:
 require_login()
 storage.ensure_dirs()
 if cloud_sync.is_configured():
-    with st.spinner("☁️ Lade deine Daten aus dem Cloud-Speicher …"):
+    with st.spinner("Lade deine Daten aus dem Cloud-Speicher …"):
         cloud_sync.ensure_started(storage.DATA_DIR)
 cfg = load_config()
 ids = module_ids(cfg)
@@ -81,7 +81,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.title("🎓 BWL @ LMU")
+    st.title("BWL @ LMU")
     st.caption(f"{cfg['app'].get('semester_label', '')} · {WEEKDAYS[storage.today().weekday()]}, {storage.today():%d.%m.%Y}")
     page = st.radio("Hauptnavigation", NAV_PAGES, key="nav", label_visibility="collapsed")
 
@@ -106,30 +106,30 @@ with st.sidebar:
         for days, mid in sorted(upcoming)[:5]:
             st.markdown(f"{module_label(cfg, mid, short=True)}: **{days}** Tage")
     else:
-        st.caption("Noch keine Klausurtermine – unter ⚙️ Einstellungen eintragen.")
+        st.caption("Noch keine Klausurtermine – unter Einstellungen eintragen.")
 
     st.divider()
     sync_status = cloud_sync.status()
     if sync_status is None:
-        st.caption("💾 Daten werden nur auf diesem Gerät gespeichert.")
+        st.caption("Daten werden nur auf diesem Gerät gespeichert.")
     elif sync_status["fatal"]:
-        st.error(sync_status["error"], icon="☁️")
+        st.error(sync_status["error"])
     else:
         if sync_status["error"]:
-            st.warning(sync_status["error"], icon="☁️")
+            st.warning(sync_status["error"])
         if sync_status["pending"]:
-            st.caption(f"☁️ {sync_status['pending']} Änderung(en) werden in Kürze gesichert.")
+            st.caption(f"{sync_status['pending']} Änderung(en) werden in Kürze gesichert.")
             if st.button("Jetzt sichern", key="sync_now"):
                 with st.spinner("Sichere …"):
                     cloud_sync.flush()
                 st.rerun()
         elif not sync_status["error"]:
-            st.caption("☁️ Alles im Cloud-Speicher gesichert.")
+            st.caption("Alles im Cloud-Speicher gesichert.")
     if ai.is_available():
         model, _ = ai._settings()
-        st.success(f"KI aktiv · {model}", icon="🤖")
+        st.caption(f"KI aktiv · {model}")
     else:
-        st.warning("Kein API-Key – Offline-Modus", icon="🔌")
+        st.caption("Kein API-Key – Offline-Modus")
 
 if page == NAV_PAGES[0]:
     dashboard.render(cfg)

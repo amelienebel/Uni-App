@@ -19,7 +19,7 @@ CARD_CHAT_SYSTEM = (
 
 
 def _card_chat(card: dict, module_name: str, key: str) -> bool:
-    with st.expander(f"💬 Nachfragen zu dieser Karte ({len(card.get('chat', []))})"):
+    with st.expander(f"Nachfragen zu dieser Karte ({len(card.get('chat', []))})"):
         for msg in card.get("chat", []):
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
@@ -64,7 +64,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str) -> No
         done = set(st.session_state.get(done_key, []))
         queue = sorted((c for c in cards if c["id"] not in done), key=lambda c: c["due"])
         if not queue and cards:
-            st.success("🎉 Alle Karten einmal durchgearbeitet!")
+            st.success("Alle Karten einmal durchgearbeitet!")
             if st.button("Nochmal von vorn", key=f"restart_{key}"):
                 st.session_state[done_key] = []
                 st.rerun()
@@ -72,7 +72,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str) -> No
     else:
         queue = sr.due_queue(cards, days, limit=limit)
     if not queue:
-        st.success("🎉 Keine fälligen Karten – alles wiederholt! Mit dem Schalter oben kannst du trotzdem üben.")
+        st.success("Keine fälligen Karten – alles wiederholt! Mit dem Schalter oben kannst du trotzdem üben.")
         return
 
     card = queue[0]
@@ -85,7 +85,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str) -> No
         answer = st.text_area("Deine Antwort", key=f"answer_{card['id']}", height=100,
                               placeholder="Antwort eintippen (oder im Kopf beantworten) …")
         if not st.session_state.get(state_key):
-            if st.button("👀 Auflösen", type="primary", key=f"reveal_btn_{card['id']}"):
+            if st.button("Auflösen", type="primary", key=f"reveal_btn_{card['id']}"):
                 st.session_state[state_key] = True
                 st.rerun()
         else:
@@ -97,7 +97,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str) -> No
                 st.markdown("**Lösung**")
                 st.success(card["back"])
             if answer.strip() and ai.is_available():
-                if st.button("🤖 Antwort von der KI prüfen lassen", key=f"check_{card['id']}"):
+                if st.button("Antwort von der KI prüfen lassen", key=f"check_{card['id']}"):
                     with st.spinner("Prüfe …"):
                         try:
                             st.session_state[f"fb_{card['id']}"] = ai.complete(
@@ -111,7 +111,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str) -> No
                     st.markdown(fb)
             st.markdown("**Wie gut konntest du die Karte?**")
             for col, grade in zip(st.columns(4), sr.GRADES):
-                if col.button(f"{grade['icon']} {grade['label']}", key=f"grade_{key}_{card['id']}_{grade['value']}",
+                if col.button(f"{grade['label']}", key=f"grade_{key}_{card['id']}_{grade['value']}",
                               width="stretch"):
                     sr.review(card, grade["value"], days)
                     save_module(module_id)
@@ -126,8 +126,8 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str) -> No
 
 def generate_button(cfg: dict, module_id: str, unit: dict, existing: list[dict], key: str,
                     label: str | None = None) -> None:
-    label = label or ("➕ Karten ergänzen (neue Notizen/Dateien berücksichtigen)" if existing
-                      else "✨ Karteikarten erstellen (gesamter Stoff)")
+    label = label or ("Karten ergänzen (neue Notizen/Dateien berücksichtigen)" if existing
+                      else "Karteikarten erstellen (gesamter Stoff)")
     if st.button(label, key=f"gen_{key}", type="secondary" if existing else "primary"):
         run_generation(cfg, module_id, unit, existing)
 
@@ -150,7 +150,7 @@ def show_generation_message(unit_id: str) -> None:
 
 
 def manual_card(module_id: str, data: dict, unit: dict | None, key: str) -> None:
-    with st.expander("➕ Karte selbst anlegen"):
+    with st.expander("Karte selbst anlegen"):
         with st.form(f"manual_card_{key}", clear_on_submit=True):
             front = st.text_area("Vorderseite (Frage)", height=80)
             back = st.text_area("Rückseite (Antwort) – Markdown & $LaTeX$ erlaubt", height=100)
@@ -165,14 +165,14 @@ def manual_card(module_id: str, data: dict, unit: dict | None, key: str) -> None
 def manage_cards(module_id: str, data: dict, cards: list[dict], key: str) -> None:
     if not cards:
         return
-    with st.expander(f"🗂️ Karten bearbeiten oder löschen ({len(cards)})"):
+    with st.expander(f"Karten bearbeiten oder löschen ({len(cards)})"):
         df = pd.DataFrame([{
             "id": c["id"], "Löschen": False, "Vorderseite": c["front"], "Rückseite": c["back"],
             "Fällig": c["due"], "Quelle": c.get("source", ""),
         } for c in cards])
         edited = st.data_editor(df, hide_index=True, width="stretch", key=f"cards_editor_{key}",
                                 column_config={"id": None}, disabled=["Fällig", "Quelle"])
-        if st.button("💾 Änderungen übernehmen", key=f"cards_save_{key}"):
+        if st.button("Änderungen übernehmen", key=f"cards_save_{key}"):
             rows = {row["id"]: row for _, row in edited.iterrows()}
             keep = []
             for card in data["cards"]:
@@ -189,5 +189,5 @@ def manage_cards(module_id: str, data: dict, cards: list[dict], key: str) -> Non
 
 def forecast(cards: list[dict]) -> None:
     if cards:
-        with st.expander("📊 Wiederholungsprognose (14 Tage)"):
+        with st.expander("Wiederholungsprognose (14 Tage)"):
             st.bar_chart(pd.DataFrame(sr.forecast(cards)), x="Datum", y="Karten")

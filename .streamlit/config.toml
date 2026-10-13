@@ -1,5 +1,47 @@
 [theme]
-primaryColor = "#00883A"
+# Ruhiges, sachliches Design. Hell/Dunkel folgt automatisch der Geräteeinstellung
+# und lässt sich in der App über ⋮ → Settings → Theme umschalten.
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFontWeights = [650, 600, 600, 600, 600, 600]
+headingFontSizes = ["2rem", "1.5rem", "1.2rem", "1.05rem", "1rem", "0.9rem"]
+baseFontSize = 15
+baseRadius = "0.5rem"
+buttonRadius = "0.45rem"
+showWidgetBorder = true
+showSidebarBorder = true
+metricValueFontSize = "1.6rem"
+metricValueFontWeight = 600
+
+[theme.light]
+primaryColor = "#2F5BB7"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F5F8"
+textColor = "#1C2330"
+borderColor = "#E1E5EB"
+linkColor = "#2F5BB7"
+blueBackgroundColor = "#EEF3FC"
+blueTextColor = "#22468F"
+
+[theme.light.sidebar]
+backgroundColor = "#F7F8FA"
+secondaryBackgroundColor = "#ECEFF3"
+borderColor = "#E1E5EB"
+
+[theme.dark]
+primaryColor = "#7AA2F7"
+backgroundColor = "#14171C"
+secondaryBackgroundColor = "#1E232B"
+textColor = "#E4E7EC"
+borderColor = "#2C323C"
+linkColor = "#8DB0FA"
+blueBackgroundColor = "#1C2A44"
+blueTextColor = "#B9CDF8"
+
+[theme.dark.sidebar]
+backgroundColor = "#101318"
+secondaryBackgroundColor = "#1A1E25"
+borderColor = "#262B33"
 
 [server]
 maxUploadSize = 500

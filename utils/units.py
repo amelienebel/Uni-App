@@ -205,8 +205,8 @@ def open_tasks(cfg: dict, module_cfg: dict, lecture_list: list[dict], exercise_l
                                  ("nachbereitet", "nachbereiten", planner.review_due(module_cfg, lec["date"]))):
             if due >= sem_start and not state.get(planner.lecture_key(module_id, lec["date"], field)):
                 tasks.append({"due": due, "unit": lec, "label": f"Vorlesung {lec['nr']} {verb}",
-                              "about": lec["topic"], "tab": "🎬 Vorbereiten" if field == "vorbereitet"
-                              else "📝 Nachbereiten"})
+                              "about": lec["topic"], "tab": "Vorbereiten" if field == "vorbereitet"
+                              else "Nachbereiten"})
     for ex in exercise_list:
         due = planner.exercise_due(module_cfg, ex, schedule, breaks)
         if due >= sem_start and not state.get(ex["plan_key"]):

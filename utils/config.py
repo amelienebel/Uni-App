@@ -38,7 +38,7 @@ def load_config() -> dict:
     cfg.setdefault("modules", [])
     cfg.setdefault("document_types", {"sonstiges": "Sonstiges"})
     for module in cfg["modules"]:
-        module.setdefault("icon", "📘")
+        module.setdefault("icon", "")
         module.setdefault("short", module["name"][:12])
         module.setdefault("color", "#1f77b4")
         module.setdefault("keywords", [])
@@ -61,4 +61,4 @@ def get_module(cfg: dict, module_id: str) -> dict:
 
 def module_label(cfg: dict, module_id: str, short: bool = False) -> str:
     module = get_module(cfg, module_id)
-    return f"{module['icon']} {module['short'] if short else module['name']}"
+    return f"{module['short'] if short else module['name']}"

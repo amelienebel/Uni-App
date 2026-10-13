@@ -12,7 +12,7 @@ from utils import planner
 from utils.config import WEEKDAYS, get_module, module_label
 from utils.storage import (get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
-from views.common import escape, goto, toggle_todo
+from views.common import goto, open_todo, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -67,7 +67,7 @@ def _select_event(ev: dict) -> None:
 SHORT_KIND = {
     "Vorbereitung": "VL vorbereiten",
     "Nachbereitung": "VL nachbereiten",
-    "Übungsblatt": "Übung vorbereiten",
+    "Übungsblatt": "Übungsblatt lösen",
     "Wiederholung": "Karten wiederholen",
     "Klausurvorbereitung": "Altklausur rechnen",
 }
@@ -112,25 +112,26 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
     overdue = not done and t["due"] < now
     _, slot = _placement(t, monday)
     with st.container(key=f"tdrow_{t['module_id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
-        c1, c2, c3 = st.columns([7, 3, 1], vertical_alignment="center")
-        c1.checkbox(f"{module['icon']} **{module['short']}** · {t['title']}", key=key,
-                    on_change=toggle_todo, args=(t, key))
+        c0, c1, c2, c3 = st.columns([0.5, 7, 3, 1], vertical_alignment="center")
+        c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
+        c1.button(f"{module['icon']} **{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary",
+                  on_click=open_todo, args=(t,), help="Öffnen")
         c2.caption(("⚠️ " if overdue else "") + f"Frist: {planner.format_due(t['due'], now)}"
                    + (f" · geplant {SLOT_LABELS[slot]} Uhr" if slot else ""))
         with c3:
             _move_popover(t, monday, place)
 
 
-def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: date) -> None:
-    """Nur-Anzeige im Raster: kleines, gut lesbares Kärtchen (abhaken/verschieben in der Liste darunter)."""
+def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: date, key: str) -> None:
+    """Kärtchen im Raster – Antippen öffnet die passende Vorlesung/Übung (abhaken in der Liste darunter)."""
     module = get_module(cfg, t["module_id"])
     done = planner.todo_done(t, modules_data, todo_state)
     overdue = not done and t["due"] < now
-    style = "text-decoration: line-through; opacity: 0.55;" if done else ""
     mark = "✓ " if done else ("⚠ " if overdue else "")
-    st.markdown(
-        f"<div class='todo-chip' title='{escape(t['title'])}' style='border-left-color:{module['color']};{style}'>"
-        f"<b>{mark}{escape(module['short'])}</b><br>{escape(_short_label(t))}</div>", unsafe_allow_html=True)
+    state = "done" if done else "open"
+    with st.container(key=f"chip_{state}_{t['module_id']}_{key}"):
+        st.button(f"{mark}**{module['short']}**  \n{_short_label(t)}", key=f"chipbtn_{key}", type="tertiary",
+                  on_click=open_todo, args=(t,), help=t["title"])
 
 
 def _open_event(ev: dict) -> None:
@@ -153,25 +154,35 @@ def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:
 # ---------------------------------------------------------------------------
 
 def _grid_css(cfg: dict) -> None:
-    rules = ["[class*='st-key-cell_today_'] {background: rgba(127,127,127,0.16); border-radius: 8px;"
+    rules = ["[class*='st-key-cell_'] {min-height: 4.2rem; padding: 4px 4px;}",
+             "[class*='st-key-cell_today_'] {background: rgba(127,127,127,0.16); border-radius: 8px;"
              " padding: 4px 6px;}",
              "[class*='st-key-head_today'] {background: rgba(127,127,127,0.22); border-radius: 8px;"
              " padding: 2px 6px;}",
              # Veranstaltungs-Karten
              "[class*='st-key-evcard_'] {background: rgba(127,127,127,0.08); border-radius: 6px;"
-             " padding: 4px 8px 6px 8px; gap: 0 !important;}",
+             " padding: 6px 9px 8px 9px; gap: 0 !important;}",
              "[class*='st-key-evcard_'] button {padding: 0; min-height: 0; font-weight: 600; text-align: left;}",
-             "[class*='st-key-evcard_'] button p {font-size: 0.85rem; font-weight: 600;}",
-             "[class*='st-key-evcard_'] [data-testid='stCaptionContainer'] p {font-size: 0.75rem;"
-             " line-height: 1.25; margin: 0;}",
-             # To-do-Kärtchen im Raster (nur Anzeige)
-             ".todo-chip {border: 1px solid rgba(127,127,127,0.25); border-left: 4px solid #888;"
-             " border-radius: 6px; padding: 3px 7px; margin: 3px 0; font-size: 0.78rem; line-height: 1.3;}",
+             "[class*='st-key-evcard_'] button p {font-size: 0.92rem; font-weight: 600;}",
+             "[class*='st-key-evcard_'] [data-testid='stCaptionContainer'] p {font-size: 0.82rem;"
+             " line-height: 1.3; margin: 0;}",
+             # To-do-Kärtchen im Raster (antippen = öffnen)
+             "[class*='st-key-chip_'] {border: 1px solid rgba(127,127,127,0.25); border-left: 4px solid #888;"
+             " border-radius: 6px; padding: 4px 8px; gap: 0 !important;}",
+             "[class*='st-key-chip_'] button {padding: 0; min-height: 0; text-align: left; justify-content: flex-start;}",
+             "[class*='st-key-chip_'] button div {justify-content: flex-start; text-align: left;}",
+             "[class*='st-key-chip_'] button p {font-size: 0.86rem; line-height: 1.3;}",
+             "[class*='st-key-chip_done_'] {opacity: 0.55;}",
+             "[class*='st-key-chip_done_'] button p {text-decoration: line-through;}",
+             "[class*='st-key-tdrow_'] button {text-align: left; justify-content: flex-start;}",
+             "[class*='st-key-tdrow_'] button div {justify-content: flex-start; text-align: left;}",
              # To-do-Zeilen in der Liste
              "[class*='st-key-tdrow_'] {border-bottom: 1px solid rgba(127,127,127,0.15); padding: 2px 0;}",
              "[class*='st-key-tdrow_'] [data-testid='stPopover'] button {padding: 0 6px; min-height: 0;}"]
     for m in cfg["modules"]:
         rules.append(f"[class*='st-key-evcard_{m['id']}_'] {{border-left: 4px solid {m['color']};}}")
+        rules.append(f"[class*='st-key-chip_open_{m['id']}_'], [class*='st-key-chip_done_{m['id']}_'] "
+                     f"{{border-left-color: {m['color']};}}")
     st.markdown(f"<style>{' '.join(rules)}</style>", unsafe_allow_html=True)
 
 
@@ -194,7 +205,12 @@ def render(cfg: dict) -> None:
 
     # --- Woche wählen --------------------------------------------------------
     offset = st.session_state.setdefault("week_offset", 0)
-    c1, c2, c3, c4 = st.columns([1, 1, 1, 4])
+    monday = planner.monday_of(now) + timedelta(weeks=offset)
+    week_no = planner.semester_week(sem_start, monday, breaks)
+    st.markdown(f"#### Woche {monday:%d.%m.} – {monday + timedelta(days=6):%d.%m.%Y}"
+                + (" · 🎄 vorlesungsfrei" if planner.is_break_week(monday, breaks)
+                   else f" · Vorlesungswoche {week_no}" if 1 <= week_no and monday <= sem_end else ""))
+    c1, c2, c3, _ = st.columns([1, 1, 1, 4])
     if c1.button("◀ Vorwoche", width="stretch"):
         st.session_state["week_offset"] = offset - 1
         st.rerun()
@@ -204,11 +220,6 @@ def render(cfg: dict) -> None:
     if c3.button("Nächste ▶", width="stretch"):
         st.session_state["week_offset"] = offset + 1
         st.rerun()
-    monday = planner.monday_of(now) + timedelta(weeks=offset)
-    week_no = planner.semester_week(sem_start, monday, breaks)
-    c4.markdown(f"#### Woche {monday:%d.%m.} – {monday + timedelta(days=6):%d.%m.%Y}"
-                + (" · 🎄 vorlesungsfrei" if planner.is_break_week(monday, breaks)
-                   else f" · Vorlesungswoche {week_no}" if 1 <= week_no and monday <= sem_end else ""))
 
     schedule = get_schedule(cfg)
     events = [e for e in planner.week_events(schedule, monday)
@@ -231,7 +242,7 @@ def render(cfg: dict) -> None:
 
     # --- Stundenplan-Raster ---------------------------------------------------
     if not list_view:
-        widths = [0.55] + [1] * 7
+        widths = [0.6] + [1] * 7
         header = st.columns(widths)
         header[0].markdown("&nbsp;")
         for col, day in zip(header[1:], days):
@@ -255,8 +266,8 @@ def render(cfg: dict) -> None:
                             for i, ev in enumerate(e for e in events if e["date"] == day
                                                    and _slot_of(e.get("start", "")) == slot):
                                 _event_card(cfg, ev, f"{day:%Y%m%d}_{slot}_{i}")
-                        for t in placed.get((day, slot), []):
-                            _todo_chip(t, cfg, modules_data, todo_state, now)
+                        for j, t in enumerate(placed.get((day, slot), [])):
+                            _todo_chip(t, cfg, modules_data, todo_state, now, f"{day:%Y%m%d}_{slot or 'x'}_{j}")
     else:
         for day in days:
             day_events = [e for e in events if e["date"] == day]
@@ -269,8 +280,8 @@ def render(cfg: dict) -> None:
                     st.warning(entry)
                 for i, ev in enumerate(day_events):
                     _event_card(cfg, ev, f"{day:%Y%m%d}_l{i}")
-                for t in day_todos:
-                    _todo_chip(t, cfg, modules_data, todo_state, now)
+                for j, t in enumerate(day_todos):
+                    _todo_chip(t, cfg, modules_data, todo_state, now, f"{day:%Y%m%d}_l{j}")
 
     # --- Aufgaben dieser Woche (abhaken & verschieben) ---------------------------
     st.subheader("Aufgaben dieser Woche")

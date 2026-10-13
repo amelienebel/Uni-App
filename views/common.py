@@ -58,6 +58,21 @@ def open_unit(module_id: str, unit_id: str | None) -> None:
     st.session_state[f"unit_{module_id}"] = unit_id
 
 
+def open_todo(todo: dict) -> None:
+    """Callback: Aufgabe anklicken → passende Vorlesung/Übung (bzw. Lernbereich) im Modul öffnen."""
+    parts = todo["key"].split(":")
+    module_id = todo["module_id"]
+    unit_id = None
+    if len(parts) >= 4 and parts[1] == "vl":
+        unit_id = f"vl:{parts[2]}"
+        st.session_state[f"ltab_next_{unit_id}"] = "📝 Nachbereiten" if parts[3] == "nachbereitet" else "🎬 Vorbereiten"
+    elif len(parts) >= 4 and parts[1] == "ex":
+        unit_id = f"ex:{parts[2]}:{parts[3]}"
+    elif todo.get("kind") in ("Wiederholung", "Klausurvorbereitung"):
+        st.session_state[f"mtabs_{module_id}"] = "🎓 Lernen & Klausur"
+    open_unit(module_id, unit_id)
+
+
 def ai_hint(feature: str = "Diese Funktion") -> bool:
     """Zeigt einen Hinweis, wenn kein API-Key vorhanden ist. Gibt True zurück, wenn KI verfügbar ist."""
     if ai.is_available():

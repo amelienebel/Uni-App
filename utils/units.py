@@ -190,3 +190,26 @@ def guess_unit(path: str, doc_type: str, chapter_id: str | None, lecture_list: l
             return lecture_list[nr - 1]["id"]
     match = next((lec for lec in lecture_list if chapter_id and lec.get("chapter_id") == chapter_id), None)
     return match["id"] if match else None
+
+
+def open_tasks(cfg: dict, module_cfg: dict, lecture_list: list[dict], exercise_list: list[dict], state: dict,
+               sem_start: date) -> list[dict]:
+    """Offene Aufgaben eines Moduls (vor-/nachbereiten, Blatt lösen), nach Frist sortiert."""
+    module_id = module_cfg["id"]
+    schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
+    tasks = []
+    for lec in lecture_list:
+        if lec["is_break"]:
+            continue
+        for field, verb, due in (("vorbereitet", "vorbereiten", planner.prep_due(module_cfg, lec["date"])),
+                                 ("nachbereitet", "nachbereiten", planner.review_due(module_cfg, lec["date"]))):
+            if due >= sem_start and not state.get(planner.lecture_key(module_id, lec["date"], field)):
+                tasks.append({"due": due, "unit": lec, "label": f"Vorlesung {lec['nr']} {verb}",
+                              "about": lec["topic"], "tab": "🎬 Vorbereiten" if field == "vorbereitet"
+                              else "📝 Nachbereiten"})
+    for ex in exercise_list:
+        due = planner.exercise_due(module_cfg, ex, schedule, breaks)
+        if due >= sem_start and not state.get(ex["plan_key"]):
+            tasks.append({"due": due, "unit": ex, "label": "Übungsblatt lösen", "about": ex["title"], "tab": None})
+    tasks.sort(key=lambda t: t["due"])
+    return tasks

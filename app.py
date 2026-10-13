@@ -67,6 +67,8 @@ st.markdown("""
     text-align: left; }
   [class*="st-key-row_"] button { justify-content: flex-start; text-align: left; }
   [class*="st-key-row_"] { margin-bottom: -0.6rem; }
+  [class*="st-key-nextbox_"] { background: rgba(28, 131, 225, 0.09); border-color: rgba(28, 131, 225, 0.35) !important; }
+  [class*="st-key-nextbox_"] h4 { padding: 0.2rem 0 0 0; }
   /* Handy: weniger Rand, kleinere Überschriften, Reiter horizontal scrollbar */
   @media (max-width: 640px) {
     .block-container { padding: 2.8rem 0.7rem 4rem 0.7rem !important; }

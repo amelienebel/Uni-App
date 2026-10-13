@@ -3,3 +3,6 @@ primaryColor = "#00883A"
 
 [server]
 maxUploadSize = 500
+# Uploads aus der als App abgelegten Seite (Home-Bildschirm / Dock) scheitern sonst mit Fehler 403,
+# weil Safari dort das Sicherheits-Cookie von Streamlit nicht mitsendet. Die App ist per Passwort geschützt.
+enableXsrfProtection = false

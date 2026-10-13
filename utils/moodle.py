@@ -48,6 +48,12 @@ class MoodleClient:
         if not self.token:
             raise MoodleError("Kein Moodle-Sicherheitsschlüssel hinterlegt (MOODLE_TOKEN).")
         self.session = requests.Session()
+        # Manche Hochschul-Firewalls blocken Skript-Anfragen ohne Browser-Kennung (Fehler 403)
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+                          "(KHTML, like Gecko) MoodleMobile BWL-Lernplattform",
+            "Accept": "application/json, */*",
+        })
 
     def call(self, function: str, **params):
         data = {"wstoken": self.token, "wsfunction": function, "moodlewsrestformat": "json"}
@@ -57,6 +63,9 @@ class MoodleClient:
             resp = self.session.post(f"{self.base_url}/webservice/rest/server.php", data=data, timeout=60)
         except requests.RequestException as exc:
             raise MoodleError(f"Keine Verbindung zu Moodle: {exc}") from exc
+        if resp.status_code == 403:
+            raise MoodleError("Moodle (Fehler 403): Die LMU blockiert den Zugriff von außerhalb auf die "
+                              "Moodle-Schnittstelle. Der Import muss dann über „Dateien hochladen“ laufen.")
         if not resp.ok:
             raise MoodleError(f"Moodle antwortet mit Fehler {resp.status_code}.")
         try:

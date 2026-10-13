@@ -113,44 +113,7 @@
           "week": 11
         }
       ],
-      "base_formulas": [
-        {
-          "name": "Potenzregel",
-          "latex": "\\frac{d}{dx}\\,x^n = n\\,x^{n-1}",
-          "chapter_id": null,
-          "explanation": "Ableitung einer Potenzfunktion."
-        },
-        {
-          "name": "Produktregel",
-          "latex": "(u\\cdot v)' = u'\\,v + u\\,v'",
-          "chapter_id": null,
-          "explanation": "Ableitung eines Produkts zweier Funktionen."
-        },
-        {
-          "name": "Kettenregel",
-          "latex": "\\big(f(g(x))\\big)' = f'(g(x))\\cdot g'(x)",
-          "chapter_id": null,
-          "explanation": "Äußere mal innere Ableitung."
-        },
-        {
-          "name": "Geometrische Reihe",
-          "latex": "\\sum_{k=0}^{n-1} q^k = \\frac{1-q^n}{1-q}, \\quad q \\neq 1",
-          "chapter_id": null,
-          "explanation": "Grundlage für Renten- und Annuitätenformeln."
-        },
-        {
-          "name": "Lagrange-Funktion",
-          "latex": "L(x,y,\\lambda) = f(x,y) + \\lambda\\,\\big(c - g(x,y)\\big)",
-          "chapter_id": null,
-          "explanation": "Optimierung von f unter der Nebenbedingung g(x,y)=c."
-        },
-        {
-          "name": "Inverse einer 2x2-Matrix",
-          "latex": "A^{-1} = \\frac{1}{ad-bc}\\begin{pmatrix} d & -b \\\\ -c & a \\end{pmatrix}",
-          "chapter_id": null,
-          "explanation": "Existiert nur für det(A) = ad - bc ≠ 0."
-        }
-      ],
+      "base_formulas": [],
       "lectures": [
         {
           "date": "2026-10-12",
@@ -295,7 +258,7 @@
           "due": "2027-01-11"
         }
       ],
-      "syllabus_version": 1,
+      "syllabus_version": 2,
       "exam_note": "Klausur 12.02.2027. Die Lösungsvorschläge werden meist freitags um 14:00 Uhr in Moodle freigeschaltet."
     },
     {
@@ -410,56 +373,7 @@
           "week": 15
         }
       ],
-      "base_formulas": [
-        {
-          "name": "Bilanzgleichung",
-          "latex": "\\text{Aktiva} = \\text{Passiva} = \\text{Eigenkapital} + \\text{Fremdkapital}",
-          "chapter_id": "t1",
-          "explanation": "Mittelverwendung = Mittelherkunft."
-        },
-        {
-          "name": "Umsatzsteuer-Zahllast",
-          "latex": "\\text{Zahllast} = \\text{Umsatzsteuer} - \\text{Vorsteuer}",
-          "chapter_id": "t4",
-          "explanation": "Wird an das Finanzamt abgeführt."
-        },
-        {
-          "name": "Lineare Abschreibung",
-          "latex": "AfA = \\frac{AK - RW}{ND}",
-          "chapter_id": "t5",
-          "explanation": "AK = Anschaffungskosten, RW = Restwert, ND = Nutzungsdauer."
-        },
-        {
-          "name": "Geometrisch-degressive Abschreibung",
-          "latex": "AfA_t = RBW_{t-1} \\cdot p",
-          "chapter_id": "t5",
-          "explanation": "Fester Prozentsatz p vom Restbuchwert des Vorjahres."
-        },
-        {
-          "name": "Erfolgsermittlung (GuV)",
-          "latex": "\\text{Jahresüberschuss} = \\text{Erträge} - \\text{Aufwendungen}",
-          "chapter_id": "k2",
-          "explanation": "Saldo der Gewinn- und Verlustrechnung."
-        },
-        {
-          "name": "Eigenkapitalquote",
-          "latex": "EK\\text{-Quote} = \\frac{EK}{GK} \\cdot 100\\,\\%",
-          "chapter_id": "k3",
-          "explanation": "Anteil des Eigenkapitals am Gesamtkapital (finanzielle Stabilität)."
-        },
-        {
-          "name": "Eigenkapitalrentabilität",
-          "latex": "r_{EK} = \\frac{\\text{Jahresüberschuss}}{EK} \\cdot 100\\,\\%",
-          "chapter_id": "k3",
-          "explanation": "Verzinsung des eingesetzten Eigenkapitals (Rentabilität)."
-        },
-        {
-          "name": "Liquidität 2. Grades",
-          "latex": "\\frac{\\text{flüssige Mittel} + \\text{kurzfr. Forderungen}}{\\text{kurzfr. Verbindlichkeiten}} \\cdot 100\\,\\%",
-          "chapter_id": "k3",
-          "explanation": "Kurzfristige Zahlungsfähigkeit (Liquidität)."
-        }
-      ],
+      "base_formulas": [],
       "lectures": [
         {
           "date": "2026-10-19",
@@ -621,7 +535,7 @@
           "due": "2027-01-25"
         }
       ],
-      "syllabus_version": 1,
+      "syllabus_version": 2,
       "lecturer": "Prof. Dr. Thorsten Sellhorn (RWP) · Prof. Dr. Deborah Schanz & Stefan Baaken (TAX)",
       "literature": "Skript auf Moodle (zuerst die „Gebrauchsanweisung“ lesen!) · Pellens/Fülbier/Gassen/Sellhorn: Internationale Rechnungslegung · Coenenberg/Haller/Mattner/Schultze: Einführung in das Rechnungswesen",
       "exam_note": "Klausur 15.02.2027, 15:30–17:30 Uhr (120 min, closed book). Raum laut ISC-Hörsaalplan (wird kurz vorher veröffentlicht)."
@@ -708,69 +622,8 @@
           "week": 13
         }
       ],
-      "base_formulas": [
-        {
-          "name": "Barwert / Abzinsung",
-          "latex": "K_0 = \\frac{K_t}{(1+i)^t}",
-          "chapter_id": "k1",
-          "explanation": "Wert einer zukünftigen Zahlung heute."
-        },
-        {
-          "name": "Rentenbarwertfaktor",
-          "latex": "RBF(i,T) = \\frac{(1+i)^T - 1}{i\\,(1+i)^T}",
-          "chapter_id": "k1",
-          "explanation": "Barwert einer nachschüssigen Rente von 1 € über T Perioden."
-        },
-        {
-          "name": "Kapitalwert (NPV)",
-          "latex": "C_0 = -I_0 + \\sum_{t=1}^{T} \\frac{CF_t}{(1+i)^t}",
-          "chapter_id": "k2",
-          "explanation": "Investition vorteilhaft, wenn C_0 > 0."
-        },
-        {
-          "name": "Interner Zinsfuß",
-          "latex": "0 = -I_0 + \\sum_{t=1}^{T} \\frac{CF_t}{(1+r)^t}",
-          "chapter_id": "k2",
-          "explanation": "r ist der Zins, bei dem der Kapitalwert null wird."
-        },
-        {
-          "name": "Annuität",
-          "latex": "A = C_0 \\cdot \\frac{i\\,(1+i)^T}{(1+i)^T - 1}",
-          "chapter_id": "k2",
-          "explanation": "Kapitalwert × Annuitätenfaktor (Kehrwert des RBF)."
-        },
-        {
-          "name": "Kurs einer Kuponanleihe",
-          "latex": "P = \\sum_{t=1}^{T} \\frac{C}{(1+y)^t} + \\frac{N}{(1+y)^T}",
-          "chapter_id": "k3",
-          "explanation": "C = Kupon, N = Nennwert, y = Rendite (Yield to Maturity)."
-        },
-        {
-          "name": "Dividendenbarwertmodell (Gordon-Wachstum)",
-          "latex": "P_0 = \\frac{Div_1}{r_E - g}",
-          "chapter_id": "k3",
-          "explanation": "Konstantes Dividendenwachstum g < r_E."
-        },
-        {
-          "name": "Erwartete Portfoliorendite",
-          "latex": "E(R_P) = \\sum_i x_i \\, E(R_i)",
-          "chapter_id": "k5",
-          "explanation": "x_i = Portfoliogewicht von Wertpapier i."
-        },
-        {
-          "name": "CAPM",
-          "latex": "E(r_i) = r_f + \\beta_i \\,\\big(E(r_M) - r_f\\big)",
-          "chapter_id": "k5",
-          "explanation": "Erwartete Rendite = risikoloser Zins + Beta × Marktrisikoprämie."
-        },
-        {
-          "name": "WACC",
-          "latex": "r_{WACC} = \\frac{E}{E+D}\\,r_E + \\frac{D}{E+D}\\,r_D\\,(1-\\tau_c)",
-          "chapter_id": "k7",
-          "explanation": "Gewichtete Kapitalkosten nach Steuern."
-        }
-      ],
-      "syllabus_version": 1,
+      "base_formulas": [],
+      "syllabus_version": 2,
       "lecturer": "Prof. Dr. Ralf Elsas-Nicolle",
       "literature": "Berk & DeMarzo: Grundlagen der Finanzwirtschaft (5. Aufl., Pearson)",
       "exam_note": "Klausur 08.02.2027, 12:30–13:30 Uhr (GOP). Anmeldung im LSF zwingend erforderlich!",
@@ -1035,45 +888,8 @@
           "week": 15
         }
       ],
-      "base_formulas": [
-        {
-          "name": "Preiselastizität der Nachfrage",
-          "latex": "\\varepsilon = \\frac{\\Delta Q / Q}{\\Delta P / P} = \\frac{dQ}{dP}\\cdot\\frac{P}{Q}",
-          "chapter_id": "k5",
-          "explanation": "|ε| > 1: elastisch, |ε| < 1: unelastisch."
-        },
-        {
-          "name": "Marktgleichgewicht",
-          "latex": "Q^D(P^*) = Q^S(P^*)",
-          "chapter_id": "k4",
-          "explanation": "Angebotene = nachgefragte Menge."
-        },
-        {
-          "name": "Optimum des Haushalts",
-          "latex": "\\frac{MU_1}{p_1} = \\frac{MU_2}{p_2}",
-          "chapter_id": "k5",
-          "explanation": "Grenznutzen pro Euro ist für alle Güter gleich."
-        },
-        {
-          "name": "Gewinnmaximierung bei vollständigem Wettbewerb",
-          "latex": "P = MC",
-          "chapter_id": "k6",
-          "explanation": "Preis = Grenzkosten."
-        },
-        {
-          "name": "Gewinnmaximierung im Monopol",
-          "latex": "MR = MC",
-          "chapter_id": "k12",
-          "explanation": "Grenzerlös = Grenzkosten; Preis aus der Nachfragekurve."
-        },
-        {
-          "name": "Konsumentenrente (lineare Nachfrage)",
-          "latex": "KR = \\tfrac{1}{2}\\,(P_{max} - P^*)\\,Q^*",
-          "chapter_id": "k7",
-          "explanation": "Dreieck zwischen Nachfragekurve und Marktpreis."
-        }
-      ],
-      "syllabus_version": 1,
+      "base_formulas": [],
+      "syllabus_version": 2,
       "lecturer": "Dr. Jacqueline Adelowo / Dr. Jean-Victor Alipour",
       "literature": "Acemoglu, Laibson, List & Belke (2020): Volkswirtschaftslehre, Pearson, Kap. 1–13 (eLibrary der UB)",
       "lectures": [
@@ -1315,63 +1131,8 @@
           "week": 13
         }
       ],
-      "base_formulas": [
-        {
-          "name": "Arithmetisches Mittel",
-          "latex": "\\bar{x} = \\frac{1}{n}\\sum_{i=1}^{n} x_i",
-          "chapter_id": "k2",
-          "explanation": "Lagemaß für metrische Merkmale."
-        },
-        {
-          "name": "Empirische Varianz",
-          "latex": "s^2 = \\frac{1}{n}\\sum_{i=1}^{n} (x_i - \\bar{x})^2 = \\overline{x^2} - \\bar{x}^2",
-          "chapter_id": "k2",
-          "explanation": "Verschiebungssatz rechts; Achtung: in der Vorlesung prüfen, ob 1/n oder 1/(n-1) verwendet wird."
-        },
-        {
-          "name": "Variationskoeffizient",
-          "latex": "v = \\frac{s}{\\bar{x}}",
-          "chapter_id": "k2",
-          "explanation": "Relatives Streuungsmaß (nur für x̄ > 0)."
-        },
-        {
-          "name": "Gini-Koeffizient (normiert)",
-          "latex": "G^* = \\frac{n}{n-1}\\, G",
-          "chapter_id": "k2",
-          "explanation": "Konzentrationsmaß, Normierung auf das Intervall [0, 1]."
-        },
-        {
-          "name": "Korrelationskoeffizient nach Bravais-Pearson",
-          "latex": "r_{xy} = \\frac{\\sum (x_i-\\bar{x})(y_i-\\bar{y})}{\\sqrt{\\sum (x_i-\\bar{x})^2 \\sum (y_i-\\bar{y})^2}}",
-          "chapter_id": "k3",
-          "explanation": "Maß für den linearen Zusammenhang, -1 ≤ r ≤ 1."
-        },
-        {
-          "name": "Erwartungswert einer diskreten Zufallsvariable",
-          "latex": "E(X) = \\sum_{i} x_i \\, P(X = x_i)",
-          "chapter_id": "k4",
-          "explanation": "Gewichteter Mittelwert der möglichen Ausprägungen."
-        },
-        {
-          "name": "Konfidenzintervall für μ (σ bekannt)",
-          "latex": "\\bar{x} \\pm z_{1-\\alpha/2} \\cdot \\frac{\\sigma}{\\sqrt{n}}",
-          "chapter_id": "k6",
-          "explanation": "Überdeckt μ mit Wahrscheinlichkeit 1−α."
-        },
-        {
-          "name": "Gauß-Teststatistik",
-          "latex": "T = \\frac{\\bar{X} - \\mu_0}{\\sigma / \\sqrt{n}}",
-          "chapter_id": "k7",
-          "explanation": "Einstichprobentest für μ bei bekanntem σ."
-        },
-        {
-          "name": "KQ-Regressionsgerade",
-          "latex": "\\hat{y} = a + b\\,x, \\quad b = \\frac{s_{xy}}{s_x^2}, \\quad a = \\bar{y} - b\\,\\bar{x}",
-          "chapter_id": "k8",
-          "explanation": "Methode der kleinsten Quadrate."
-        }
-      ],
-      "syllabus_version": 1,
+      "base_formulas": [],
+      "syllabus_version": 2,
       "lecturer": "Matthias Aßenmacher",
       "lectures": [
         {

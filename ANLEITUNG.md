@@ -111,6 +111,20 @@ Jetzt startest du die Lernplattform wie jede andere App über ihr Symbol.
 - **Zusätzliche Sicherung:** Unter 📥 *Export & Backup* kannst du jederzeit ein komplettes Backup als ZIP
   herunterladen.
 
+## Moodle verbinden (optional)
+
+Damit holt die App neue Folien, Übungsblätter und Lösungen direkt aus Moodle.
+
+1. In Moodle oben rechts auf dein Profilbild → **„Einstellungen“** → **„Sicherheitsschlüssel“**.
+2. Den Schlüssel in der Zeile **„Moodle mobile web service“** kopieren.
+3. Auf share.streamlit.io bei deiner App **⋮ → „Settings“ → „Secrets“** eine neue Zeile ergänzen:
+   `MOODLE_TOKEN = "dein-schlüssel"` → **Save** → **⋮ → „Reboot app“**.
+4. In der App: **📂 Bulk-Upload & Moodle-Import → „🔗 Direkt aus Moodle“** → „Kurse laden“ → Zuordnung prüfen
+   → „Neue Dateien suchen“ → „Importieren“.
+
+Den Schlüssel nie weitergeben: Er erlaubt Zugriff auf dein Moodle-Konto. Über „Zurücksetzen“ auf derselben
+Moodle-Seite machst du einen alten Schlüssel jederzeit ungültig.
+
 ## Wenn etwas nicht klappt
 
 | Meldung / Problem | Lösung |

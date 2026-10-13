@@ -214,9 +214,12 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             add({"key": exercise_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),
                  "status_field": None, "sync": "uebung", "kind": "Übungsblatt",
                  "title": f"Übung vorbereiten – {ex['title']}", "due": max(due, monday)})
+
+    # Zusätzliche Termine mit Zeitraum (Klausuranmeldung, Quizze, Extra-Sessions) – für alle Module
+    for module in cfg["modules"]:
         for task in tasks_of(module):
             if task["start"] <= sunday and task["due"] >= monday:
-                add({"key": f"{module_id}:task:{task['index']}", "module_id": module_id, "chapter_id": None,
+                add({"key": f"{module['id']}:task:{task['index']}", "module_id": module["id"], "chapter_id": None,
                      "status_field": None, "kind": "Aufgabe", "title": task["title"], "due": task["due"]})
 
     iso_week = f"{monday.isocalendar()[0]}-W{monday.isocalendar()[1]:02d}"

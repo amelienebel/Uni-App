@@ -11,7 +11,11 @@
         "start": "2026-12-24",
         "end": "2027-01-06"
       }
-    ]
+    ],
+    "exam_registration": {
+      "start": "2026-12-07",
+      "end": "2027-01-08"
+    }
   },
   "modules": [
     {
@@ -149,7 +153,13 @@
       ],
       "lectures": [],
       "exercises": [],
-      "tasks": []
+      "tasks": [
+        {
+          "title": "Klausuranmeldung im LSF: Grundlagen der Mathematik für Wirtschaftswissenschaftler (Pflicht!)",
+          "start": "2026-12-07",
+          "due": "2027-01-08"
+        }
+      ]
     },
     {
       "id": "rewe",
@@ -173,21 +183,29 @@
         "soll",
         "haben",
         "rückstellung",
-        "umsatzsteuer"
+        "umsatzsteuer",
+        "sellhorn",
+        "schanz",
+        "baaken",
+        "rwp",
+        "tax",
+        "jahresabschluss",
+        "case",
+        "skript"
       ],
       "schedule": [
         {
           "type": "Vorlesung",
           "weekday": 0,
           "start": "18:00",
-          "end": "20:00",
+          "end": "19:30",
           "room": "Geschw.-Scholl-Pl. 1 (A) – Audi Max (A030)"
         },
         {
           "type": "Übung",
           "weekday": 3,
-          "start": "16:00",
-          "end": "18:00",
+          "start": "16:15",
+          "end": "17:45",
           "room": "Geschw.-Scholl-Pl. 1 (M) – M 218"
         },
         {
@@ -201,101 +219,275 @@
       "chapters": [
         {
           "id": "k1",
-          "title": "Grundlagen und Rechtsrahmen (HGB)",
-          "week": 1
-        },
-        {
-          "id": "k2",
-          "title": "Inventur, Inventar und Bilanz",
+          "title": "1. Rechnungswesen als Sprache der Wirtschaft (RWP)",
           "week": 2
         },
         {
-          "id": "k3",
-          "title": "Buchungstechnik: Bestands- und Erfolgskonten",
-          "week": 3
-        },
-        {
-          "id": "k4",
-          "title": "Warenverkehr und Umsatzsteuer",
+          "id": "t1",
+          "title": "Grundlagen Handelsrecht und Bilanzaufbau (TAX)",
           "week": 4
         },
         {
-          "id": "k5",
-          "title": "Anlagevermögen und Abschreibungen",
+          "id": "t2",
+          "title": "Grundlagen Buchungstechnik (TAX)",
+          "week": 5
+        },
+        {
+          "id": "t3",
+          "title": "Typisierung und Abbildung von Geschäftsvorfällen (TAX)",
           "week": 6
         },
         {
-          "id": "k6",
-          "title": "Umlaufvermögen und Bewertung",
+          "id": "t4",
+          "title": "Buchungstechnik Vorräte, Steuern und Absatz (TAX)",
           "week": 7
         },
         {
-          "id": "k7",
-          "title": "Rechnungsabgrenzung und Rückstellungen",
+          "id": "t5",
+          "title": "Buchungstechnik für besondere Geschäftsvorfälle (TAX)",
           "week": 8
         },
         {
-          "id": "k8",
-          "title": "Eigenkapital und Verbindlichkeiten",
+          "id": "t6",
+          "title": "Einführung in die Unternehmensbesteuerung (TAX)",
+          "week": 9
+        },
+        {
+          "id": "k2",
+          "title": "2. Der Jahresabschluss als Herzstück der Unternehmensberichterstattung (RWP)",
           "week": 10
         },
         {
-          "id": "k9",
-          "title": "Jahresabschluss: GuV, Anhang, Lagebericht",
-          "week": 11
+          "id": "k3",
+          "title": "3. Unternehmensanalyse (RWP)",
+          "week": 13
         },
         {
-          "id": "k10",
-          "title": "Bilanzanalyse und Kennzahlen",
-          "week": 12
-        },
-        {
-          "id": "k11",
-          "title": "Wiederholung und Klausurvorbereitung",
+          "id": "k4",
+          "title": "4. Externes Rechnungswesen jenseits des Jahresabschlusses (RWP)",
           "week": 14
+        },
+        {
+          "id": "kwdh",
+          "title": "Review Session, Q&A und Probeklausur",
+          "week": 15
         }
       ],
       "base_formulas": [
         {
           "name": "Bilanzgleichung",
           "latex": "\\text{Aktiva} = \\text{Passiva} = \\text{Eigenkapital} + \\text{Fremdkapital}",
-          "chapter_id": "k2",
+          "chapter_id": "t1",
           "explanation": "Mittelverwendung = Mittelherkunft."
+        },
+        {
+          "name": "Umsatzsteuer-Zahllast",
+          "latex": "\\text{Zahllast} = \\text{Umsatzsteuer} - \\text{Vorsteuer}",
+          "chapter_id": "t4",
+          "explanation": "Wird an das Finanzamt abgeführt."
         },
         {
           "name": "Lineare Abschreibung",
           "latex": "AfA = \\frac{AK - RW}{ND}",
-          "chapter_id": "k5",
+          "chapter_id": "t5",
           "explanation": "AK = Anschaffungskosten, RW = Restwert, ND = Nutzungsdauer."
         },
         {
           "name": "Geometrisch-degressive Abschreibung",
           "latex": "AfA_t = RBW_{t-1} \\cdot p",
-          "chapter_id": "k5",
+          "chapter_id": "t5",
           "explanation": "Fester Prozentsatz p vom Restbuchwert des Vorjahres."
         },
         {
           "name": "Erfolgsermittlung (GuV)",
           "latex": "\\text{Jahresüberschuss} = \\text{Erträge} - \\text{Aufwendungen}",
-          "chapter_id": "k9",
+          "chapter_id": "k2",
           "explanation": "Saldo der Gewinn- und Verlustrechnung."
         },
         {
           "name": "Eigenkapitalquote",
           "latex": "EK\\text{-Quote} = \\frac{EK}{GK} \\cdot 100\\,\\%",
-          "chapter_id": "k10",
-          "explanation": "Anteil des Eigenkapitals am Gesamtkapital."
+          "chapter_id": "k3",
+          "explanation": "Anteil des Eigenkapitals am Gesamtkapital (finanzielle Stabilität)."
         },
         {
-          "name": "Umsatzsteuer-Zahllast",
-          "latex": "\\text{Zahllast} = \\text{Umsatzsteuer} - \\text{Vorsteuer}",
-          "chapter_id": "k4",
-          "explanation": "Wird an das Finanzamt abgeführt."
+          "name": "Eigenkapitalrentabilität",
+          "latex": "r_{EK} = \\frac{\\text{Jahresüberschuss}}{EK} \\cdot 100\\,\\%",
+          "chapter_id": "k3",
+          "explanation": "Verzinsung des eingesetzten Eigenkapitals (Rentabilität)."
+        },
+        {
+          "name": "Liquidität 2. Grades",
+          "latex": "\\frac{\\text{flüssige Mittel} + \\text{kurzfr. Forderungen}}{\\text{kurzfr. Verbindlichkeiten}} \\cdot 100\\,\\%",
+          "chapter_id": "k3",
+          "explanation": "Kurzfristige Zahlungsfähigkeit (Liquidität)."
         }
       ],
-      "lectures": [],
-      "exercises": [],
-      "tasks": []
+      "lectures": [
+        {
+          "date": "2026-10-19",
+          "chapter_id": "k1",
+          "topic": "Rechnungswesen als Sprache der Wirtschaft I – Skript 1.1–1.4"
+        },
+        {
+          "date": "2026-10-26",
+          "chapter_id": "k1",
+          "topic": "Rechnungswesen als Sprache der Wirtschaft II – Skript 1.5–1.7"
+        },
+        {
+          "date": "2026-11-02",
+          "chapter_id": "t1",
+          "topic": "Grundlagen Handelsrecht und Bilanzaufbau (Baaken)"
+        },
+        {
+          "date": "2026-11-09",
+          "chapter_id": "t2",
+          "topic": "Grundlagen Buchungstechnik (Baaken)"
+        },
+        {
+          "date": "2026-11-16",
+          "chapter_id": "t3",
+          "topic": "Typisierung und Abbildung von Geschäftsvorfällen (Baaken)"
+        },
+        {
+          "date": "2026-11-23",
+          "chapter_id": "t4",
+          "topic": "Buchungstechnik Vorräte, Steuern und Absatz (Baaken)"
+        },
+        {
+          "date": "2026-11-30",
+          "chapter_id": "t5",
+          "topic": "Buchungstechnik für besondere Geschäftsvorfälle (Baaken)"
+        },
+        {
+          "date": "2026-12-07",
+          "chapter_id": "t6",
+          "topic": "Einführung in die Unternehmensbesteuerung (Prof. Schanz)"
+        },
+        {
+          "date": "2026-12-14",
+          "chapter_id": "k2",
+          "topic": "Jahresabschluss I – Skript 2.1–2.3"
+        },
+        {
+          "date": "2027-01-11",
+          "chapter_id": "k2",
+          "topic": "Jahresabschluss II – Skript 2.4–2.5"
+        },
+        {
+          "date": "2027-01-18",
+          "chapter_id": "k3",
+          "topic": "Unternehmensanalyse – Skript Abschnitt 3"
+        },
+        {
+          "date": "2027-01-25",
+          "chapter_id": "k4",
+          "topic": "Externes Rechnungswesen jenseits des Jahresabschlusses – Skript Abschnitt 4"
+        },
+        {
+          "date": "2027-02-01",
+          "chapter_id": "kwdh",
+          "topic": "Review Session / finales Q&A"
+        }
+      ],
+      "exercises": [
+        {
+          "week_of": "2026-10-12",
+          "chapter_id": "k1",
+          "title": "Einführung (nur Mi 14.10., 08:30, A240 – Do keine Übung)"
+        },
+        {
+          "week_of": "2026-10-19",
+          "chapter_id": "k1",
+          "title": "Übungsaufgaben 1-1 und 1-2"
+        },
+        {
+          "week_of": "2026-10-26",
+          "chapter_id": "k1",
+          "title": "Übungsaufgaben 1-3, 1-4, 1-5 · Case 1.1–1.3"
+        },
+        {
+          "week_of": "2026-11-02",
+          "chapter_id": "t1",
+          "title": "Grundlagen Handelsrecht und Bilanzaufbau"
+        },
+        {
+          "week_of": "2026-11-09",
+          "chapter_id": "t2",
+          "title": "Grundlagen Buchungstechnik"
+        },
+        {
+          "week_of": "2026-11-16",
+          "chapter_id": "t3",
+          "title": "Typisierung von Geschäftsvorfällen (Do keine Übung – nur Mi 18.11.)"
+        },
+        {
+          "week_of": "2026-11-23",
+          "chapter_id": "t4",
+          "title": "Buchungstechnik Vorräte, Steuern und Absatz"
+        },
+        {
+          "week_of": "2026-11-30",
+          "chapter_id": "t5",
+          "title": "Buchungstechnik für besondere Geschäftsvorfälle"
+        },
+        {
+          "week_of": "2026-12-07",
+          "chapter_id": "t6",
+          "title": "Einführung in die Unternehmensbesteuerung"
+        },
+        {
+          "week_of": "2026-12-14",
+          "chapter_id": "k2",
+          "title": "Übungsaufgabe 2-1 · Case 2.1–2.3"
+        },
+        {
+          "week_of": "2027-01-11",
+          "chapter_id": "k2",
+          "title": "Case 2.4–2.6"
+        },
+        {
+          "week_of": "2027-01-18",
+          "chapter_id": "k3",
+          "title": "Case 3.1–3.5"
+        },
+        {
+          "week_of": "2027-01-25",
+          "chapter_id": "k4",
+          "title": "Case 4.1–4.3"
+        },
+        {
+          "week_of": "2027-02-01",
+          "chapter_id": "kwdh",
+          "title": "Probeklausur"
+        }
+      ],
+      "tasks": [
+        {
+          "title": "Klausuranmeldung im LSF: Externes Rechnungswesen (Pflicht!)",
+          "start": "2026-12-07",
+          "due": "2027-01-08"
+        },
+        {
+          "title": "Extra-Session 1 (optional, 19:35–20:15): Carbon Accounting am Beispiel SAP Green Ledger",
+          "start": "2027-01-11",
+          "due": "2027-01-11"
+        },
+        {
+          "title": "Extra-Session 2 (optional, 19:35–20:15): Bayern vs. Dortmund – Wer hat den besseren Cashflow?",
+          "start": "2027-01-18",
+          "due": "2027-01-18"
+        },
+        {
+          "title": "Extra-Session 3 (optional, 19:35–20:15): KPIs deutscher Premiumhersteller",
+          "start": "2027-01-25",
+          "due": "2027-01-25"
+        }
+      ],
+      "syllabus_version": 1,
+      "lecturer": "Prof. Dr. Thorsten Sellhorn (RWP) · Prof. Dr. Deborah Schanz & Stefan Baaken (TAX)",
+      "literature": "Skript auf Moodle (zuerst die „Gebrauchsanweisung“ lesen!) · Pellens/Fülbier/Gassen/Sellhorn: Internationale Rechnungslegung · Coenenberg/Haller/Mattner/Schultze: Einführung in das Rechnungswesen",
+      "exam_note": "Klausur 15.02.2027, 15:30–17:30 Uhr (120 min, closed book). Raum laut ISC-Hörsaalplan (wird kurz vorher veröffentlicht)."
     },
     {
       "id": "invfin",
@@ -560,6 +752,11 @@
         }
       ],
       "tasks": [
+        {
+          "title": "Klausuranmeldung im LSF: Investition und Finanzierung (Pflicht!)",
+          "start": "2026-12-07",
+          "due": "2027-01-08"
+        },
         {
           "title": "Moodle-Quiz 1 bearbeiten (freiwillig)",
           "start": "2026-11-16",
@@ -891,7 +1088,13 @@
           "title": "Übung/Tutorium: Altklausur"
         }
       ],
-      "tasks": []
+      "tasks": [
+        {
+          "title": "Klausuranmeldung im LSF: Grundlagen der VWL (Pflicht!)",
+          "start": "2026-12-07",
+          "due": "2027-01-08"
+        }
+      ]
     },
     {
       "id": "statistik",
@@ -1187,7 +1390,13 @@
           "title": "Blatt 8: Lineare Regression (A4–A6)"
         }
       ],
-      "tasks": []
+      "tasks": [
+        {
+          "title": "Klausuranmeldung im LSF: Grundlagen der Statistik (Pflicht!)",
+          "start": "2026-12-07",
+          "due": "2027-01-08"
+        }
+      ]
     }
   ],
   "document_types": {

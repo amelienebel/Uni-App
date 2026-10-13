@@ -268,3 +268,36 @@ def guess_chapter_index(path: str, text: str, chapters: list[dict]) -> int:
         if hits > best_hits:
             best, best_hits = i, hits
     return best
+
+
+_LECTURE_NR = re.compile(r"(?:(?<!\d)(\d{1,2})\.?[\s_\-]*(?:vorlesung|vl\b|lecture|einheit))|"
+                         r"(?:(?:vorlesung|vl|lecture|einheit)[\s_.\-]*0*(\d{1,2})(?!\d))", re.IGNORECASE)
+_SHEET_NR = re.compile(r"(?:(?:ü|ue|u)bungsblatt|blatt|sheet|problem[\s_\-]?set)[\s_.\-]*0*(\d{1,2})(?!\d)",
+                       re.IGNORECASE)
+
+
+def guess_chapter_from_plan(path: str, module_cfg: dict) -> str | None:
+    """Kapitel anhand des Kursablaufs: „4. Vorlesung“ → Thema der 4. Vorlesung, „Übungsblatt 2“ → Kapitel von Blatt 2."""
+    name = PurePosixPath(path).name
+    sheet = _SHEET_NR.search(name)
+    if sheet:
+        number = int(sheet.group(1))
+        pattern = re.compile(rf"\bblatt\s*{number}\b", re.IGNORECASE)
+        for ex in module_cfg.get("exercises", []):
+            if pattern.search(ex.get("title", "")) and ex.get("chapter_id"):
+                return ex["chapter_id"]
+        return None
+    lecture = _LECTURE_NR.search(name)
+    if lecture:
+        number = int(lecture.group(1) or lecture.group(2))
+        if "einheit" in lecture.group(0).lower():
+            for ch in module_cfg.get("chapters", []):
+                if re.search(rf"\beinheit\s*{number}\b", ch.get("title", ""), re.IGNORECASE):
+                    return ch["id"]
+        lectures = sorted(module_cfg.get("lectures", []), key=lambda lec: lec["date"])
+        for lec in lectures:  # Nummerierung im Thema hat Vorrang (z. B. Mathe: „4. Vorlesung“)
+            if re.match(rf"{number}\.\s", lec.get("topic", "")):
+                return lec.get("chapter_id")
+        if 1 <= number <= len(lectures):
+            return lectures[number - 1].get("chapter_id")
+    return None

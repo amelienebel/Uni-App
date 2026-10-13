@@ -8,8 +8,9 @@ import zipfile
 import pandas as pd
 import streamlit as st
 
-from utils.config import module_label
-from utils.pdf_parser import (extract_pdf, find_formula_candidates, guess_chapter_index, guess_doc_type, guess_module,
+from utils.config import get_module, module_label
+from utils.pdf_parser import (extract_pdf, find_formula_candidates, guess_chapter_from_plan, guess_chapter_index,
+                              guess_doc_type, guess_module,
                               pdfs_from_zip)
 from utils.storage import add_document, add_formulas, load_module, save_module
 
@@ -71,12 +72,16 @@ def render(cfg: dict) -> None:
         module_id, score = guess_module(item["path"], text, cfg["modules"])
         module_id = module_id or ids[0]
         chapters = load_module(module_id)["chapters"]
+        planned_chapter = guess_chapter_from_plan(item["path"], get_module(cfg, module_id))
+        chapter_ids = [ch["id"] for ch in chapters]
+        chapter_nr = (chapter_ids.index(planned_chapter) + 1 if planned_chapter in chapter_ids
+                      else guess_chapter_index(item["path"], text, chapters))
         rows.append({
             "Importieren": True,
             "Datei": item["path"],
             "Modul": module_names[module_id],
             "Typ": type_names[guess_doc_type(item["path"], text)],
-            "Kapitel-Nr.": guess_chapter_index(item["path"], text, chapters),
+            "Kapitel-Nr.": chapter_nr,
             "Seiten": len(extracted["pages"]),
             "Sicherheit": "hoch" if score >= 5 else "mittel" if score >= 2 else "niedrig – bitte prüfen",
             "_hash": hashlib.sha1(item["content"]).hexdigest(),

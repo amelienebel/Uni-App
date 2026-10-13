@@ -6,39 +6,57 @@ import pandas as pd
 import streamlit as st
 
 from utils import planner
-from utils.storage import CHAPTER_STATUS_FIELDS, chapter_label, load_module, load_todos, new_id, save_module, today
+from utils.config import WEEKDAYS_SHORT
+from utils.storage import (CHAPTER_STATUS_FIELDS, chapter_label, get_schedule, lecture_breaks, load_module, load_todos,
+                           new_id, save_module, today)
 from utils.units import session_text, short_label, unit_cards, unit_docs
-from views.common import open_unit
+from views.common import open_unit, toggle_todo
 
 
 def _mark(ok: bool) -> str:
     return "✅" if ok else "⬜"
 
 
-def _lecture_row(module_id: str, data: dict, lec: dict, state: dict, is_next: bool) -> None:
+def _due(d) -> str:
+    return f"{WEEKDAYS_SHORT[d.weekday()]} {d:%d.%m.}"
+
+
+def _check(col, label: str, todo: dict, state: dict, wkey: str) -> None:
+    st.session_state[wkey] = bool(state.get(todo["key"]))
+    col.checkbox(label, key=wkey, on_change=toggle_todo, args=(todo, wkey))
+
+
+def _lecture_row(module: dict, data: dict, lec: dict, state: dict, is_next: bool) -> None:
+    module_id = module["id"]
     docs = unit_docs(data, lec)
     cards = unit_cards(data, lec)
-    prep = state.get(planner.lecture_key(module_id, lec["date"], "vorbereitet"))
-    review = state.get(planner.lecture_key(module_id, lec["date"], "nachbereitet"))
     with st.container(key=f"row_{module_id}_{lec['id'].replace(':', '_')}"):
-        c1, c2 = st.columns([3, 2], vertical_alignment="center")
+        c1, c2, c3 = st.columns([6, 2, 2], vertical_alignment="center")
         c1.button(f"🎬 {short_label(lec)} – {lec['topic']}" + ("  ⬅ als Nächstes" if is_next else ""),
                   key=f"open_{module_id}_{lec['id']}", type="tertiary", on_click=open_unit,
                   args=(module_id, lec["id"]))
-        c2.caption(f"{'📄 Folien' if docs else '· keine Folien'} · {_mark(prep)} vorbereitet · "
-                   f"{_mark(review)} nachbereitet" + (f" · 🃏 {len(cards)}" if cards else ""))
+        c1.caption(f"{'📄 Folien' if docs else 'keine Folien'}" + (f" · 🃏 {len(cards)} Karten" if cards else "")
+                   + f" · vorbereiten bis {_due(planner.prep_due(module, lec['date']))}"
+                   + f" · nachbereiten bis {_due(planner.review_due(module, lec['date']))}")
+        for col, field, label in ((c2, "vorbereitet", "Vorbereitet"), (c3, "nachbereitet", "Nachbereitet")):
+            todo = {"key": planner.lecture_key(module_id, lec["date"], field), "module_id": module_id,
+                    "chapter_id": lec.get("chapter_id"), "sync": field}
+            _check(col, label, todo, state, f"abl_{field}_{module_id}_{lec['id']}")
 
 
-def _exercise_row(module_id: str, data: dict, ex: dict, state: dict, is_next: bool) -> None:
-    docs = unit_docs(data, ex)
-    have = {d["doc_type"] for d in docs}
+def _exercise_row(module: dict, data: dict, ex: dict, state: dict, is_next: bool, due) -> None:
+    module_id = module["id"]
+    have = {d["doc_type"] for d in unit_docs(data, ex)}
     with st.container(key=f"row_{module_id}_{ex['id'].replace(':', '_')}"):
-        c1, c2 = st.columns([3, 2], vertical_alignment="center")
+        c1, c2, c3 = st.columns([6, 2, 2], vertical_alignment="center")
         c1.button(f"✏️ {ex['title']}" + ("  ⬅ als Nächstes" if is_next else ""),
                   key=f"open_{module_id}_{ex['id']}", type="tertiary", on_click=open_unit,
                   args=(module_id, ex["id"]))
-        c2.caption(f"{session_text(ex)} · {_mark('uebung' in have)} Blatt · {_mark('loesung' in have)} Lösung · "
-                   f"{_mark(bool(state.get(ex['plan_key'])))} gelöst")
+        files = " · ".join(label for key, label in (("uebung", "📄 Blatt"), ("loesung", "📗 Lösung"),
+                                                     ("eigene_loesung", "✍️ meine Lösung")) if key in have)
+        c1.caption(f"{session_text(ex)}" + (f" · {files}" if files else "") + f" · lösen bis {_due(due)}")
+        todo = {"key": ex["plan_key"], "module_id": module_id, "chapter_id": ex.get("chapter_id"), "sync": "uebung"}
+        _check(c2, "Gelöst", todo, state, f"abl_ex_{module_id}_{ex['id']}")
 
 
 def _chapter_editor(module_id: str, data: dict) -> None:
@@ -83,7 +101,9 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
         candidates = [u for u in (next_lec, next_ex) if u]
         next_id = min(candidates, key=lambda u: u["date"] if u["kind"] == "lecture" else u["session"])["id"]
 
-    st.caption("Tippe auf eine Vorlesung oder Übung, um Dateien hochzuladen, vor- und nachzubereiten und zu lernen.")
+    schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
+    st.caption("Tippe auf eine Vorlesung oder Übung, um Dateien hochzuladen, vor- und nachzubereiten und zu lernen. "
+               "Erledigtes kannst du direkt hier abhaken.")
     groups = [(ch["id"], chapter_label(data, ch["id"])) for ch in data["chapters"]] + [(None, "Weitere Termine")]
     for chapter_id, label in groups:
         ch_lecs = [lec for lec in lecs if lec.get("chapter_id") == chapter_id]
@@ -94,8 +114,11 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
             st.markdown(f"**{label}**")
             items = sorted(ch_lecs + ch_exs, key=lambda u: u["date"] if u["kind"] == "lecture" else u["session"])
             for u in items:
-                row = _lecture_row if u["kind"] == "lecture" else _exercise_row
-                row(module_id, data, u, state, u["id"] == next_id)
+                if u["kind"] == "lecture":
+                    _lecture_row(module, data, u, state, u["id"] == next_id)
+                else:
+                    _exercise_row(module, data, u, state, u["id"] == next_id,
+                                  planner.exercise_due(module, u, schedule, breaks))
 
     tasks = planner.tasks_of(module)
     if tasks:

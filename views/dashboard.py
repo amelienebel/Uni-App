@@ -228,8 +228,6 @@ def render(cfg: dict) -> None:
             continue
 
     list_view = st.toggle("📱 Listenansicht (fürs Handy)", key="dash_list_view")
-    st.caption("Tippe auf eine Veranstaltung, um die Vorlesung bzw. Übung mit Dateien, Vor- und Nachbereitung zu öffnen · "
-               "↔️ verschiebt ein To-do.")
 
     # --- Stundenplan-Raster ---------------------------------------------------
     if not list_view:

@@ -14,11 +14,12 @@ from views.module_tabs import ablauf, exercise_page, formulas_tab, learn, lectur
 TABS = ["📋 Ablauf", "🎓 Lernen & Klausur", "📐 Formeln & Notizen"]
 
 
-def _header(cfg: dict, module: dict, data: dict) -> None:
+def _stats(module: dict, data: dict) -> None:
+    """Fortschritt, Kapitel, Karten und Klausurtage – am Ende der Modulseite."""
     module_id = module["id"]
     progress = planner.module_progress(data)
     days = days_until_exam(module_id)
-    st.title(f"{module['icon']} {module['name']}")
+    st.divider()
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Fortschritt", f"{progress['overall'] * 100:.0f} %")
     c2.metric("Kapitel komplett", f"{progress['chapters_done']}/{progress['n_chapters']}")
@@ -28,6 +29,9 @@ def _header(cfg: dict, module: dict, data: dict) -> None:
               help=f"Termin: {exam:%d.%m.%Y}" if exam else "Unter ⚙️ Einstellungen eintragen")
     st.progress(progress["overall"])
 
+
+def _header(cfg: dict, module: dict, data: dict) -> None:
+    st.title(f"{module['icon']} {module['name']}")
     nxt = planner.next_session(cfg, module, get_schedule(cfg), today())
     if nxt:
         when = f"{WEEKDAYS[nxt['date'].weekday()]}, {nxt['date']:%d.%m.} · {nxt.get('start', '')}" \
@@ -73,3 +77,4 @@ def render(cfg: dict, module_id: str) -> None:
         formulas_tab.render(cfg, module_id)
         st.divider()
         notes.render(cfg, module_id)
+    _stats(module, data)

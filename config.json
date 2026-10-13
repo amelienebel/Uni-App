@@ -260,7 +260,12 @@
         }
       ],
       "syllabus_version": 2,
-      "exam_note": "Klausur 12.02.2027. Die Lösungsvorschläge werden meist freitags um 14:00 Uhr in Moodle freigeschaltet."
+      "exam_note": "Klausur 12.02.2027. Die Lösungsvorschläge werden meist freitags um 14:00 Uhr in Moodle freigeschaltet.",
+      "deadlines": {
+        "prep_weekday": 6,
+        "review_weekday": 2,
+        "exercise_weekday": 6
+      }
     },
     {
       "id": "rewe",
@@ -537,7 +542,12 @@
       "syllabus_version": 2,
       "lecturer": "Prof. Dr. Thorsten Sellhorn (RWP) · Prof. Dr. Deborah Schanz & Stefan Baaken (TAX)",
       "literature": "Skript auf Moodle (zuerst die „Gebrauchsanweisung“ lesen!) · Pellens/Fülbier/Gassen/Sellhorn: Internationale Rechnungslegung · Coenenberg/Haller/Mattner/Schultze: Einführung in das Rechnungswesen",
-      "exam_note": "Klausur 15.02.2027, 15:30–17:30 Uhr (120 min, closed book). Raum laut ISC-Hörsaalplan (wird kurz vorher veröffentlicht)."
+      "exam_note": "Klausur 15.02.2027, 15:30–17:30 Uhr (120 min, closed book). Raum laut ISC-Hörsaalplan (wird kurz vorher veröffentlicht).",
+      "deadlines": {
+        "prep_weekday": 6,
+        "review_weekday": 2,
+        "exercise_weekday": 2
+      }
     },
     {
       "id": "invfin",
@@ -756,7 +766,12 @@
           "start": "2027-01-25",
           "due": "2027-01-31"
         }
-      ]
+      ],
+      "deadlines": {
+        "prep_weekday": 0,
+        "review_weekday": 3,
+        "exercise_weekday": 2
+      }
     },
     {
       "id": "vwl",
@@ -1035,7 +1050,12 @@
           "title": "Übung/Tutorium: Altklausur"
         }
       ],
-      "tasks": []
+      "tasks": [],
+      "deadlines": {
+        "prep_weekday": 0,
+        "review_weekday": 3,
+        "exercise_weekday": 2
+      }
     },
     {
       "id": "statistik",
@@ -1276,7 +1296,12 @@
           "title": "Blatt 8: Lineare Regression (A4–A6)"
         }
       ],
-      "tasks": []
+      "tasks": [],
+      "deadlines": {
+        "prep_weekday": 2,
+        "review_weekday": 5,
+        "exercise_weekday": 6
+      }
     }
   ],
   "document_types": {

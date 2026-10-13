@@ -97,8 +97,14 @@ def render(cfg: dict) -> None:
     with st.form("learning_form"):
         limit = st.number_input("Max. Wiederholungen pro Modul und Sitzung", 10, 500,
                                 int(learning["daily_review_limit"]), step=10)
-        st.caption("Fristen: Vorlesung vorbereiten 1 Tag vorher · nachbereiten 2 Tage danach · "
-                   "Übungsblatt lösen 2 Tage vor der Übung bzw. dem Tutorium.")
+        days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+        lines = []
+        for m in cfg["modules"]:
+            dl = m.get("deadlines", {})
+            if dl:
+                lines.append(f"- **{m['short']}**: vorbereiten {days[dl['prep_weekday']]} · nachbereiten "
+                             f"{days[dl['review_weekday']]} · Übungsblatt {days[dl['exercise_weekday']]}")
+        st.caption("Feste Fristen (in config.json → deadlines):\n" + "\n".join(lines))
         if st.form_submit_button("Speichern"):
             learning.update({"daily_review_limit": int(limit)})
             save_settings()

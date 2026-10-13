@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import streamlit as st
 
-from utils import ai
-from utils.config import get_module
-from utils.storage import abs_data_path, chapter_label, get_document_text, load_module, load_todos, now_iso, save_module
+from utils import ai, planner
+from utils.config import WEEKDAYS_SHORT, get_module
+from utils.storage import (abs_data_path, chapter_label, get_document_text, get_schedule, lecture_breaks, load_module,
+                           load_todos, now_iso, save_module)
 from utils.units import related_lectures, session_text, short_label, unit_cards, unit_docs
 from views.common import open_unit, toggle_todo
 from views.module_tabs import study
@@ -68,7 +69,8 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
 
     wkey = f"exdone_{module_id}_{ex['id']}"
     st.session_state[wkey] = bool(state.get(ex["plan_key"]))
-    st.checkbox("Blatt gelöst", key=wkey, on_change=toggle_todo,
+    due = planner.exercise_due(get_module(cfg, module_id), ex, get_schedule(cfg), lecture_breaks(cfg))
+    st.checkbox(f"Blatt gelöst (bis {WEEKDAYS_SHORT[due.weekday()]} {due:%d.%m.})", key=wkey, on_change=toggle_todo,
                 args=({"key": ex["plan_key"], "module_id": module_id, "chapter_id": ex.get("chapter_id"),
                        "sync": "uebung"}, wkey))
 

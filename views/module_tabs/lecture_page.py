@@ -59,7 +59,10 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
 
     state = load_todos()
     c1, c2 = st.columns(2)
-    for col, field, label in ((c1, "vorbereitet", "Vorbereitet"), (c2, "nachbereitet", "Nachbereitet")):
+    prep, review = planner.prep_due(module, lec["date"]), planner.review_due(module, lec["date"])
+    for col, field, label in ((c1, "vorbereitet", f"Vorbereitet (bis {WEEKDAYS[prep.weekday()][:2]} {prep:%d.%m.})"),
+                              (c2, "nachbereitet",
+                               f"Nachbereitet (bis {WEEKDAYS[review.weekday()][:2]} {review:%d.%m.})")):
         wkey = f"lst_{field}_{module_id}_{lec['id']}"
         st.session_state[wkey] = bool(state.get(planner.lecture_key(module_id, lec["date"], field)))
         col.checkbox(label, key=wkey, on_change=_status_toggle, args=(module_id, lec, field, wkey))

@@ -89,6 +89,48 @@ def exercise_session(module_id: str, ex: dict, schedule: list[dict], breaks=()) 
     return min(sessions) if sessions else ex["week_of"] + timedelta(days=4)
 
 
+def weekday_before(d: date, weekday: int) -> date:
+    """Letzter Tag mit diesem Wochentag vor d (0 = Montag … 6 = Sonntag)."""
+    return d - timedelta(days=((d.weekday() - weekday) % 7) or 7)
+
+
+def weekday_after(d: date, weekday: int) -> date:
+    """Nächster Tag mit diesem Wochentag nach d."""
+    return d + timedelta(days=((weekday - d.weekday()) % 7) or 7)
+
+
+def prep_due(module_cfg: dict, lecture_date: date) -> date:
+    """Frist „Vorlesung vorbereiten“: fester Wochentag laut config.json (deadlines), sonst 1 Tag vorher."""
+    weekday = module_cfg.get("deadlines", {}).get("prep_weekday")
+    return weekday_before(lecture_date, weekday) if weekday is not None \
+        else lecture_date - timedelta(days=PREP_DAYS_BEFORE)
+
+
+def review_due(module_cfg: dict, lecture_date: date) -> date:
+    """Frist „Vorlesung nachbereiten“: fester Wochentag laut config.json (deadlines), sonst 2 Tage danach."""
+    weekday = module_cfg.get("deadlines", {}).get("review_weekday")
+    return weekday_after(lecture_date, weekday) if weekday is not None \
+        else lecture_date + timedelta(days=REVIEW_DAYS_AFTER)
+
+
+def exercise_due(module_cfg: dict, ex: dict, schedule: list[dict], breaks=()) -> date:
+    """Frist „Übungsblatt lösen“: fester Wochentag vor der Übung (bzw. dem Tutorium, falls es keine Übung gibt)."""
+    module_id = module_cfg["id"]
+    session = exercise_session(module_id, ex, schedule, breaks)
+    weekday = module_cfg.get("deadlines", {}).get("exercise_weekday")
+    if weekday is None:
+        return session - timedelta(days=EXERCISE_DAYS_BEFORE)
+    anchor = session
+    if not ex.get("due"):
+        uebungen = [e["date"] for e in week_events(schedule, monday_of(session))
+                    if e.get("module_id") == module_id and e.get("type") == "Übung" and e["date"] >= session
+                    and not break_for(e["date"], breaks)]
+        anchor = max(uebungen) if uebungen else session
+    if anchor.weekday() == weekday:  # Sondertermin genau am Fristtag: dann einen Tag vorher
+        return anchor - timedelta(days=1)
+    return weekday_before(anchor, weekday)
+
+
 def next_session(cfg: dict, module_cfg: dict, schedule: list[dict], now: date) -> dict | None:
     """Nächster Termin eines Moduls (Vorlesung oder Übung/Tutorium) inkl. Thema bzw. Übungsblatt."""
     from utils.storage import lecture_breaks, semester_dates
@@ -184,14 +226,11 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                    semester_start: date, semester_end: date, learning: dict, breaks=()) -> list[dict]:
     """Erzeugt konkrete Aufgaben mit Fristen für die Woche ab `monday`.
 
-    - Vorlesung vorbereiten: fällig 1 Tag vor der Vorlesung
-    - Vorlesung nachbereiten: fällig 2 Tage nach der Vorlesung
-    - Übungsblatt lösen: fällig 2 Tage vor der Übung bzw. dem Tutorium
-    - Übungsblatt lösen: fällig am Tag vor der Übung (Stoff der Vorwoche)
+    - Vorlesung vorbereiten / nachbereiten / Übungsblatt lösen: feste Wochentage pro Modul
+      (config.json → deadlines), sonst 1 Tag vorher / 2 Tage danach / 2 Tage vor der Übung
     - Spaced-Repetition-Wiederholungen und Klausurvorbereitung je nach Klausurnähe
     Aufgaben mit Kapitelbezug sind direkt mit dem Kapitelstatus verknüpft.
     """
-    prep_before, review_after = PREP_DAYS_BEFORE, REVIEW_DAYS_AFTER
     week = semester_week(semester_start, monday, breaks)
     in_lecture_period = monday_of(semester_start) <= monday <= semester_end
     todos: list[dict] = []
@@ -213,6 +252,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
         data = modules_data[module_id]
         if module_id in planned:
             continue
+        module = next(m for m in cfg["modules"] if m["id"] == module_id)
         if event.get("type") == "Vorlesung":
             chapter = chapter_for_week(data["chapters"], week)
             if not chapter:
@@ -223,14 +263,14 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                 "module_id": module_id, "chapter_id": chapter["id"], "status_field": "vorbereitet",
                 "kind": "Vorbereitung",
                 "title": f"Vorlesung vorbereiten – Kap. {idx}: {chapter['title']}",
-                "due": event["date"] - timedelta(days=prep_before),
+                "due": prep_due(module, event["date"]),
             })
             add({
                 "key": f"{module_id}:{chapter['id']}:nachbereitet",
                 "module_id": module_id, "chapter_id": chapter["id"], "status_field": "nachbereitet",
                 "kind": "Nachbereitung",
                 "title": f"Vorlesung nachbereiten – Kap. {idx}: {chapter['title']}",
-                "due": event["date"] + timedelta(days=review_after),
+                "due": review_due(module, event["date"]),
             })
         elif event.get("type") in ("Übung", "Tutorium"):
             chapter = chapter_for_week(data["chapters"], week - 1) or chapter_for_week(data["chapters"], week)
@@ -257,14 +297,13 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             add({"key": lecture_key(module_id, lec["date"], "vorbereitet"), "module_id": module_id,
                  "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "vorbereitet",
                  "kind": "Vorbereitung", "title": f"Vorlesung vorbereiten – {label}",
-                 "due": lec["date"] - timedelta(days=prep_before)})
+                 "due": prep_due(module, lec["date"])})
             add({"key": lecture_key(module_id, lec["date"], "nachbereitet"), "module_id": module_id,
                  "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "nachbereitet",
                  "kind": "Nachbereitung", "title": f"Vorlesung nachbereiten – {label}",
-                 "due": lec["date"] + timedelta(days=review_after)})
+                 "due": review_due(module, lec["date"])})
         for ex in exercises_of(module):
-            session = exercise_session(module_id, ex, schedule, breaks)
-            due = session - timedelta(days=EXERCISE_DAYS_BEFORE)
+            due = exercise_due(module, ex, schedule, breaks)
             if not (monday <= due <= sunday):
                 continue
             add({"key": exercise_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),

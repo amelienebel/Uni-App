@@ -65,7 +65,8 @@ def lectures_of(module_cfg: dict) -> list[dict]:
 
 
 def exercises_of(module_cfg: dict) -> list[dict]:
-    return [{**ex, "week_of": _d(ex["week_of"]), "index": i} for i, ex in enumerate(module_cfg.get("exercises", []))]
+    return [{**ex, "week_of": _d(ex["week_of"]), "due": _d(ex["due"]) if ex.get("due") else None, "index": i}
+            for i, ex in enumerate(module_cfg.get("exercises", []))]
 
 
 def tasks_of(module_cfg: dict) -> list[dict]:
@@ -210,7 +211,10 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
         for ex in exercises_of(module):
             if ex["week_of"] != monday:
                 continue
-            due = exercise_events[0]["date"] - timedelta(days=1) if exercise_events else monday + timedelta(days=4)
+            if ex["due"]:
+                due = ex["due"]  # feste Frist laut Kursplan (z. B. Besprechung erst in der Folgewoche)
+            else:
+                due = exercise_events[0]["date"] - timedelta(days=1) if exercise_events else monday + timedelta(days=4)
             add({"key": exercise_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),
                  "status_field": None, "sync": "uebung", "kind": "Übungsblatt",
                  "title": f"Übung vorbereiten – {ex['title']}", "due": max(due, monday)})

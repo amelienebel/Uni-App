@@ -58,108 +58,245 @@
       ],
       "chapters": [
         {
-          "id": "k1",
-          "title": "Mengen, Aussagenlogik und Zahlbereiche",
+          "id": "e1",
+          "title": "Einheit 1",
           "week": 1
         },
         {
-          "id": "k2",
-          "title": "Folgen, Reihen und Finanzmathematik",
+          "id": "e2",
+          "title": "Einheit 2",
           "week": 2
         },
         {
-          "id": "k3",
-          "title": "Funktionen einer Variablen",
+          "id": "e3",
+          "title": "Einheit 3 (Selbststudium)",
+          "week": 2
+        },
+        {
+          "id": "e4",
+          "title": "Einheit 4",
           "week": 3
         },
         {
-          "id": "k4",
-          "title": "Differentialrechnung einer Variablen",
+          "id": "e5",
+          "title": "Einheit 5",
           "week": 4
         },
         {
-          "id": "k5",
-          "title": "Integralrechnung",
+          "id": "e6",
+          "title": "Einheit 6",
+          "week": 5
+        },
+        {
+          "id": "e7",
+          "title": "Einheit 7",
           "week": 6
         },
         {
-          "id": "k6",
-          "title": "Funktionen mehrerer Variablen",
-          "week": 7
-        },
-        {
-          "id": "k7",
-          "title": "Optimierung unter Nebenbedingungen (Lagrange)",
+          "id": "e8",
+          "title": "Einheit 8",
           "week": 8
         },
         {
-          "id": "k8",
-          "title": "Matrizen und Vektoren",
+          "id": "e9",
+          "title": "Einheit 9",
+          "week": 9
+        },
+        {
+          "id": "e10",
+          "title": "Einheit 10",
           "week": 10
         },
         {
-          "id": "k9",
-          "title": "Lineare Gleichungssysteme",
+          "id": "e11",
+          "title": "Einheit 11",
           "week": 11
-        },
-        {
-          "id": "k10",
-          "title": "Determinanten und Inverse",
-          "week": 12
-        },
-        {
-          "id": "k11",
-          "title": "Wiederholung und Klausurvorbereitung",
-          "week": 14
         }
       ],
       "base_formulas": [
         {
           "name": "Potenzregel",
           "latex": "\\frac{d}{dx}\\,x^n = n\\,x^{n-1}",
-          "chapter_id": "k4",
+          "chapter_id": null,
           "explanation": "Ableitung einer Potenzfunktion."
         },
         {
           "name": "Produktregel",
           "latex": "(u\\cdot v)' = u'\\,v + u\\,v'",
-          "chapter_id": "k4",
+          "chapter_id": null,
           "explanation": "Ableitung eines Produkts zweier Funktionen."
         },
         {
           "name": "Kettenregel",
           "latex": "\\big(f(g(x))\\big)' = f'(g(x))\\cdot g'(x)",
-          "chapter_id": "k4",
+          "chapter_id": null,
           "explanation": "Äußere mal innere Ableitung."
         },
         {
           "name": "Geometrische Reihe",
           "latex": "\\sum_{k=0}^{n-1} q^k = \\frac{1-q^n}{1-q}, \\quad q \\neq 1",
-          "chapter_id": "k2",
+          "chapter_id": null,
           "explanation": "Grundlage für Renten- und Annuitätenformeln."
         },
         {
           "name": "Lagrange-Funktion",
           "latex": "L(x,y,\\lambda) = f(x,y) + \\lambda\\,\\big(c - g(x,y)\\big)",
-          "chapter_id": "k7",
+          "chapter_id": null,
           "explanation": "Optimierung von f unter der Nebenbedingung g(x,y)=c."
         },
         {
           "name": "Inverse einer 2x2-Matrix",
           "latex": "A^{-1} = \\frac{1}{ad-bc}\\begin{pmatrix} d & -b \\\\ -c & a \\end{pmatrix}",
-          "chapter_id": "k10",
+          "chapter_id": null,
           "explanation": "Existiert nur für det(A) = ad - bc ≠ 0."
         }
       ],
-      "lectures": [],
-      "exercises": [],
+      "lectures": [
+        {
+          "date": "2026-10-12",
+          "chapter_id": "e1",
+          "topic": "1. Vorlesung"
+        },
+        {
+          "date": "2026-10-19",
+          "chapter_id": "e2",
+          "topic": "2. Vorlesung (dazu: 3. Einheit im Selbststudium)"
+        },
+        {
+          "date": "2026-10-26",
+          "chapter_id": "e4",
+          "topic": "4. Vorlesung"
+        },
+        {
+          "date": "2026-11-02",
+          "chapter_id": "e5",
+          "topic": "5. Vorlesung"
+        },
+        {
+          "date": "2026-11-09",
+          "chapter_id": "e6",
+          "topic": "6. Vorlesung"
+        },
+        {
+          "date": "2026-11-16",
+          "chapter_id": "e7",
+          "topic": "7. Vorlesung"
+        },
+        {
+          "date": "2026-11-30",
+          "chapter_id": "e8",
+          "topic": "8. Vorlesung"
+        },
+        {
+          "date": "2026-12-07",
+          "chapter_id": "e9",
+          "topic": "9. Vorlesung"
+        },
+        {
+          "date": "2026-12-14",
+          "chapter_id": "e10",
+          "topic": "10. Vorlesung"
+        },
+        {
+          "date": "2026-12-21",
+          "chapter_id": "e11",
+          "topic": "11. (letzte) Vorlesung"
+        }
+      ],
+      "exercises": [
+        {
+          "week_of": "2026-10-12",
+          "chapter_id": "e1",
+          "due": "2026-10-18",
+          "title": "Übungsblatt 1 – Wiederholung von Grundwissen (nur Selbststudium, kein Tutorium)"
+        },
+        {
+          "week_of": "2026-10-19",
+          "chapter_id": "e2",
+          "due": "2026-10-26",
+          "title": "Übungsblatt 2 – Besprechung im Montags-Tutorium 26.10."
+        },
+        {
+          "week_of": "2026-10-26",
+          "chapter_id": "e4",
+          "due": "2026-11-02",
+          "title": "Übungsblatt 3 – Besprechung im Montags-Tutorium 02.11."
+        },
+        {
+          "week_of": "2026-11-02",
+          "chapter_id": "e5",
+          "due": "2026-11-09",
+          "title": "Übungsblatt 4 – Besprechung im Montags-Tutorium 09.11."
+        },
+        {
+          "week_of": "2026-11-09",
+          "chapter_id": "e6",
+          "due": "2026-11-16",
+          "title": "Übungsblatt 5 – Besprechung im Montags-Tutorium 16.11."
+        },
+        {
+          "week_of": "2026-11-16",
+          "chapter_id": "e7",
+          "due": "2026-11-23",
+          "title": "Übungsblatt 6 – Besprechung im Montags-Tutorium 23.11."
+        },
+        {
+          "week_of": "2026-11-23",
+          "chapter_id": "e7",
+          "due": "2026-11-30",
+          "title": "Übungsblatt 7 – Besprechung im Montags-Tutorium 30.11."
+        },
+        {
+          "week_of": "2026-11-30",
+          "chapter_id": "e8",
+          "due": "2026-12-07",
+          "title": "Übungsblatt 8 – Besprechung im Montags-Tutorium 07.12."
+        },
+        {
+          "week_of": "2026-12-07",
+          "chapter_id": "e9",
+          "due": "2026-12-14",
+          "title": "Übungsblatt 9 – Besprechung im Montags-Tutorium 14.12."
+        },
+        {
+          "week_of": "2026-12-14",
+          "chapter_id": "e10",
+          "due": "2026-12-21",
+          "title": "Übungsblatt 10 – Montags-Tutorium 21.12. entfällt (Weihnachtspause) – selbst mit Lösungsvorschlag prüfen"
+        },
+        {
+          "week_of": "2027-01-04",
+          "chapter_id": "e11",
+          "due": "2027-01-11",
+          "title": "Übungsblatt 11 – Tutorien ab 07.01., Besprechung im Montags-Tutorium 11.01."
+        },
+        {
+          "week_of": "2027-01-11",
+          "chapter_id": null,
+          "due": "2027-01-18",
+          "title": "Übungsblatt 12 – Besprechung im Montags-Tutorium 18.01."
+        },
+        {
+          "week_of": "2027-01-18",
+          "chapter_id": null,
+          "due": "2027-01-25",
+          "title": "Übungsblatt 13 – ab 25.01. keine Tutorien mehr – Fragen in einem früheren Tutorium klären"
+        }
+      ],
       "tasks": [
         {
           "title": "Klausuranmeldung im LSF: Grundlagen der Mathematik für Wirtschaftswissenschaftler (Pflicht!)",
           "start": "2026-12-07",
           "due": "2027-01-08"
+        },
+        {
+          "title": "Puffer-Termin Vorlesung Mo 11.01., 12–14 Uhr (findet voraussichtlich nicht statt – Moodle prüfen)",
+          "start": "2027-01-11",
+          "due": "2027-01-11"
         }
-      ]
+      ],
+      "syllabus_version": 1,
+      "exam_note": "Klausur 12.02.2027. Die Lösungsvorschläge werden meist freitags um 14:00 Uhr in Moodle freigeschaltet."
     },
     {
       "id": "rewe",

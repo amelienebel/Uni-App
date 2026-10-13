@@ -282,7 +282,7 @@ def guess_chapter_from_plan(path: str, module_cfg: dict) -> str | None:
     sheet = _SHEET_NR.search(name)
     if sheet:
         number = int(sheet.group(1))
-        pattern = re.compile(rf"\bblatt\s*{number}\b", re.IGNORECASE)
+        pattern = re.compile(rf"blatt\s*{number}\b", re.IGNORECASE)
         for ex in module_cfg.get("exercises", []):
             if pattern.search(ex.get("title", "")) and ex.get("chapter_id"):
                 return ex["chapter_id"]

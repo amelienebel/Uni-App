@@ -126,8 +126,9 @@ def exercise_due(module_cfg: dict, ex: dict, schedule: list[dict], breaks=()) ->
                     if e.get("module_id") == module_id and e.get("type") == "Übung" and e["date"] >= session
                     and not break_for(e["date"], breaks)]
         anchor = max(uebungen) if uebungen else session
-    if anchor.weekday() == weekday:  # Sondertermin genau am Fristtag: dann einen Tag vorher
-        return anchor - timedelta(days=1)
+    if anchor.weekday() == weekday:
+        # Fester Abgabetag ohne Termin (z. B. Selbststudium bis Sonntag) = Frist; Sondertermin am Fristtag = Vortag
+        return anchor - timedelta(days=1) if ex.get("start") else anchor
     return weekday_before(anchor, weekday)
 
 
@@ -291,17 +292,17 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
         if module_id not in planned:
             continue
         for lec in lectures_of(module):
-            if not (monday <= lec["date"] <= sunday) or break_for(lec["date"], breaks):
+            if break_for(lec["date"], breaks):
                 continue
+            # Maßgeblich ist die Frist: z. B. Montagsvorlesung → Vorbereitung am Sonntag der Vorwoche
             label = f"{lec['date']:%d.%m.}: {lec['topic']}"
-            add({"key": lecture_key(module_id, lec["date"], "vorbereitet"), "module_id": module_id,
-                 "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "vorbereitet",
-                 "kind": "Vorbereitung", "title": f"Vorlesung vorbereiten – {label}",
-                 "due": prep_due(module, lec["date"])})
-            add({"key": lecture_key(module_id, lec["date"], "nachbereitet"), "module_id": module_id,
-                 "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "nachbereitet",
-                 "kind": "Nachbereitung", "title": f"Vorlesung nachbereiten – {label}",
-                 "due": review_due(module, lec["date"])})
+            for field, kind, verb, due in (("vorbereitet", "Vorbereitung", "vorbereiten", prep_due(module, lec["date"])),
+                                           ("nachbereitet", "Nachbereitung", "nachbereiten",
+                                            review_due(module, lec["date"]))):
+                if monday <= due <= sunday:
+                    add({"key": lecture_key(module_id, lec["date"], field), "module_id": module_id,
+                         "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": field,
+                         "kind": kind, "title": f"Vorlesung {verb} – {label}", "due": due})
         for ex in exercises_of(module):
             due = exercise_due(module, ex, schedule, breaks)
             if not (monday <= due <= sunday):

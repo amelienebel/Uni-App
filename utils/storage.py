@@ -210,8 +210,35 @@ def _default_module_data(module_cfg: dict) -> dict:
         "quizzes": [],
         "exam_analyses": [],
         "chat": [],
+        "syllabus_version": int(module_cfg.get("syllabus_version", 0)),
         "created_at": now_iso(),
     }
+
+
+def _apply_syllabus_update(data: dict, module_cfg: dict, default: dict) -> bool:
+    """Übernimmt eine neue Kapitelstruktur aus config.json (wenn syllabus_version erhöht wurde).
+
+    Erledigt-Status bleibt für gleichnamige Kapitel-IDs erhalten. Unterlagen, Karten und Formeln,
+    deren Kapitel es nicht mehr gibt, werden „ohne Kapitel“ geführt. Basisformeln werden erneuert.
+    """
+    version = int(module_cfg.get("syllabus_version", 0))
+    if version <= int(data.get("syllabus_version", 0)):
+        return False
+    old_status = {ch["id"]: ch.get("status", {}) for ch in data["chapters"]}
+    data["chapters"] = default["chapters"]
+    for ch in data["chapters"]:
+        ch["status"].update({k: v for k, v in old_status.get(ch["id"], {}).items() if k in CHAPTER_STATUS_FIELDS})
+    valid = {ch["id"] for ch in data["chapters"]}
+    for collection in ("documents", "cards", "formulas"):
+        for item in data.get(collection, []):
+            if item.get("chapter_id") not in valid:
+                item["chapter_id"] = None
+    base_source = "Basis (config.json)"
+    data["formulas"] = [f for f in data["formulas"] if f.get("source") != base_source] + \
+        [f for f in default["formulas"] if f.get("source") == base_source]
+    data["removed_chapters"] = []
+    data["syllabus_version"] = version
+    return True
 
 
 def load_module(module_id: str) -> dict:
@@ -221,6 +248,9 @@ def load_module(module_id: str) -> dict:
         module_cfg = get_module(load_config(), module_id)
         default = _default_module_data(module_cfg)
         data = _read_json(MODULE_DIR / f"{module_id}.json", default)
+        data.setdefault("chapters", [])
+        data.setdefault("formulas", [])
+        migrated = _apply_syllabus_update(data, module_cfg, default)
         for field, value in default.items():
             data.setdefault(field, value)
         # Neue Kapitel aus config.json ergänzen (Erweiterbarkeit)
@@ -233,7 +263,7 @@ def load_module(module_id: str) -> dict:
             for status_key in CHAPTER_STATUS_FIELDS:
                 ch["status"].setdefault(status_key, False)
         st.session_state[key] = data
-        if not (MODULE_DIR / f"{module_id}.json").exists():
+        if migrated or not (MODULE_DIR / f"{module_id}.json").exists():
             save_module(module_id)
     return st.session_state[key]
 

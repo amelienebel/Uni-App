@@ -146,7 +146,10 @@
           "chapter_id": "k10",
           "explanation": "Existiert nur für det(A) = ad - bc ≠ 0."
         }
-      ]
+      ],
+      "lectures": [],
+      "exercises": [],
+      "tasks": []
     },
     {
       "id": "rewe",
@@ -289,7 +292,10 @@
           "chapter_id": "k4",
           "explanation": "Wird an das Finanzamt abgeführt."
         }
-      ]
+      ],
+      "lectures": [],
+      "exercises": [],
+      "tasks": []
     },
     {
       "id": "invfin",
@@ -334,102 +340,240 @@
       "chapters": [
         {
           "id": "k1",
-          "title": "Grundlagen von Investition und Finanzierung",
+          "title": "Einführung, Zeitwert des Geldes und Zinssätze",
           "week": 1
         },
         {
           "id": "k2",
-          "title": "Finanzmathematische Grundlagen (Zins, Barwert, Endwert)",
+          "title": "Investitionsentscheidungen und Investitionsplanung",
           "week": 2
         },
         {
           "id": "k3",
-          "title": "Statische Investitionsrechnung",
-          "week": 3
-        },
-        {
-          "id": "k4",
-          "title": "Kapitalwertmethode",
+          "title": "Bewertung von Anleihen und Aktien",
           "week": 4
         },
         {
-          "id": "k5",
-          "title": "Interner Zinsfuß und Annuitätenmethode",
+          "id": "k4",
+          "title": "Kapitalmärkte und die Bewertung des Risikos",
           "week": 6
         },
         {
-          "id": "k6",
-          "title": "Optimale Nutzungsdauer und Ersatzzeitpunkt",
+          "id": "k5",
+          "title": "Optimale Portfolioallokation und das CAPM",
           "week": 7
         },
         {
-          "id": "k7",
-          "title": "Investitionsentscheidungen unter Unsicherheit",
-          "week": 8
-        },
-        {
-          "id": "k8",
-          "title": "Finanzierungsformen: Eigen- und Fremdfinanzierung",
+          "id": "k6",
+          "title": "Anlegerverhalten und Kapitalmarkteffizienz",
           "week": 10
         },
         {
-          "id": "k9",
-          "title": "Kapitalstruktur und Leverage-Effekt",
-          "week": 11
-        },
-        {
-          "id": "k10",
-          "title": "Kapitalmarkt, Portfoliotheorie und CAPM",
+          "id": "k7",
+          "title": "Kapitalstruktur",
           "week": 12
         },
         {
-          "id": "k11",
-          "title": "Wiederholung und Klausurvorbereitung",
-          "week": 14
+          "id": "k8",
+          "title": "Q&A und Klausurvorbereitung",
+          "week": 13
         }
       ],
       "base_formulas": [
         {
-          "name": "Kapitalwert (NPV)",
-          "latex": "C_0 = -I_0 + \\sum_{t=1}^{T} \\frac{CF_t}{(1+i)^t}",
-          "chapter_id": "k4",
-          "explanation": "Investition vorteilhaft, wenn C_0 > 0."
-        },
-        {
           "name": "Barwert / Abzinsung",
           "latex": "K_0 = \\frac{K_t}{(1+i)^t}",
-          "chapter_id": "k2",
+          "chapter_id": "k1",
           "explanation": "Wert einer zukünftigen Zahlung heute."
         },
         {
           "name": "Rentenbarwertfaktor",
           "latex": "RBF(i,T) = \\frac{(1+i)^T - 1}{i\\,(1+i)^T}",
-          "chapter_id": "k2",
+          "chapter_id": "k1",
           "explanation": "Barwert einer nachschüssigen Rente von 1 € über T Perioden."
         },
         {
-          "name": "Annuität",
-          "latex": "A = C_0 \\cdot \\frac{i\\,(1+i)^T}{(1+i)^T - 1}",
-          "chapter_id": "k5",
-          "explanation": "Kapitalwert × Annuitätenfaktor (Kehrwert des RBF)."
+          "name": "Kapitalwert (NPV)",
+          "latex": "C_0 = -I_0 + \\sum_{t=1}^{T} \\frac{CF_t}{(1+i)^t}",
+          "chapter_id": "k2",
+          "explanation": "Investition vorteilhaft, wenn C_0 > 0."
         },
         {
           "name": "Interner Zinsfuß",
           "latex": "0 = -I_0 + \\sum_{t=1}^{T} \\frac{CF_t}{(1+r)^t}",
-          "chapter_id": "k5",
+          "chapter_id": "k2",
           "explanation": "r ist der Zins, bei dem der Kapitalwert null wird."
         },
         {
-          "name": "Leverage-Formel",
-          "latex": "r_{EK} = r_{GK} + (r_{GK} - r_{FK}) \\cdot \\frac{FK}{EK}",
-          "chapter_id": "k9",
-          "explanation": "Eigenkapitalrendite steigt mit Verschuldung, solange r_GK > r_FK."
+          "name": "Annuität",
+          "latex": "A = C_0 \\cdot \\frac{i\\,(1+i)^T}{(1+i)^T - 1}",
+          "chapter_id": "k2",
+          "explanation": "Kapitalwert × Annuitätenfaktor (Kehrwert des RBF)."
+        },
+        {
+          "name": "Kurs einer Kuponanleihe",
+          "latex": "P = \\sum_{t=1}^{T} \\frac{C}{(1+y)^t} + \\frac{N}{(1+y)^T}",
+          "chapter_id": "k3",
+          "explanation": "C = Kupon, N = Nennwert, y = Rendite (Yield to Maturity)."
+        },
+        {
+          "name": "Dividendenbarwertmodell (Gordon-Wachstum)",
+          "latex": "P_0 = \\frac{Div_1}{r_E - g}",
+          "chapter_id": "k3",
+          "explanation": "Konstantes Dividendenwachstum g < r_E."
+        },
+        {
+          "name": "Erwartete Portfoliorendite",
+          "latex": "E(R_P) = \\sum_i x_i \\, E(R_i)",
+          "chapter_id": "k5",
+          "explanation": "x_i = Portfoliogewicht von Wertpapier i."
         },
         {
           "name": "CAPM",
           "latex": "E(r_i) = r_f + \\beta_i \\,\\big(E(r_M) - r_f\\big)",
-          "chapter_id": "k10",
+          "chapter_id": "k5",
           "explanation": "Erwartete Rendite = risikoloser Zins + Beta × Marktrisikoprämie."
+        },
+        {
+          "name": "WACC",
+          "latex": "r_{WACC} = \\frac{E}{E+D}\\,r_E + \\frac{D}{E+D}\\,r_D\\,(1-\\tau_c)",
+          "chapter_id": "k7",
+          "explanation": "Gewichtete Kapitalkosten nach Steuern."
+        }
+      ],
+      "syllabus_version": 1,
+      "lecturer": "Prof. Dr. Ralf Elsas-Nicolle",
+      "literature": "Berk & DeMarzo: Grundlagen der Finanzwirtschaft (5. Aufl., Pearson)",
+      "exam_note": "Klausur 08.02.2027, 12:30–13:30 Uhr (GOP). Anmeldung im LSF zwingend erforderlich!",
+      "lectures": [
+        {
+          "date": "2026-10-13",
+          "chapter_id": "k1",
+          "topic": "Einführung & Zeitwert des Geldes und Zinssätze"
+        },
+        {
+          "date": "2026-10-20",
+          "chapter_id": "k2",
+          "topic": "Investitionsentscheidungen und Investitionsplanung I"
+        },
+        {
+          "date": "2026-10-27",
+          "chapter_id": "k2",
+          "topic": "Investitionsentscheidungen und Investitionsplanung II"
+        },
+        {
+          "date": "2026-11-03",
+          "chapter_id": "k3",
+          "topic": "Bewertung von Anleihen und Aktien I"
+        },
+        {
+          "date": "2026-11-10",
+          "chapter_id": "k3",
+          "topic": "Bewertung von Anleihen und Aktien II"
+        },
+        {
+          "date": "2026-11-17",
+          "chapter_id": "k4",
+          "topic": "Kapitalmärkte und die Bewertung des Risikos"
+        },
+        {
+          "date": "2026-11-24",
+          "chapter_id": "k5",
+          "topic": "Optimale Portfolioallokation und das CAPM I"
+        },
+        {
+          "date": "2026-12-01",
+          "chapter_id": "k5",
+          "topic": "Optimale Portfolioallokation und das CAPM II"
+        },
+        {
+          "date": "2026-12-08",
+          "chapter_id": null,
+          "topic": "Vorlesung 9 (Thema im Syllabus offen – siehe Moodle)"
+        },
+        {
+          "date": "2026-12-15",
+          "chapter_id": "k6",
+          "topic": "Anlegerverhalten und Kapitalmarkteffizienz"
+        },
+        {
+          "date": "2027-01-12",
+          "chapter_id": "k7",
+          "topic": "Kapitalstruktur"
+        },
+        {
+          "date": "2027-01-19",
+          "chapter_id": "k8",
+          "topic": "Q&A"
+        }
+      ],
+      "exercises": [
+        {
+          "week_of": "2026-11-02",
+          "chapter_id": null,
+          "title": "Übungsblatt 1"
+        },
+        {
+          "week_of": "2026-11-09",
+          "chapter_id": null,
+          "title": "Übungsblatt 2"
+        },
+        {
+          "week_of": "2026-11-16",
+          "chapter_id": null,
+          "title": "Übungsblatt 3"
+        },
+        {
+          "week_of": "2026-11-23",
+          "chapter_id": null,
+          "title": "Übungsblatt 4"
+        },
+        {
+          "week_of": "2026-11-30",
+          "chapter_id": null,
+          "title": "Übungsblatt 5"
+        },
+        {
+          "week_of": "2026-12-07",
+          "chapter_id": null,
+          "title": "Übungsblatt 6"
+        },
+        {
+          "week_of": "2026-12-14",
+          "chapter_id": null,
+          "title": "Übungsblatt 7"
+        },
+        {
+          "week_of": "2027-01-11",
+          "chapter_id": null,
+          "title": "Übungsblatt 8"
+        },
+        {
+          "week_of": "2027-01-18",
+          "chapter_id": null,
+          "title": "Übungsblatt 9"
+        },
+        {
+          "week_of": "2027-01-25",
+          "chapter_id": "k8",
+          "title": "Tutorium: Q&A"
+        }
+      ],
+      "tasks": [
+        {
+          "title": "Moodle-Quiz 1 bearbeiten (freiwillig)",
+          "start": "2026-11-16",
+          "due": "2026-11-22"
+        },
+        {
+          "title": "Moodle-Quiz 2 bearbeiten (freiwillig)",
+          "start": "2027-01-11",
+          "due": "2027-01-17"
+        },
+        {
+          "title": "Moodle-Quiz 3 bearbeiten (freiwillig)",
+          "start": "2027-01-25",
+          "due": "2027-01-31"
         }
       ]
     },
@@ -455,7 +599,12 @@
         "inflation",
         "konsumentenrente",
         "externe effekte",
-        "nutzen"
+        "nutzen",
+        "mikroökonomik",
+        "acemoglu",
+        "spieltheorie",
+        "externalität",
+        "anreize"
       ],
       "schedule": [
         {
@@ -483,98 +632,266 @@
       "chapters": [
         {
           "id": "k1",
-          "title": "Einführung: Knappheit und Opportunitätskosten",
+          "title": "Kap. 1: Grundsätze und Praxis der Ökonomik",
           "week": 1
         },
         {
           "id": "k2",
-          "title": "Angebot, Nachfrage und Marktgleichgewicht",
+          "title": "Kap. 2 und 3: Ökonomische Methoden, ökonomische Fragen und Optimierung",
           "week": 2
         },
         {
-          "id": "k3",
-          "title": "Elastizitäten",
+          "id": "k4",
+          "title": "Kap. 4: Nachfrage, Angebot und Gleichgewicht",
           "week": 3
         },
         {
-          "id": "k4",
-          "title": "Haushaltstheorie",
+          "id": "k5",
+          "title": "Kap. 5: Konsumenten und Anreize",
           "week": 4
         },
         {
-          "id": "k5",
-          "title": "Produktion und Kosten",
+          "id": "k6",
+          "title": "Kap. 6: Verkäufer und Anreize",
           "week": 6
         },
         {
-          "id": "k6",
-          "title": "Marktformen: Vollkommener Wettbewerb und Monopol",
+          "id": "k7",
+          "title": "Kap. 7: Vollständiger Wettbewerb und die unsichtbare Hand",
           "week": 7
         },
         {
-          "id": "k7",
-          "title": "Wohlfahrt, Marktversagen und externe Effekte",
+          "id": "k8",
+          "title": "Kap. 8: Handel",
           "week": 8
         },
         {
-          "id": "k8",
-          "title": "Volkswirtschaftliche Gesamtrechnung und BIP",
-          "week": 10
+          "id": "k13",
+          "title": "Kap. 13: Spieltheorie",
+          "week": 9
         },
         {
           "id": "k9",
-          "title": "Geld und Inflation",
-          "week": 11
+          "title": "Kap. 9: Externalitäten und öffentliche Güter",
+          "week": 10
         },
         {
           "id": "k10",
-          "title": "Konjunktur, Arbeitsmarkt und Wirtschaftspolitik",
-          "week": 12
+          "title": "Kap. 10: Der Staat",
+          "week": 11
         },
         {
           "id": "k11",
-          "title": "Wiederholung und Klausurvorbereitung",
+          "title": "Kap. 11: Märkte für Produktionsfaktoren",
+          "week": 12
+        },
+        {
+          "id": "k12",
+          "title": "Kap. 12: Monopol und Preisdiskriminierung",
+          "week": 13
+        },
+        {
+          "id": "kstrom",
+          "title": "Economics of Electricity Markets",
           "week": 14
+        },
+        {
+          "id": "kwdh",
+          "title": "Wiederholung, Fragen und Altklausur",
+          "week": 15
         }
       ],
       "base_formulas": [
         {
           "name": "Preiselastizität der Nachfrage",
           "latex": "\\varepsilon = \\frac{\\Delta Q / Q}{\\Delta P / P} = \\frac{dQ}{dP}\\cdot\\frac{P}{Q}",
-          "chapter_id": "k3",
+          "chapter_id": "k5",
           "explanation": "|ε| > 1: elastisch, |ε| < 1: unelastisch."
         },
         {
           "name": "Marktgleichgewicht",
           "latex": "Q^D(P^*) = Q^S(P^*)",
-          "chapter_id": "k2",
+          "chapter_id": "k4",
           "explanation": "Angebotene = nachgefragte Menge."
         },
         {
-          "name": "Gewinnmaximierung",
-          "latex": "MR = MC \\quad (\\text{Wettbewerb: } P = MC)",
+          "name": "Optimum des Haushalts",
+          "latex": "\\frac{MU_1}{p_1} = \\frac{MU_2}{p_2}",
+          "chapter_id": "k5",
+          "explanation": "Grenznutzen pro Euro ist für alle Güter gleich."
+        },
+        {
+          "name": "Gewinnmaximierung bei vollständigem Wettbewerb",
+          "latex": "P = MC",
           "chapter_id": "k6",
-          "explanation": "Grenzerlös = Grenzkosten."
+          "explanation": "Preis = Grenzkosten."
         },
         {
-          "name": "Grenzrate der Substitution",
-          "latex": "GRS = \\frac{MU_1}{MU_2} = \\frac{p_1}{p_2}",
-          "chapter_id": "k4",
-          "explanation": "Optimalitätsbedingung im Haushaltsoptimum."
+          "name": "Gewinnmaximierung im Monopol",
+          "latex": "MR = MC",
+          "chapter_id": "k12",
+          "explanation": "Grenzerlös = Grenzkosten; Preis aus der Nachfragekurve."
         },
         {
-          "name": "BIP (Verwendungsrechnung)",
-          "latex": "Y = C + I + G + (X - M)",
-          "chapter_id": "k8",
-          "explanation": "Konsum + Investitionen + Staatsausgaben + Nettoexporte."
-        },
-        {
-          "name": "Quantitätsgleichung",
-          "latex": "M \\cdot V = P \\cdot Y",
-          "chapter_id": "k9",
-          "explanation": "Geldmenge × Umlaufgeschwindigkeit = Preisniveau × reales BIP."
+          "name": "Konsumentenrente (lineare Nachfrage)",
+          "latex": "KR = \\tfrac{1}{2}\\,(P_{max} - P^*)\\,Q^*",
+          "chapter_id": "k7",
+          "explanation": "Dreieck zwischen Nachfragekurve und Marktpreis."
         }
-      ]
+      ],
+      "syllabus_version": 1,
+      "lecturer": "Dr. Jacqueline Adelowo / Dr. Jean-Victor Alipour",
+      "literature": "Acemoglu, Laibson, List & Belke (2020): Volkswirtschaftslehre, Pearson, Kap. 1–13 (eLibrary der UB)",
+      "lectures": [
+        {
+          "date": "2026-10-13",
+          "chapter_id": "k1",
+          "topic": "Kap. 1: Grundsätze und Praxis der Ökonomik"
+        },
+        {
+          "date": "2026-10-20",
+          "chapter_id": "k2",
+          "topic": "Kap. 2 und 3: Ökonomische Methoden und ökonomische Fragen, Optimierung"
+        },
+        {
+          "date": "2026-10-27",
+          "chapter_id": "k4",
+          "topic": "Kap. 4: Nachfrage, Angebot und Gleichgewicht"
+        },
+        {
+          "date": "2026-11-03",
+          "chapter_id": "k5",
+          "topic": "Kap. 5: Konsumenten und Anreize I"
+        },
+        {
+          "date": "2026-11-10",
+          "chapter_id": "k5",
+          "topic": "Kap. 5: Konsumenten und Anreize II"
+        },
+        {
+          "date": "2026-11-17",
+          "chapter_id": "k6",
+          "topic": "Kap. 6: Verkäufer und Anreize"
+        },
+        {
+          "date": "2026-11-24",
+          "chapter_id": "k7",
+          "topic": "Kap. 7: Vollständiger Wettbewerb und die unsichtbare Hand"
+        },
+        {
+          "date": "2026-12-01",
+          "chapter_id": "k8",
+          "topic": "Kap. 8: Handel"
+        },
+        {
+          "date": "2026-12-08",
+          "chapter_id": "k13",
+          "topic": "Kap. 13: Spieltheorie"
+        },
+        {
+          "date": "2026-12-15",
+          "chapter_id": "k9",
+          "topic": "Kap. 9: Externalitäten und öffentliche Güter"
+        },
+        {
+          "date": "2026-12-22",
+          "chapter_id": "k10",
+          "topic": "Kap. 10: Der Staat"
+        },
+        {
+          "date": "2027-01-12",
+          "chapter_id": "k11",
+          "topic": "Kap. 11: Märkte für Produktionsfaktoren"
+        },
+        {
+          "date": "2027-01-19",
+          "chapter_id": "k12",
+          "topic": "Kap. 12: Monopol und Preisdiskriminierung"
+        },
+        {
+          "date": "2027-01-26",
+          "chapter_id": "kstrom",
+          "topic": "Economics of Electricity Markets"
+        },
+        {
+          "date": "2027-02-02",
+          "chapter_id": "kwdh",
+          "topic": "Wiederholung + Fragen"
+        }
+      ],
+      "exercises": [
+        {
+          "week_of": "2026-10-19",
+          "chapter_id": null,
+          "title": "Übung: Mathematische Grundkenntnisse"
+        },
+        {
+          "week_of": "2026-10-26",
+          "chapter_id": "k2",
+          "title": "Übung/Tutorium: Kap. 2 und 3 – Ökon. Methoden, Optimierung"
+        },
+        {
+          "week_of": "2026-11-02",
+          "chapter_id": "k4",
+          "title": "Übung/Tutorium: Kap. 4 – Nachfrage, Angebot, Gleichgewicht"
+        },
+        {
+          "week_of": "2026-11-09",
+          "chapter_id": "k5",
+          "title": "Übung/Tutorium: Kap. 5 – Konsumenten und Anreize I"
+        },
+        {
+          "week_of": "2026-11-16",
+          "chapter_id": "k5",
+          "title": "Übung/Tutorium: Kap. 5 – Konsumenten und Anreize II"
+        },
+        {
+          "week_of": "2026-11-23",
+          "chapter_id": "k6",
+          "title": "Übung/Tutorium: Kap. 6 – Verkäufer und Anreize"
+        },
+        {
+          "week_of": "2026-11-30",
+          "chapter_id": "k7",
+          "title": "Übung/Tutorium: Kap. 7 – Vollständiger Wettbewerb"
+        },
+        {
+          "week_of": "2026-12-07",
+          "chapter_id": "k8",
+          "title": "Übung/Tutorium: Kap. 8 – Handel"
+        },
+        {
+          "week_of": "2026-12-14",
+          "chapter_id": "k13",
+          "title": "Übung/Tutorium: Kap. 13 – Spieltheorie"
+        },
+        {
+          "week_of": "2026-12-21",
+          "chapter_id": "k9",
+          "title": "Übung/Tutorium: Kap. 9 – Externalitäten (Do-Übung erst am 07.01.)"
+        },
+        {
+          "week_of": "2027-01-11",
+          "chapter_id": "k10",
+          "title": "Übung/Tutorium: Kap. 10 – Der Staat"
+        },
+        {
+          "week_of": "2027-01-18",
+          "chapter_id": "k11",
+          "title": "Übung/Tutorium: Kap. 11 – Märkte für Produktionsfaktoren"
+        },
+        {
+          "week_of": "2027-01-25",
+          "chapter_id": "k12",
+          "title": "Übung/Tutorium: Kap. 12 – Monopol und Preisdiskriminierung"
+        },
+        {
+          "week_of": "2027-02-01",
+          "chapter_id": "kwdh",
+          "title": "Übung/Tutorium: Altklausur"
+        }
+      ],
+      "tasks": []
     },
     {
       "id": "statistik",
@@ -619,104 +936,258 @@
       "chapters": [
         {
           "id": "k1",
-          "title": "Grundbegriffe und Skalenniveaus",
+          "title": "Deskriptive Statistik: Einführung und Häufigkeiten",
           "week": 1
         },
         {
           "id": "k2",
-          "title": "Häufigkeitsverteilungen und Grafiken",
+          "title": "Univariate deskriptive Statistik: Lage-, Streuungs- und Konzentrationsmaße",
           "week": 2
         },
         {
           "id": "k3",
-          "title": "Lagemaße",
-          "week": 3
-        },
-        {
-          "id": "k4",
-          "title": "Streuungsmaße",
+          "title": "Bivariate deskriptive Statistik: Zusammenhangsmaße",
           "week": 4
         },
         {
+          "id": "k4",
+          "title": "Zufallsvariablen",
+          "week": 5
+        },
+        {
           "id": "k5",
-          "title": "Konzentrationsmessung (Lorenzkurve, Gini)",
+          "title": "Verteilungen",
           "week": 6
         },
         {
           "id": "k6",
-          "title": "Zweidimensionale Daten: Kontingenz und Korrelation",
-          "week": 7
-        },
-        {
-          "id": "k7",
-          "title": "Lineare Regression",
+          "title": "Schätzen",
           "week": 8
         },
         {
-          "id": "k8",
-          "title": "Indexzahlen",
+          "id": "k7",
+          "title": "Testen",
           "week": 10
         },
         {
-          "id": "k9",
-          "title": "Zeitreihenanalyse",
-          "week": 11
-        },
-        {
-          "id": "k10",
-          "title": "Einführung in die Wahrscheinlichkeitsrechnung",
-          "week": 12
-        },
-        {
-          "id": "k11",
-          "title": "Wiederholung und Klausurvorbereitung",
-          "week": 14
+          "id": "k8",
+          "title": "Lineare Regression",
+          "week": 13
         }
       ],
       "base_formulas": [
         {
           "name": "Arithmetisches Mittel",
           "latex": "\\bar{x} = \\frac{1}{n}\\sum_{i=1}^{n} x_i",
-          "chapter_id": "k3",
+          "chapter_id": "k2",
           "explanation": "Lagemaß für metrische Merkmale."
         },
         {
           "name": "Empirische Varianz",
           "latex": "s^2 = \\frac{1}{n}\\sum_{i=1}^{n} (x_i - \\bar{x})^2 = \\overline{x^2} - \\bar{x}^2",
-          "chapter_id": "k4",
-          "explanation": "Verschiebungssatz rechts; Achtung: Vorlesung kann auch 1/(n-1) verwenden."
+          "chapter_id": "k2",
+          "explanation": "Verschiebungssatz rechts; Achtung: in der Vorlesung prüfen, ob 1/n oder 1/(n-1) verwendet wird."
         },
         {
           "name": "Variationskoeffizient",
           "latex": "v = \\frac{s}{\\bar{x}}",
-          "chapter_id": "k4",
+          "chapter_id": "k2",
           "explanation": "Relatives Streuungsmaß (nur für x̄ > 0)."
-        },
-        {
-          "name": "Korrelationskoeffizient nach Bravais-Pearson",
-          "latex": "r_{xy} = \\frac{\\sum (x_i-\\bar{x})(y_i-\\bar{y})}{\\sqrt{\\sum (x_i-\\bar{x})^2 \\sum (y_i-\\bar{y})^2}}",
-          "chapter_id": "k6",
-          "explanation": "Maß für den linearen Zusammenhang, -1 ≤ r ≤ 1."
-        },
-        {
-          "name": "KQ-Regressionsgerade",
-          "latex": "\\hat{y} = a + b\\,x, \\quad b = \\frac{s_{xy}}{s_x^2}, \\quad a = \\bar{y} - b\\,\\bar{x}",
-          "chapter_id": "k7",
-          "explanation": "Methode der kleinsten Quadrate."
-        },
-        {
-          "name": "Preisindex nach Laspeyres",
-          "latex": "P^L_{0t} = \\frac{\\sum p_t\\, q_0}{\\sum p_0\\, q_0}",
-          "chapter_id": "k8",
-          "explanation": "Gewichtung mit Mengen der Basisperiode."
         },
         {
           "name": "Gini-Koeffizient (normiert)",
           "latex": "G^* = \\frac{n}{n-1}\\, G",
-          "chapter_id": "k5",
-          "explanation": "Normierung auf das Intervall [0, 1]."
+          "chapter_id": "k2",
+          "explanation": "Konzentrationsmaß, Normierung auf das Intervall [0, 1]."
+        },
+        {
+          "name": "Korrelationskoeffizient nach Bravais-Pearson",
+          "latex": "r_{xy} = \\frac{\\sum (x_i-\\bar{x})(y_i-\\bar{y})}{\\sqrt{\\sum (x_i-\\bar{x})^2 \\sum (y_i-\\bar{y})^2}}",
+          "chapter_id": "k3",
+          "explanation": "Maß für den linearen Zusammenhang, -1 ≤ r ≤ 1."
+        },
+        {
+          "name": "Erwartungswert einer diskreten Zufallsvariable",
+          "latex": "E(X) = \\sum_{i} x_i \\, P(X = x_i)",
+          "chapter_id": "k4",
+          "explanation": "Gewichteter Mittelwert der möglichen Ausprägungen."
+        },
+        {
+          "name": "Konfidenzintervall für μ (σ bekannt)",
+          "latex": "\\bar{x} \\pm z_{1-\\alpha/2} \\cdot \\frac{\\sigma}{\\sqrt{n}}",
+          "chapter_id": "k6",
+          "explanation": "Überdeckt μ mit Wahrscheinlichkeit 1−α."
+        },
+        {
+          "name": "Gauß-Teststatistik",
+          "latex": "T = \\frac{\\bar{X} - \\mu_0}{\\sigma / \\sqrt{n}}",
+          "chapter_id": "k7",
+          "explanation": "Einstichprobentest für μ bei bekanntem σ."
+        },
+        {
+          "name": "KQ-Regressionsgerade",
+          "latex": "\\hat{y} = a + b\\,x, \\quad b = \\frac{s_{xy}}{s_x^2}, \\quad a = \\bar{y} - b\\,\\bar{x}",
+          "chapter_id": "k8",
+          "explanation": "Methode der kleinsten Quadrate."
         }
-      ]
+      ],
+      "syllabus_version": 1,
+      "lecturer": "Matthias Aßenmacher",
+      "lectures": [
+        {
+          "date": "2026-10-15",
+          "chapter_id": "k1",
+          "topic": "Deskriptive Statistik I (Einführung, Häufigkeiten)"
+        },
+        {
+          "date": "2026-10-22",
+          "chapter_id": "k2",
+          "topic": "Deskriptive Statistik II (Lagemaße)"
+        },
+        {
+          "date": "2026-10-29",
+          "chapter_id": "k2",
+          "topic": "Deskriptive Statistik III (Streuungs- und Konzentrationsmaße)"
+        },
+        {
+          "date": "2026-11-05",
+          "chapter_id": "k3",
+          "topic": "Deskriptive Statistik IV (Zusammenhangsmaße)"
+        },
+        {
+          "date": "2026-11-12",
+          "chapter_id": "k4",
+          "topic": "Zufallsvariablen"
+        },
+        {
+          "date": "2026-11-19",
+          "chapter_id": "k5",
+          "topic": "Verteilungen I"
+        },
+        {
+          "date": "2026-11-26",
+          "chapter_id": "k5",
+          "topic": "Verteilungen II"
+        },
+        {
+          "date": "2026-12-03",
+          "chapter_id": "k6",
+          "topic": "Schätzen I"
+        },
+        {
+          "date": "2026-12-10",
+          "chapter_id": "k6",
+          "topic": "Schätzen II"
+        },
+        {
+          "date": "2026-12-17",
+          "chapter_id": "k7",
+          "topic": "Testen I (Einführendes Beispiel)"
+        },
+        {
+          "date": "2027-01-07",
+          "chapter_id": "k7",
+          "topic": "Testen II (Einstichprobentests)"
+        },
+        {
+          "date": "2027-01-14",
+          "chapter_id": "k7",
+          "topic": "Testen III (Zweistichprobentests & Sonstiges)"
+        },
+        {
+          "date": "2027-01-21",
+          "chapter_id": "k8",
+          "topic": "Lineare Regression I"
+        },
+        {
+          "date": "2027-01-28",
+          "chapter_id": "k8",
+          "topic": "Lineare Regression II"
+        },
+        {
+          "date": "2027-02-05",
+          "chapter_id": "k8",
+          "topic": "Lineare Regression III"
+        }
+      ],
+      "exercises": [
+        {
+          "week_of": "2026-10-12",
+          "chapter_id": "k1",
+          "title": "Häufigkeiten, Grafiken, R-Setup (Laptop mitbringen!)"
+        },
+        {
+          "week_of": "2026-10-19",
+          "chapter_id": "k1",
+          "title": "Blatt 1: Grundlagen & Häufigkeiten"
+        },
+        {
+          "week_of": "2026-10-26",
+          "chapter_id": "k2",
+          "title": "Blatt 2: Univariate deskriptive Statistik (A1–A4)"
+        },
+        {
+          "week_of": "2026-11-02",
+          "chapter_id": "k2",
+          "title": "Blatt 2: Univariate deskriptive Statistik (A5–A9)"
+        },
+        {
+          "week_of": "2026-11-09",
+          "chapter_id": "k3",
+          "title": "Blatt 3: Bivariate deskriptive Statistik"
+        },
+        {
+          "week_of": "2026-11-16",
+          "chapter_id": "k4",
+          "title": "Blatt 4: Zufallsvariablen"
+        },
+        {
+          "week_of": "2026-11-23",
+          "chapter_id": "k5",
+          "title": "Blatt 5: Verteilungen (A1–A3)"
+        },
+        {
+          "week_of": "2026-11-30",
+          "chapter_id": "k5",
+          "title": "Blatt 5: Verteilungen (A4–A7)"
+        },
+        {
+          "week_of": "2026-12-07",
+          "chapter_id": "k6",
+          "title": "Blatt 6: Schätzen (A1–A3)"
+        },
+        {
+          "week_of": "2026-12-14",
+          "chapter_id": "k6",
+          "title": "Blatt 6: Schätzen (A4–A6)"
+        },
+        {
+          "week_of": "2026-12-21",
+          "chapter_id": "k7",
+          "title": "Blatt 7: Testen (A1)"
+        },
+        {
+          "week_of": "2027-01-11",
+          "chapter_id": "k7",
+          "title": "Blatt 7: Testen (A2–A3)"
+        },
+        {
+          "week_of": "2027-01-18",
+          "chapter_id": "k7",
+          "title": "Blatt 7: Testen (A4–A6)"
+        },
+        {
+          "week_of": "2027-01-25",
+          "chapter_id": "k8",
+          "title": "Blatt 8: Lineare Regression (A1–A3)"
+        },
+        {
+          "week_of": "2027-02-01",
+          "chapter_id": "k8",
+          "title": "Blatt 8: Lineare Regression (A4–A6)"
+        }
+      ],
+      "tasks": []
     }
   ],
   "document_types": {

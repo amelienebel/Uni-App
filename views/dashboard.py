@@ -9,7 +9,7 @@ import streamlit as st
 
 from utils import planner
 from utils import spaced_repetition as sr
-from utils.config import WEEKDAYS, get_module, module_label
+from utils.config import WEEKDAYS, get_module, load_config, module_label
 from utils.storage import (days_until_exam, get_exam_date, get_schedule, load_module, load_settings,
                            lecture_breaks, load_todos, save_module, save_todos, semester_dates, today)
 from views.common import goto
@@ -27,6 +27,11 @@ def _toggle_todo(todo: dict, widget_key: str) -> None:
         state = load_todos()
         state[todo["key"]] = value
         save_todos()
+        if todo.get("sync") and todo.get("chapter_id"):
+            data = load_module(todo["module_id"])
+            planner.sync_chapter_status(get_module(load_config(), todo["module_id"]), data, todo["chapter_id"],
+                                        todo["sync"], state)
+            save_module(todo["module_id"])
 
 
 def render(cfg: dict) -> None:
@@ -127,7 +132,7 @@ def render(cfg: dict) -> None:
         open_count = sum(1 for t in todos if not planner.todo_done(t, modules_data, todo_state))
         if todos:
             st.progress(1 - open_count / len(todos), text=f"{len(todos) - open_count} von {len(todos)} erledigt")
-        kinds = ["Alle", "Vorbereitung", "Nachbereitung", "Übungsblatt", "Wiederholung", "Klausurvorbereitung"]
+        kinds = ["Alle", "Vorbereitung", "Nachbereitung", "Übungsblatt", "Aufgabe", "Wiederholung", "Klausurvorbereitung"]
         kind_filter = st.pills("Filter", kinds, default="Alle", key="todo_filter", label_visibility="collapsed")
         for t in todos:
             if kind_filter and kind_filter != "Alle" and t["kind"] != kind_filter:

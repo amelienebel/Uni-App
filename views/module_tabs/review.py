@@ -56,7 +56,7 @@ def _offline_pitch(notes: dict, chapter: str) -> str:
 def render(cfg: dict, module_id: str) -> None:
     module = get_module(cfg, module_id)
     data = load_module(module_id)
-    current = planner.chapter_for_week(data["chapters"], planner.current_lecture_week(cfg, today()))
+    current = planner.current_chapter(cfg, module, data, today())
 
     st.subheader("📝 Vorlesung nachbereiten")
     if not data["chapters"]:

@@ -52,7 +52,7 @@ def _run_analysis(cfg: dict, module_id: str, doc: dict) -> None:
 
 def render(cfg: dict, module_id: str) -> None:
     data = load_module(module_id)
-    upcoming = planner.chapter_for_week(data["chapters"], planner.current_lecture_week(cfg, today()))
+    upcoming = planner.current_chapter(cfg, get_module(cfg, module_id), data, today(), upcoming=True)
 
     st.subheader("🎬 Vorlesung vorbereiten")
     has_ai = ai_hint("Die Folienanalyse")

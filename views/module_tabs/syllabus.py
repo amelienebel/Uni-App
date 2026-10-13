@@ -6,19 +6,80 @@ import pandas as pd
 import streamlit as st
 
 from utils import planner
-from utils.storage import (CHAPTER_STATUS_FIELDS, chapter_label, delete_document, load_module, new_id, save_module,
-                           today)
+from utils.config import WEEKDAYS, WEEKDAYS_SHORT, get_module
+from utils.storage import (CHAPTER_STATUS_FIELDS, chapter_label, delete_document, lecture_breaks, load_module,
+                           load_todos, new_id, save_module, today)
 from views.common import doc_type_label
+
+
+def _ablauf(cfg: dict, module: dict, data: dict) -> None:
+    """Ablauf laut Syllabus: Vorlesungstermine, Übungen und Aufgaben mit Erledigt-Status."""
+    now = today()
+    state = load_todos()
+    breaks = lecture_breaks(cfg)
+    lectures = planner.lectures_of(module)
+    exercises = planner.exercises_of(module)
+    tasks = planner.tasks_of(module)
+    if not (lectures or exercises or tasks):
+        return
+
+    meta = [module.get("lecturer"), module.get("literature")]
+    if any(meta):
+        st.caption(" · ".join(f"📚 {m}" if i else f"👤 {m}" for i, m in enumerate(meta) if m))
+    if module.get("exam_note"):
+        st.warning(module["exam_note"], icon="📝")
+
+    next_lec = next((lec for lec in lectures if lec["date"] >= now), None)
+    if next_lec:
+        st.info(f"Nächste Vorlesung: **{WEEKDAYS[next_lec['date'].weekday()]}, {next_lec['date']:%d.%m.%Y}** – "
+                f"{next_lec['topic']}")
+
+    def mark(key: str) -> str:
+        return "✅" if state.get(key) else "⬜"
+
+    if lectures:
+        st.markdown("#### 🗓️ Vorlesungen")
+        rows = []
+        for i, lec in enumerate(lectures, start=1):
+            rows.append({
+                "Nr.": i,
+                "Datum": f"{WEEKDAYS_SHORT[lec['date'].weekday()]}, {lec['date']:%d.%m.%Y}",
+                "Kapitel": chapter_label(data, lec.get("chapter_id")) if lec.get("chapter_id") else "–",
+                "Thema": lec["topic"] + (" (Ferien)" if planner.break_for(lec["date"], breaks) else ""),
+                "Vorbereitet": mark(planner.lecture_key(module["id"], lec["date"], "vorbereitet")),
+                "Nachbereitet": mark(planner.lecture_key(module["id"], lec["date"], "nachbereitet")),
+                "": "⬅️ nächste" if lec is next_lec else "",
+            })
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    if exercises:
+        st.markdown("#### ✏️ Übungen & Tutorien")
+        st.dataframe(pd.DataFrame([{
+            "Woche ab": f"{ex['week_of']:%d.%m.%Y}",
+            "Inhalt": ex["title"],
+            "Kapitel": chapter_label(data, ex.get("chapter_id")) if ex.get("chapter_id") else "–",
+            "Erledigt": mark(planner.exercise_key(module["id"], ex)),
+        } for ex in exercises]), hide_index=True, width="stretch")
+    if tasks:
+        st.markdown("#### 📌 Weitere Termine")
+        for t in tasks:
+            task_key = f"{module['id']}:task:{t['index']}"
+            st.markdown(f"- {mark(task_key)} **{t['title']}** "
+                        f"({t['start']:%d.%m.} – {t['due']:%d.%m.%Y})")
+    st.caption("Abhaken kannst du die Termine in der 🏠 Wochenübersicht – der Kapitelstatus unten wird automatisch "
+               "aktualisiert.")
 
 
 def render(cfg: dict, module_id: str) -> None:
     data = load_module(module_id)
-    current_week = planner.current_lecture_week(cfg, today())
-    current = planner.chapter_for_week(data["chapters"], current_week)
+    module = get_module(cfg, module_id)
+    current = planner.current_chapter(cfg, module, data, today())
 
     st.subheader("📖 Vorlesungsverlauf")
     if current:
-        st.info(f"Aktuell (Vorlesungswoche {current_week}): **{chapter_label(data, current['id'])}**")
+        st.info(f"Aktuelles Kapitel: **{chapter_label(data, current['id'])}**")
+    _ablauf(cfg, module, data)
+
+    st.markdown("#### 📚 Kapitel")
 
     st.caption("Kapitel, Wochen und Status direkt in der Tabelle bearbeiten. Neue Zeilen über ➕ hinzufügen.")
     df = pd.DataFrame([{

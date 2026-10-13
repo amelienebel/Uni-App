@@ -54,6 +54,65 @@ def chapter_for_week(chapters: list[dict], week: int) -> dict | None:
     return current
 
 
+def _d(value: str) -> date:
+    return date.fromisoformat(value)
+
+
+def lectures_of(module_cfg: dict) -> list[dict]:
+    """Vorlesungstermine laut Syllabus (Ablauf), chronologisch."""
+    items = [{**lec, "date": _d(lec["date"])} for lec in module_cfg.get("lectures", [])]
+    return sorted(items, key=lambda lec: lec["date"])
+
+
+def exercises_of(module_cfg: dict) -> list[dict]:
+    return [{**ex, "week_of": _d(ex["week_of"]), "index": i} for i, ex in enumerate(module_cfg.get("exercises", []))]
+
+
+def tasks_of(module_cfg: dict) -> list[dict]:
+    return [{**t, "start": _d(t.get("start") or t["due"]), "due": _d(t["due"]), "index": i}
+            for i, t in enumerate(module_cfg.get("tasks", []))]
+
+
+def lecture_key(module_id: str, lecture_date: date, field: str) -> str:
+    return f"{module_id}:vl:{lecture_date.isoformat()}:{field}"
+
+
+def exercise_key(module_id: str, exercise: dict) -> str:
+    return f"{module_id}:ex:{exercise['week_of'].isoformat()}:{exercise['index']}"
+
+
+def current_chapter(cfg: dict, module_cfg: dict, module_data: dict, d: date, upcoming: bool = False) -> dict | None:
+    """Kapitel der letzten (upcoming=False) bzw. nächsten (upcoming=True) Vorlesung laut Ablauf."""
+    lectures = [lec for lec in lectures_of(module_cfg) if lec.get("chapter_id")]
+    if not lectures:
+        return chapter_for_week(module_data["chapters"], current_lecture_week(cfg, d))
+    if upcoming:
+        candidates = [lec for lec in lectures if lec["date"] >= d] or lectures[-1:]
+        chosen = candidates[0]
+    else:
+        candidates = [lec for lec in lectures if lec["date"] <= d] or lectures[:1]
+        chosen = candidates[-1]
+    return next((ch for ch in module_data["chapters"] if ch["id"] == chosen["chapter_id"]), None)
+
+
+def sync_chapter_status(module_cfg: dict, module_data: dict, chapter_id: str | None, field: str,
+                        todo_state: dict) -> None:
+    """Kapitelstatus = alle zugehörigen Termine (Vorlesungen bzw. Übungen) abgehakt."""
+    if not chapter_id:
+        return
+    module_id = module_cfg["id"]
+    if field == "uebung":
+        keys = [exercise_key(module_id, ex) for ex in exercises_of(module_cfg) if ex.get("chapter_id") == chapter_id]
+    else:
+        keys = [lecture_key(module_id, lec["date"], field) for lec in lectures_of(module_cfg)
+                if lec.get("chapter_id") == chapter_id]
+    if not keys:
+        return
+    for ch in module_data["chapters"]:
+        if ch["id"] == chapter_id:
+            ch["status"][field] = all(todo_state.get(k) for k in keys)
+
+
 def week_events(schedule: list[dict], monday: date) -> list[dict]:
     events = []
     for event in schedule:
@@ -79,6 +138,8 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
     in_lecture_period = monday_of(semester_start) <= monday <= semester_end
     todos: list[dict] = []
     seen: set[str] = set()
+    sunday = monday + timedelta(days=6)
+    planned = {m["id"] for m in cfg["modules"] if m.get("lectures") or m.get("exercises")}
 
     def add(todo: dict) -> None:
         if todo["key"] not in seen:
@@ -92,6 +153,8 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
         if break_for(event["date"], breaks):
             continue
         data = modules_data[module_id]
+        if module_id in planned:
+            continue
         if event.get("type") == "Vorlesung":
             chapter = chapter_for_week(data["chapters"], week)
             if not chapter:
@@ -123,6 +186,38 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                 "title": f"Übungsblatt lösen – Kap. {idx}: {chapter['title']}",
                 "due": event["date"] - timedelta(days=1),
             })
+
+    # Module mit Ablaufplan aus dem Syllabus: konkrete Termine statt Wochenraster
+    for module in cfg["modules"]:
+        module_id = module["id"]
+        if module_id not in planned:
+            continue
+        events = [e for e in week_events(schedule, monday) if e.get("module_id") == module_id]
+        for lec in lectures_of(module):
+            if not (monday <= lec["date"] <= sunday) or break_for(lec["date"], breaks):
+                continue
+            label = f"{lec['date']:%d.%m.}: {lec['topic']}"
+            add({"key": lecture_key(module_id, lec["date"], "vorbereitet"), "module_id": module_id,
+                 "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "vorbereitet",
+                 "kind": "Vorbereitung", "title": f"Vorlesung vorbereiten – {label}",
+                 "due": lec["date"] - timedelta(days=prep_before)})
+            add({"key": lecture_key(module_id, lec["date"], "nachbereitet"), "module_id": module_id,
+                 "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "nachbereitet",
+                 "kind": "Nachbereitung", "title": f"Vorlesung nachbereiten – {label}",
+                 "due": lec["date"] + timedelta(days=review_after)})
+        exercise_events = [e for e in events if e.get("type") in ("Übung", "Tutorium")
+                           and not break_for(e["date"], breaks)]
+        for ex in exercises_of(module):
+            if ex["week_of"] != monday:
+                continue
+            due = exercise_events[0]["date"] - timedelta(days=1) if exercise_events else monday + timedelta(days=4)
+            add({"key": exercise_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),
+                 "status_field": None, "sync": "uebung", "kind": "Übungsblatt",
+                 "title": f"Übung vorbereiten – {ex['title']}", "due": max(due, monday)})
+        for task in tasks_of(module):
+            if task["start"] <= sunday and task["due"] >= monday:
+                add({"key": f"{module_id}:task:{task['index']}", "module_id": module_id, "chapter_id": None,
+                     "status_field": None, "kind": "Aufgabe", "title": task["title"], "due": task["due"]})
 
     iso_week = f"{monday.isocalendar()[0]}-W{monday.isocalendar()[1]:02d}"
     for module in cfg["modules"]:

@@ -11,7 +11,7 @@ from utils import planner
 from utils import spaced_repetition as sr
 from utils.config import WEEKDAYS, get_module, module_label
 from utils.storage import (days_until_exam, get_exam_date, get_schedule, load_module, load_settings,
-                           load_todos, save_module, save_todos, semester_dates, today)
+                           lecture_breaks, load_todos, save_module, save_todos, semester_dates, today)
 from views.common import goto
 
 
@@ -34,7 +34,8 @@ def render(cfg: dict) -> None:
     settings = load_settings()
     sem_start, sem_end = semester_dates(cfg)
     modules_data = {m["id"]: load_module(m["id"]) for m in cfg["modules"]}
-    week_now = planner.semester_week(sem_start, now)
+    breaks = lecture_breaks(cfg)
+    week_now = planner.semester_week(sem_start, now, breaks)
 
     st.title("🏠 Wochenübersicht & Lernplan")
     if week_now < 1:
@@ -76,13 +77,14 @@ def render(cfg: dict) -> None:
         st.session_state["week_offset"] = offset + 1
         st.rerun()
     monday = planner.monday_of(now) + timedelta(weeks=offset)
-    week_no = planner.semester_week(sem_start, monday)
+    week_no = planner.semester_week(sem_start, monday, breaks)
     c4.markdown(f"#### 📅 Woche {monday:%d.%m.} – {monday + timedelta(days=6):%d.%m.%Y}"
-                + (f" · Vorlesungswoche {week_no}" if 1 <= week_no and monday <= sem_end else ""))
+                + (" · 🎄 vorlesungsfrei" if planner.is_break_week(monday, breaks)
+                   else f" · Vorlesungswoche {week_no}" if 1 <= week_no and monday <= sem_end else ""))
 
     schedule = get_schedule(cfg)
     events = planner.week_events(schedule, monday)
-    todos = planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end, settings["learning"])
+    todos = planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end, settings["learning"], breaks)
     todo_state = load_todos()
 
     # --- Wochenraster ---------------------------------------------------------
@@ -93,7 +95,11 @@ def render(cfg: dict) -> None:
         with col:
             is_today = day == now
             st.markdown(f"**{'🔵 ' if is_today else ''}{WEEKDAYS[i][:2]} {day:%d.%m.}**")
-            for ev in [e for e in events if e["date"] == day]:
+            day_break = planner.break_for(day, breaks)
+            if day_break:
+                st.caption(f"🎄 {day_break} – vorlesungsfrei")
+            day_events = [] if day_break or day > sem_end or day < sem_start else [e for e in events if e["date"] == day]
+            for ev in day_events:
                 if ev.get("module_id") not in modules_data:
                     continue
                 module = get_module(cfg, ev["module_id"])

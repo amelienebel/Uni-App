@@ -8,7 +8,7 @@ from utils import ai, planner
 from utils.config import get_module
 from utils.pdf_parser import heuristic_analysis
 from utils.storage import (add_document, add_formulas, chapter_label, documents_of, get_document_pages,
-                           get_document_text, load_module, now_iso, save_module, semester_dates, today)
+                           get_document_text, load_module, now_iso, save_module, today)
 from views.common import ai_hint, chapter_select, render_formula
 
 ANALYSIS_PROMPT = """Bereite mich auf die kommende Vorlesung vor. Unten stehen die Folien aus Moodle für das Modul
@@ -52,8 +52,7 @@ def _run_analysis(cfg: dict, module_id: str, doc: dict) -> None:
 
 def render(cfg: dict, module_id: str) -> None:
     data = load_module(module_id)
-    sem_start, _ = semester_dates(cfg)
-    upcoming = planner.chapter_for_week(data["chapters"], planner.semester_week(sem_start, today()))
+    upcoming = planner.chapter_for_week(data["chapters"], planner.current_lecture_week(cfg, today()))
 
     st.subheader("🎬 Vorlesung vorbereiten")
     has_ai = ai_hint("Die Folienanalyse")

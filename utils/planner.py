@@ -5,17 +5,42 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from utils import spaced_repetition as sr
-from utils.storage import CHAPTER_STATUS_FIELDS, days_until_exam
+from utils.storage import CHAPTER_STATUS_FIELDS, days_until_exam, lecture_breaks, semester_dates
 
 
 def monday_of(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
-def semester_week(semester_start: date, d: date) -> int:
-    """1-basierte Vorlesungswoche (<= 0: vor Semesterbeginn)."""
-    delta = (monday_of(d) - monday_of(semester_start)).days
-    return delta // 7 + 1
+def break_for(d: date, breaks) -> str | None:
+    """Name der vorlesungsfreien Zeit, in die das Datum fällt (sonst None)."""
+    for start, end, name in breaks:
+        if start <= d <= end:
+            return name
+    return None
+
+
+def is_break_week(monday: date, breaks) -> bool:
+    """Woche zählt als vorlesungsfrei, wenn Montag bis Freitag komplett in den Ferien liegen."""
+    return all(break_for(monday + timedelta(days=i), breaks) for i in range(5))
+
+
+def semester_week(semester_start: date, d: date, breaks=()) -> int:
+    """1-basierte Vorlesungswoche ohne Ferienwochen (<= 0: vor Semesterbeginn)."""
+    first, target = monday_of(semester_start), monday_of(d)
+    if target < first:
+        return (target - first).days // 7 + 1
+    week, monday = 0, first
+    while monday <= target:
+        if not is_break_week(monday, breaks):
+            week += 1
+        monday += timedelta(weeks=1)
+    return week
+
+
+def current_lecture_week(cfg: dict, d: date) -> int:
+    start, _ = semester_dates(cfg)
+    return semester_week(start, d, lecture_breaks(cfg))
 
 
 def chapter_for_week(chapters: list[dict], week: int) -> dict | None:
@@ -39,7 +64,7 @@ def week_events(schedule: list[dict], monday: date) -> list[dict]:
 
 
 def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict], monday: date,
-                   semester_start: date, semester_end: date, learning: dict) -> list[dict]:
+                   semester_start: date, semester_end: date, learning: dict, breaks=()) -> list[dict]:
     """Erzeugt konkrete Aufgaben mit Fristen für die Woche ab `monday`.
 
     - Vorlesung vorbereiten: fällig `prep_days_before` Tage vor der Vorlesung
@@ -50,7 +75,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
     """
     prep_before = int(learning.get("prep_days_before", 1))
     review_after = int(learning.get("review_days_after", 2))
-    week = semester_week(semester_start, monday)
+    week = semester_week(semester_start, monday, breaks)
     in_lecture_period = monday_of(semester_start) <= monday <= semester_end
     todos: list[dict] = []
     seen: set[str] = set()
@@ -62,7 +87,9 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
 
     for event in week_events(schedule, monday):
         module_id = event.get("module_id")
-        if module_id not in modules_data or not in_lecture_period:
+        if module_id not in modules_data or not in_lecture_period or event["date"] > semester_end:
+            continue
+        if break_for(event["date"], breaks):
             continue
         data = modules_data[module_id]
         if event.get("type") == "Vorlesung":

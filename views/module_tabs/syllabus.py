@@ -7,14 +7,13 @@ import streamlit as st
 
 from utils import planner
 from utils.storage import (CHAPTER_STATUS_FIELDS, chapter_label, delete_document, load_module, new_id, save_module,
-                           semester_dates, today)
+                           today)
 from views.common import doc_type_label
 
 
 def render(cfg: dict, module_id: str) -> None:
     data = load_module(module_id)
-    sem_start, _ = semester_dates(cfg)
-    current_week = planner.semester_week(sem_start, today())
+    current_week = planner.current_lecture_week(cfg, today())
     current = planner.chapter_for_week(data["chapters"], current_week)
 
     st.subheader("📖 Vorlesungsverlauf")

@@ -10,7 +10,7 @@ import streamlit as st
 from utils import ai, planner
 from utils.config import get_module
 from utils.storage import (abs_data_path, chapter_label, delete_data_file, get_notes, load_module, save_module,
-                           save_upload, semester_dates, today)
+                           save_upload, today)
 from views.common import chapter_select, tts_player
 
 IMAGE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif"}
@@ -56,8 +56,7 @@ def _offline_pitch(notes: dict, chapter: str) -> str:
 def render(cfg: dict, module_id: str) -> None:
     module = get_module(cfg, module_id)
     data = load_module(module_id)
-    sem_start, _ = semester_dates(cfg)
-    current = planner.chapter_for_week(data["chapters"], planner.semester_week(sem_start, today()))
+    current = planner.chapter_for_week(data["chapters"], planner.current_lecture_week(cfg, today()))
 
     st.subheader("📝 Vorlesung nachbereiten")
     if not data["chapters"]:

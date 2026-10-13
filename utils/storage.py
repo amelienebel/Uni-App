@@ -142,13 +142,32 @@ def get_schedule(cfg: dict | None = None) -> list[dict]:
 
 
 def get_exam_date(module_id: str) -> date | None:
+    """Klausurtermin aus den Einstellungen, sonst Vorgabe aus config.json (Feld exam_date)."""
     entry = load_settings().get("exam_dates", {}).get(module_id) or {}
-    if entry.get("date"):
+    value = entry.get("date")
+    if not value:
         try:
-            return date.fromisoformat(entry["date"])
+            value = get_module(load_config(), module_id).get("exam_date")
+        except KeyError:
+            value = None
+    if value:
+        try:
+            return date.fromisoformat(value)
         except ValueError:
             return None
     return None
+
+
+def lecture_breaks(cfg: dict | None = None) -> list[tuple[date, date, str]]:
+    """Vorlesungsfreie Zeiten (z. B. Weihnachtsferien) aus config.json."""
+    cfg = cfg or load_config()
+    breaks = []
+    for b in cfg["app"].get("lecture_breaks", []):
+        try:
+            breaks.append((date.fromisoformat(b["start"]), date.fromisoformat(b["end"]), b.get("name", "vorlesungsfrei")))
+        except (KeyError, ValueError):
+            continue
+    return breaks
 
 
 def days_until_exam(module_id: str, ref: date | None = None) -> int | None:

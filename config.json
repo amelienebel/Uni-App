@@ -3,8 +3,15 @@
     "title": "BWL-Lernplattform LMU",
     "university": "Ludwig-Maximilians-Universität München",
     "semester_label": "WiSe 2026/27",
-    "semester_start": "2026-10-19",
-    "semester_end": "2027-02-12"
+    "semester_start": "2026-10-12",
+    "semester_end": "2027-02-06",
+    "lecture_breaks": [
+      {
+        "name": "Weihnachtsferien",
+        "start": "2026-12-24",
+        "end": "2027-01-06"
+      }
+    ]
   },
   "modules": [
     {
@@ -14,6 +21,7 @@
       "icon": "🧮",
       "color": "#1f77b4",
       "ects": 6,
+      "exam_date": "2027-02-12",
       "keywords": [
         "mathe",
         "mathematik",
@@ -147,6 +155,7 @@
       "icon": "📒",
       "color": "#2ca02c",
       "ects": 6,
+      "exam_date": "2027-02-15",
       "keywords": [
         "rewe",
         "rechnungswesen",
@@ -289,6 +298,7 @@
       "icon": "💶",
       "color": "#ff7f0e",
       "ects": 6,
+      "exam_date": "2027-02-08",
       "keywords": [
         "invest",
         "investition",
@@ -430,6 +440,7 @@
       "icon": "🌍",
       "color": "#9467bd",
       "ects": 6,
+      "exam_date": "2027-02-09",
       "keywords": [
         "vwl",
         "volkswirtschaft",
@@ -572,6 +583,7 @@
       "icon": "📊",
       "color": "#d62728",
       "ects": 6,
+      "exam_date": "2027-02-17",
       "keywords": [
         "statistik",
         "stat",

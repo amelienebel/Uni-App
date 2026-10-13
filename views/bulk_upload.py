@@ -52,7 +52,9 @@ def _chapter_for_moodle_file(file: dict, module_cfg: dict, chapters: list[dict],
 
 def _moodle_tab(cfg: dict) -> None:
     if not moodle.is_configured():
-        st.info("Noch nicht verbunden. Trage deinen Moodle-Sicherheitsschlüssel in den Streamlit-Secrets ein:\n\n"
+        st.info("Hinweis: Das LMU-Moodle blockiert Zugriffe von außerhalb der Uni (Fehler 403). Nutze deshalb "
+                "„Kursinhalte herunterladen“ in Moodle und den Reiter „⬆️ Dateien hochladen“.\n\n"
+                "Falls sich das ändert: Moodle-Sicherheitsschlüssel in den Streamlit-Secrets eintragen:\n\n"
                 "```\nMOODLE_TOKEN = \"dein-schlüssel\"\n```\n\nDanach die App neu starten (Reboot).", icon="🔗")
         return
     settings = load_settings()
@@ -179,7 +181,7 @@ def render(cfg: dict) -> None:
         st.success(f"✅ {result[0]} Datei(en) aus Moodle importiert.")
         for msg in result[1]:
             st.caption(f"⏭️ {msg}")
-    tab_moodle, tab_upload = st.tabs(["🔗 Direkt aus Moodle", "⬆️ Dateien hochladen"])
+    tab_upload, tab_moodle = st.tabs(["⬆️ Dateien hochladen", "🔗 Direkt aus Moodle (experimentell)"])
     with tab_moodle:
         _moodle_tab(cfg)
     with tab_upload:

@@ -266,12 +266,12 @@
         "review_weekday": 2,
         "exercise_weekday": 6
       },
-      "symbol": "functions"
+      "symbol": "calculate"
     },
     {
       "id": "rewe",
       "name": "Externes Rechnungswesen",
-      "short": "ReWe",
+      "short": "ExRW",
       "icon": "📒",
       "color": "#1E9C75",
       "ects": 6,
@@ -298,7 +298,8 @@
         "tax",
         "jahresabschluss",
         "case",
-        "skript"
+        "skript",
+        "exrw"
       ],
       "schedule": [
         {
@@ -306,7 +307,7 @@
           "weekday": 0,
           "start": "18:00",
           "end": "19:30",
-          "room": "Geschw.-Scholl-Pl. 1 (A) – Audi Max (A030)"
+          "room": "Audimax"
         },
         {
           "type": "Übung",
@@ -581,7 +582,7 @@
           "weekday": 1,
           "start": "12:00",
           "end": "14:00",
-          "room": "Geschw.-Scholl-Pl. 1 (A) – Audi Max (A030)"
+          "room": "Audimax"
         },
         {
           "type": "Übung",
@@ -811,7 +812,7 @@
           "weekday": 1,
           "start": "14:00",
           "end": "16:00",
-          "room": "Geschw.-Scholl-Pl. 1 (A) – Audi Max (A030)"
+          "room": "Audimax"
         },
         {
           "type": "Tutorium",
@@ -1098,7 +1099,7 @@
           "weekday": 3,
           "start": "10:00",
           "end": "12:00",
-          "room": "Geschw.-Scholl-Pl. 1 (A) – Audi Max (A030)"
+          "room": "Audimax"
         }
       ],
       "chapters": [

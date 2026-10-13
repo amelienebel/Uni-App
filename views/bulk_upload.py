@@ -56,7 +56,7 @@ def _upload_tab(cfg: dict) -> None:
     if not files:
         with st.expander("Tipps für eine gute automatische Zuordnung"):
             st.markdown(
-                "- Dateinamen wie `Mathe_VL03_Folien.pdf`, `ReWe_Uebungsblatt_4.pdf`, `IuF_Loesung_Blatt2.pdf`\n"
+                "- Dateinamen wie `Mathe_VL03_Folien.pdf`, `ExRW_Uebungsblatt_4.pdf`, `IuF_Loesung_Blatt2.pdf`\n"
                 "- Ordnerpfade aus Moodle werden mit ausgewertet, z. B. `Statistik/Woche 5/…`\n"
                 "- Kapitelnummern werden aus `Kap`, `Kapitel`, `VL`, `Vorlesung`, `Blatt`, `Woche` … erkannt\n"
                 "- Schlüsselwörter pro Modul lassen sich in `config.json` (Feld `keywords`) erweitern")

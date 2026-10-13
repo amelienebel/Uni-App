@@ -131,7 +131,7 @@ def render(cfg: dict) -> None:
             st.success("Gespeichert. Die Erinnerungen der nächsten Tage werden beim nächsten Öffnen eingeplant.")
     if st.button("Testnachricht senden", icon=":material/send:"):
         try:
-            notify.send(conf["topic"], "BWL-Lernplattform", "Es klappt! Ab jetzt erinnere ich dich ans Lernen.")
+            notify.send(conf["topic"], "Amelies Lern-App", "Es klappt! Ab jetzt erinnere ich dich ans Lernen.")
             st.success("Gesendet – kommt sie auf dem Handy an?")
         except requests.RequestException as exc:
             st.error(f"Senden fehlgeschlagen: {exc}")

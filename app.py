@@ -10,14 +10,14 @@ import hmac
 
 import streamlit as st
 
-st.set_page_config(page_title="BWL-Lernplattform LMU", page_icon=":material/school:", layout="wide",
+st.set_page_config(page_title="Amelies Lern-App", page_icon=":material/school:", layout="wide",
                    initial_sidebar_state="auto")
 
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
 from utils.config import WEEKDAYS, get_module, get_secret, load_config, module_ids, module_label  # noqa: E402
 from views import (bulk_upload, dashboard, exam_plan_view, export_view, formulas, module_view,  # noqa: E402
                    settings_view, today_view)
-from views.common import NAV_PAGES, PAGES, micon, open_unit  # noqa: E402
+from views.common import NAV_PAGES, PAGES, goto, micon, open_unit  # noqa: E402
 
 
 
@@ -35,7 +35,7 @@ def require_login() -> None:
     if st.session_state.get("auth_ok") or hmac.compare_digest(url_token.encode(), token.encode()):
         st.session_state["auth_ok"] = True
         return
-    st.title("BWL-Lernplattform")
+    st.title("Amelies Lern-App")
     with st.form("login"):
         entered = st.text_input("Passwort", type="password")
         remember = st.checkbox("Auf diesem Gerät angemeldet bleiben", value=True)
@@ -64,6 +64,11 @@ st.markdown("""
   .small-muted { color: #888; font-size: 0.85rem; }
   /* Modul-Unterpunkte in der Seitenleiste: eingerückt, linksbündig */
   [class*="st-key-navmod_"] button { justify-content: flex-start; padding-left: 1.6rem; min-height: 2rem; }
+  [data-testid="stSidebar"] h1 { font-size: 1.35rem; }
+  [class*="st-key-navpage_"] button { justify-content: flex-start; min-height: 2.1rem; padding-left: 0.6rem; }
+  [class*="st-key-navpage_"] button div { justify-content: flex-start; text-align: left; }
+  [class*="st-key-navpage_"] { margin-bottom: -0.55rem; }
+  [class*="st-key-navmod_"] { margin-bottom: -0.55rem; }
   [class*="st-key-navmod_"] button div, [class*="st-key-row_"] button div { justify-content: flex-start;
     text-align: left; }
   [class*="st-key-row_"] button { justify-content: flex-start; text-align: left; }
@@ -101,7 +106,7 @@ for _m in cfg["modules"]:
         f"[class*='st-key-tdrow_{_id}_'] [data-testid='stIconMaterial'], "
         f"[class*='st-key-row_{_id}_'] [data-testid='stIconMaterial'], "
         f".st-key-modhead_{_id} h1 [data-testid='stIconMaterial'] {{color: {_c};}}",
-        f"[class*='st-key-tdrow_{_id}_'] {{border-left: 3px solid {_c}; padding-left: 0.6rem;}}",
+        f"[class*='st-key-tdrow_{_id}_'] {{border-left: 3px solid {_c}; padding-left: 0.9rem;}}",
         f"[class*='st-key-chap_{_id}_'] {{border-left: 4px solid {_c} !important;}}",
         f"[class*='st-key-chip_open_{_id}_'] {{background: {_c}14;}}",
         f"[class*='st-key-chip_open_{_id}_'] strong, [class*='st-key-chip_done_{_id}_'] strong, "
@@ -111,9 +116,16 @@ for _m in cfg["modules"]:
 st.markdown(f"<style>{' '.join(_rules)}</style>", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.title(":material/school: BWL @ LMU")
+    st.title(":material/school: Amelies Lern-App")
     st.caption(f"{cfg['app'].get('semester_label', '')} · {WEEKDAYS[storage.today().weekday()]}, {storage.today():%d.%m.%Y}")
-    page = st.radio("Hauptnavigation", NAV_PAGES, key="nav", label_visibility="collapsed")
+    # Hauptnavigation: ganze Zeile antippbar (keine Radio-Kreise)
+    if st.session_state.get("nav") not in NAV_PAGES:
+        st.session_state["nav"] = PAGES["today"]
+    page = st.session_state["nav"]
+    for key, label in PAGES.items():
+        icon, _, text = label.partition(": ")
+        st.button(text, key=f"navpage_{key}", icon=icon + ":", width="stretch",
+                  type="primary" if page == label else "tertiary", on_click=goto, args=(key,))
 
     # Module direkt als Unterpunkte (ohne Aufklappen)
     if st.session_state.get("nav_module") not in ids:

@@ -54,7 +54,7 @@ def _podcast(cfg: dict, now) -> None:
     st.subheader(":material/podcasts: Podcast des Tages")
     if not lectures and not entry:
         older = sorted(podcast.store(), reverse=True)
-        st.caption("Heute ist keine Vorlesung. Podcasts gibt es an Vorlesungstagen (Mo: Mathe & ReWe, "
+        st.caption("Heute ist keine Vorlesung. Podcasts gibt es an Vorlesungstagen (Mo: Mathe & ExRW, "
                    "Di: I&F & VWL, Do: Statistik).")
         if older:
             _archive(older)

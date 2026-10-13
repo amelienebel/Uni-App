@@ -133,12 +133,17 @@ def get_schedule(cfg: dict | None = None) -> list[dict]:
     cfg = cfg or load_config()
     settings = load_settings()
     if settings.get("schedule"):
-        return settings["schedule"]
+        return [{**e, "room": room_label(e.get("room", ""))} for e in settings["schedule"]]
     schedule = []
     for module in cfg["modules"]:
         for event in module["schedule"]:
             schedule.append({"module_id": module["id"], **event})
     return schedule
+
+
+def room_label(room: str) -> str:
+    """Kurze Raumangabe: alles im Audimax heißt einfach „Audimax“."""
+    return "Audimax" if re.search(r"audi\s*max", room or "", re.IGNORECASE) else (room or "")
 
 
 def get_exam_date(module_id: str) -> date | None:

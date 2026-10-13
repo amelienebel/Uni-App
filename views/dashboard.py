@@ -142,10 +142,12 @@ def _open_event(ev: dict) -> None:
 def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:
     module = get_module(cfg, ev["module_id"])
     with st.container(key=f"evcard_{ev['module_id']}_{key}"):
-        st.button(f"{module['short']} · {ev.get('type', '')}", key=f"evbtn_{key}",
+        st.button(f"{module['short']}  \n{ev.get('type', '')}", key=f"evbtn_{key}",
                   type="tertiary", on_click=_open_event, args=(ev,), help="Vorlesung bzw. Übung mit allen Unterlagen öffnen")
         when = f"{ev.get('start', '')}–{ev.get('end', '')}"
-        st.caption(f"{when}  \n{ev.get('room', '')}" if ev.get("room") else when)
+        room = ev.get("room", "")
+        short_room = room.split(" – ")[-1].strip() if room else ""  # „Geschw.-Scholl-Pl. 1 (B) – B 201“ → „B 201“
+        st.caption(f"{when}  \n{short_room}" if short_room else when)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +162,7 @@ def _grid_css(cfg: dict) -> None:
              " padding: 2px 6px;}",
              # Veranstaltungs-Karten
              "[class*='st-key-evcard_'] {background: rgba(127,127,127,0.08); border-radius: 6px;"
-             " padding: 6px 9px 8px 9px; gap: 0 !important;}",
+             " padding: 6px 9px 8px 9px; gap: 0 !important; min-height: 6.4rem;}",
              "[class*='st-key-evcard_'] button {padding: 0; min-height: 0; font-weight: 600; text-align: left;}",
              "[class*='st-key-evcard_'] button p {font-size: 0.92rem; font-weight: 600;}",
              "[class*='st-key-evcard_'] [data-testid='stCaptionContainer'] p {font-size: 0.82rem;"
@@ -176,7 +178,7 @@ def _grid_css(cfg: dict) -> None:
              "[class*='st-key-tdrow_'] button {text-align: left; justify-content: flex-start;}",
              "[class*='st-key-tdrow_'] button div {justify-content: flex-start; text-align: left;}",
              # To-do-Zeilen in der Liste
-             "[class*='st-key-tdrow_'] {border-bottom: 1px solid rgba(127,127,127,0.15); padding: 2px 0;}",
+             "[class*='st-key-tdrow_'] {border-bottom: 1px solid rgba(127,127,127,0.15); padding: 2px 0 2px 0.9rem;}",
              "[class*='st-key-tdrow_'] [data-testid='stPopover'] button {padding: 0 6px; min-height: 0;}"]
     for m in cfg["modules"]:
         rules.append(f"[class*='st-key-evcard_{m['id']}_'] {{border-left: 4px solid {m['color']};}}")

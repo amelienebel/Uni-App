@@ -85,7 +85,7 @@ with st.sidebar:
                                  format_func=lambda mid: module_label(cfg, mid))
 
     st.divider()
-    st.markdown("**⏳ Nächste Klausuren**")
+    st.markdown("**Nächste Klausuren**")
     upcoming = []
     for mid in ids:
         days = storage.days_until_exam(mid)
@@ -93,7 +93,7 @@ with st.sidebar:
             upcoming.append((days, mid))
     if upcoming:
         for days, mid in sorted(upcoming)[:5]:
-            st.markdown(f"📝 {module_label(cfg, mid, short=True)}: **{days}** Tage")
+            st.markdown(f"{module_label(cfg, mid, short=True)}: **{days}** Tage")
     else:
         st.caption("Noch keine Klausurtermine – unter ⚙️ Einstellungen eintragen.")
 

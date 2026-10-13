@@ -61,7 +61,6 @@ utils/
   ai.py                     Anthropic-API (Streaming, strukturierte Ausgaben, Fehlerbehandlung)
   export.py                 Markdown-/PDF-Export, Backup/Restore
   cloud_sync.py             Optionaler Cloud-Speicher: spiegelt data/ in ein privates GitHub-Repository
-  moodle.py                 Optionale Moodle-Anbindung (Web-Service, Token aus MOODLE_TOKEN)
 views/
   dashboard.py, module_view.py, formulas.py, bulk_upload.py, export_view.py, settings_view.py, common.py
   module_tabs/              syllabus, preparation, review, flashcards, formulas_tab, exams, tutor

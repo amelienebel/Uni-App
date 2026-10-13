@@ -7,6 +7,7 @@ import streamlit as st
 from utils import planner
 from utils.config import get_module
 from utils.storage import days_until_exam, get_exam_date, load_module
+from views import event_detail
 from views.common import MODULE_TAB_LABELS
 from views.module_tabs import exams, flashcards, formulas_tab, notes, preparation, review, syllabus, tutor
 
@@ -28,6 +29,10 @@ def render(cfg: dict, module_id: str) -> None:
     c4.metric("Klausur", f"{days} Tage" if days is not None and days >= 0 else "–",
               help=f"Termin: {exam:%d.%m.%Y}" if exam else "Unter ⚙️ Einstellungen eintragen")
     st.progress(progress["overall"])
+
+    sel = st.session_state.get("sel_event")
+    if sel and sel.get("module_id") == module_id:
+        event_detail.render(cfg, sel)
 
     if st.session_state.get(f"mtabs_{module_id}") not in TABS:
         st.session_state.pop(f"mtabs_{module_id}", None)

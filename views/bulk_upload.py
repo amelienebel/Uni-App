@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import zipfile
-from datetime import timedelta
 
 import pandas as pd
 import streamlit as st
@@ -13,9 +12,7 @@ from utils.config import get_module, module_label
 from utils.pdf_parser import (extract_pdf, find_formula_candidates, guess_chapter_from_plan, guess_chapter_index,
                               guess_doc_type, guess_module,
                               pdfs_from_zip)
-from utils import moodle, planner
-from utils.storage import (add_document, add_formulas, load_module, load_settings, save_module, save_settings,
-                           semester_dates)
+from utils.storage import add_document, add_formulas, load_module, save_module
 
 
 def _collect(files) -> tuple[list[dict], list[str]]:
@@ -34,158 +31,9 @@ def _collect(files) -> tuple[list[dict], list[str]]:
     return items, errors
 
 
-def _chapter_for_moodle_file(file: dict, module_cfg: dict, chapters: list[dict], sem_start) -> int:
-    """Kapitel-Nr.: 1) Aktivitäts-/Dateiname laut Kursplan, 2) Datum des Moodle-Abschnitts, 3) Heuristik."""
-    ids = [ch["id"] for ch in chapters]
-    for name in (file["title"] + ".pdf", file["filename"]):
-        chapter_id = guess_chapter_from_plan(name, module_cfg)
-        if chapter_id in ids:
-            return ids.index(chapter_id) + 1
-    start = moodle.section_date(file["section"], sem_start)
-    if start:
-        monday = planner.monday_of(start)
-        for lec in planner.lectures_of(module_cfg):
-            if monday <= lec["date"] <= monday + timedelta(days=6) and lec.get("chapter_id") in ids:
-                return ids.index(lec["chapter_id"]) + 1
-    return guess_chapter_index(f"{file['section']}/{file['title']}", "", chapters)
-
-
-def _moodle_tab(cfg: dict) -> None:
-    if not moodle.is_configured():
-        st.info("Hinweis: Das LMU-Moodle blockiert Zugriffe von außerhalb der Uni (Fehler 403). Nutze deshalb "
-                "„Kursinhalte herunterladen“ in Moodle und den Reiter „⬆️ Dateien hochladen“.\n\n"
-                "Falls sich das ändert: Moodle-Sicherheitsschlüssel in den Streamlit-Secrets eintragen:\n\n"
-                "```\nMOODLE_TOKEN = \"dein-schlüssel\"\n```\n\nDanach die App neu starten (Reboot).", icon="🔗")
-        return
-    settings = load_settings()
-    course_map = settings.setdefault("moodle", {}).setdefault("course_map", {})
-    names = {m["id"]: module_label(cfg, m["id"]) for m in cfg["modules"]}
-
-    if st.button("🔄 Verbindung herstellen & Kurse laden", type="primary" if "moodle_courses" not in st.session_state
-                 else "secondary"):
-        with st.spinner("Verbinde mit Moodle …"):
-            try:
-                st.session_state["moodle_courses"] = moodle.MoodleClient().courses()
-            except moodle.MoodleError as exc:
-                st.error(str(exc))
-    courses = st.session_state.get("moodle_courses")
-    if not courses:
-        st.caption("Klicke auf den Knopf, um deine Moodle-Kurse zu laden.")
-        return
-    st.success(f"Verbunden – {len(courses)} Kurse gefunden.")
-
-    course_names = {c["id"]: c["fullname"] for c in courses}
-    with st.expander("🔗 Zuordnung Fach ↔ Moodle-Kurs", expanded=not course_map):
-        new_map = {}
-        suggested = moodle.match_courses(cfg["modules"], courses)
-        for module in cfg["modules"]:
-            saved = course_map.get(module["id"])
-            default = saved if saved in course_names else suggested.get(module["id"])
-            options = [None] + list(course_names)
-            new_map[module["id"]] = st.selectbox(
-                names[module["id"]], options, index=options.index(default) if default in options else 0,
-                format_func=lambda cid: "— kein Kurs —" if cid is None else course_names[cid],
-                key=f"moodle_map_{module['id']}")
-        if st.button("💾 Zuordnung speichern"):
-            settings["moodle"]["course_map"] = {k: v for k, v in new_map.items() if v}
-            save_settings()
-            st.success("Gespeichert.")
-            course_map = settings["moodle"]["course_map"]
-    active_map = {k: v for k, v in new_map.items() if v}
-
-    if st.button("🔎 Neue Dateien in Moodle suchen"):
-        client = moodle.MoodleClient()
-        sem_start, _ = semester_dates(cfg)
-        rows, files = [], []
-        type_names = cfg["document_types"]
-        with st.spinner("Durchsuche Kurse …"):
-            for module_id, course_id in active_map.items():
-                module_cfg = get_module(cfg, module_id)
-                data = load_module(module_id)
-                known = {d.get("moodle_key") for d in data["documents"]}
-                try:
-                    course_files = client.course_pdfs(course_id)
-                except moodle.MoodleError as exc:
-                    st.error(f"{names[module_id]}: {exc}")
-                    continue
-                for f in course_files:
-                    if f["key"] in known:
-                        continue
-                    files.append({**f, "module_id": module_id})
-                    rows.append({
-                        "Importieren": True,
-                        "Fach": names[module_id],
-                        "Abschnitt": f["section"],
-                        "Datei": f["title"] if f["title"].lower().endswith(".pdf") else f"{f['title']} ({f['filename']})",
-                        "Typ": type_names[guess_doc_type(f"{f['section']}/{f['title']}/{f['filename']}")],
-                        "Kapitel-Nr.": _chapter_for_moodle_file(f, module_cfg, data["chapters"], sem_start),
-                    })
-        st.session_state["moodle_new"] = (files, rows)
-
-    if "moodle_new" not in st.session_state:
-        return
-    files, rows = st.session_state["moodle_new"]
-    if not files:
-        st.success("✅ Alles aktuell – keine neuen Dateien in Moodle.")
-        return
-    st.markdown(f"#### {len(files)} neue Datei(en) gefunden")
-    st.caption("Häkchen entfernen, was du nicht brauchst. Kapitel-Nr. 0 = ohne Kapitel. "
-               "Gesperrte Dateien (z. B. Lösungen vor dem Freischaltdatum) werden übersprungen.")
-    type_names = cfg["document_types"]
-    edited = st.data_editor(
-        pd.DataFrame(rows), hide_index=True, width="stretch", key="moodle_editor",
-        column_config={
-            "Fach": st.column_config.TextColumn(disabled=True),
-            "Abschnitt": st.column_config.TextColumn(disabled=True),
-            "Datei": st.column_config.TextColumn(disabled=True, width="large"),
-            "Typ": st.column_config.SelectboxColumn(options=list(type_names.values()), required=True),
-            "Kapitel-Nr.": st.column_config.NumberColumn(min_value=0, max_value=30, step=1),
-        })
-    if st.button("📥 Ausgewählte Dateien importieren", type="primary", key="moodle_import"):
-        client = moodle.MoodleClient()
-        type_to_key = {v: k for k, v in type_names.items()}
-        imported, skipped = 0, []
-        progress = st.progress(0.0)
-        for i, (f, (_, row)) in enumerate(zip(files, edited.iterrows())):
-            progress.progress((i + 1) / len(files), text=f"Lade {f['filename']} …")
-            if not row["Importieren"]:
-                continue
-            try:
-                content = client.download(f)
-            except moodle.MoodleError as exc:
-                skipped.append(str(exc))
-                continue
-            data = load_module(f["module_id"])
-            digest = hashlib.sha1(content).hexdigest()
-            existing = next((d for d in data["documents"] if d.get("hash") == digest), None)
-            if existing:  # gleicher Inhalt schon vorhanden (z. B. per Hand hochgeladen)
-                existing["moodle_key"] = f["key"]
-                save_module(f["module_id"])
-                continue
-            nr = int(row["Kapitel-Nr."] or 0)
-            chapter_id = data["chapters"][nr - 1]["id"] if 1 <= nr <= len(data["chapters"]) else None
-            name = f["filename"] if f["title"].lower() in f["filename"].lower() else f"{f['title']} – {f['filename']}"
-            doc = add_document(f["module_id"], name, content, type_to_key[row["Typ"]], chapter_id)
-            doc.update({"hash": digest, "moodle_key": f["key"]})
-            save_module(f["module_id"])
-            imported += 1
-        progress.empty()
-        st.session_state.pop("moodle_new", None)
-        st.session_state["moodle_result"] = (imported, skipped)
-        st.rerun()
-
-
 def render(cfg: dict) -> None:
     st.title("📂 Bulk-Upload & Moodle-Import")
-    if result := st.session_state.pop("moodle_result", None):
-        st.success(f"✅ {result[0]} Datei(en) aus Moodle importiert.")
-        for msg in result[1]:
-            st.caption(f"⏭️ {msg}")
-    tab_upload, tab_moodle = st.tabs(["⬆️ Dateien hochladen", "🔗 Direkt aus Moodle (experimentell)"])
-    with tab_moodle:
-        _moodle_tab(cfg)
-    with tab_upload:
-        _upload_tab(cfg)
+    _upload_tab(cfg)
 
 
 def _upload_tab(cfg: dict) -> None:

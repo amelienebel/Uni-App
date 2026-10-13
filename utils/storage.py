@@ -47,7 +47,6 @@ DEFAULT_SETTINGS = {
     "schedule": None,  # None = Stundenplan aus config.json
     "ai": {"model": "claude-opus-5-5", "effort": "medium"},
     "learning": {"daily_review_limit": 60, "prep_days_before": 1, "review_days_after": 2},
-    "moodle": {"course_map": {}},  # modul_id -> Moodle-Kurs-ID
 }
 
 

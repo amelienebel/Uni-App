@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 
 import pandas as pd
 import streamlit as st
 
-from utils import ai, planner
-from utils.config import WEEKDAYS, get_module, load_config, module_label
-from utils.storage import (abs_data_path, chapter_label, get_exam_date, get_notes, get_schedule, lecture_breaks,
-                           load_module, load_settings, load_todos, save_module, save_todos, semester_dates, today)
-from views.common import goto, open_module_tab
+from utils import planner
+from utils.config import WEEKDAYS, get_module, module_label
+from utils.storage import (get_exam_date, get_schedule, lecture_breaks,
+                           load_module, load_settings, load_todos, save_todos, semester_dates, today)
+from views.common import MODULE_TAB_LABELS, goto
+from views.event_detail import toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
-EXERCISE_TYPES = ("Übung", "Tutorium")
 
 
 # ---------------------------------------------------------------------------
@@ -47,25 +48,6 @@ def _placement(todo: dict, monday: date) -> tuple[date, int | None]:
     return min(max(todo["due"], monday), sunday), None
 
 
-def _toggle_todo(todo: dict, widget_key: str) -> None:
-    value = st.session_state[widget_key]
-    if todo.get("status_field"):
-        data = load_module(todo["module_id"])
-        for ch in data["chapters"]:
-            if ch["id"] == todo["chapter_id"]:
-                ch["status"][todo["status_field"]] = value
-        save_module(todo["module_id"])
-        return
-    state = load_todos()
-    state[todo["key"]] = value
-    save_todos()
-    if todo.get("sync") and todo.get("chapter_id"):
-        data = load_module(todo["module_id"])
-        planner.sync_chapter_status(get_module(load_config(), todo["module_id"]), data, todo["chapter_id"],
-                                    todo["sync"], state)
-        save_module(todo["module_id"])
-
-
 def _move_todo(todo_key: str, day_key: str, slot_key: str) -> None:
     day = st.session_state.get(day_key)
     slot = st.session_state.get(slot_key)
@@ -83,6 +65,44 @@ def _select_event(ev: dict) -> None:
     st.session_state["sel_event"] = {k: (v.isoformat() if isinstance(v, date) else v) for k, v in ev.items()}
 
 
+SHORT_KIND = {
+    "Vorbereitung": "VL vorbereiten",
+    "Nachbereitung": "VL nachbereiten",
+    "Übungsblatt": "Übung vorbereiten",
+    "Wiederholung": "Karten wiederholen",
+    "Klausurvorbereitung": "Altklausur rechnen",
+}
+
+
+def _short_label(t: dict) -> str:
+    if t["kind"] in SHORT_KIND:
+        return SHORT_KIND[t["kind"]]
+    title = t["title"].split(":")[0].split("(")[0].strip()
+    return title if len(title) <= 34 else title[:32] + "…"
+
+
+def _move_popover(t: dict, monday: date, place: str) -> None:
+    with st.popover("↔️", help="Verschieben", type="tertiary"):
+        st.markdown(f"**{t['title']}**")
+        days = [monday + timedelta(days=i) for i in range(7)]
+        current_day, current_slot = _placement(t, monday)
+        day_key, slot_key = f"mvd_{place}_{t['key']}", f"mvs_{place}_{t['key']}"
+        day_options = [d.isoformat() for d in days]
+        st.selectbox("Tag", day_options,
+                     index=day_options.index(current_day.isoformat()) if current_day.isoformat() in day_options
+                     else 0, key=day_key,
+                     format_func=lambda iso: f"{WEEKDAYS[date.fromisoformat(iso).weekday()]}, "
+                                             f"{date.fromisoformat(iso):%d.%m.}")
+        slot_options = [None] + SLOTS
+        st.selectbox("Zeit", slot_options, index=slot_options.index(current_slot) if current_slot in slot_options
+                     else 0, key=slot_key,
+                     format_func=lambda s: "Ohne feste Zeit (Aufgabenzeile)" if s is None else f"{SLOT_LABELS[s]} Uhr")
+        b1, b2 = st.columns(2)
+        b1.button("Verschieben", key=f"mvb_{place}_{t['key']}", type="primary",
+                  on_click=_move_todo, args=(t["key"], day_key, slot_key))
+        b2.button("Zurücksetzen", key=f"mvr_{place}_{t['key']}", on_click=_reset_todo, args=(t["key"],))
+
+
 def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monday: date, now: date,
                  place: str, compact: bool) -> None:
     module = get_module(cfg, t["module_id"])
@@ -91,149 +111,35 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
     st.session_state[key] = done
     overdue = not done and t["due"] < now
     if compact:
-        label = f"{module['icon']} {t['kind']}: {t['title'].split(' – ', 1)[-1]}"
-        help_text = f"{module['short']} · Frist: {planner.format_due(t['due'], now)}"
-    else:
-        label = (f"{module['icon']} **{module['short']}** · {t['title']}  \n"
-                 f"{'⚠️ ' if overdue else ''}Frist: {planner.format_due(t['due'], now)}")
-        help_text = None
-    c_check, c_move = st.columns([6, 1], vertical_alignment="top")
-    with c_check:
-        st.checkbox(("⚠️ " if overdue and compact else "") + label, key=key, on_change=_toggle_todo,
-                    args=(t, key), help=help_text)
-    with c_move:
-        with st.popover("↔️", help="Verschieben"):
-            st.markdown(f"**{t['title']}**")
-            days = [monday + timedelta(days=i) for i in range(7)]
-            current_day, current_slot = _placement(t, monday)
-            day_key, slot_key = f"mvd_{place}_{t['key']}", f"mvs_{place}_{t['key']}"
-            day_options = [d.isoformat() for d in days]
-            st.selectbox("Tag", day_options,
-                         index=day_options.index(current_day.isoformat()) if current_day.isoformat() in day_options
-                         else 0, key=day_key,
-                         format_func=lambda iso: f"{WEEKDAYS[date.fromisoformat(iso).weekday()]}, "
-                                                 f"{date.fromisoformat(iso):%d.%m.}")
-            slot_options = [None] + SLOTS
-            st.selectbox("Zeit", slot_options, index=slot_options.index(current_slot) if current_slot in slot_options
-                         else 0, key=slot_key,
-                         format_func=lambda s: "Ohne feste Zeit (Aufgabenzeile)" if s is None else f"{SLOT_LABELS[s]} Uhr")
-            b1, b2 = st.columns(2)
-            b1.button("Verschieben", key=f"mvb_{place}_{t['key']}", type="primary",
-                      on_click=_move_todo, args=(t["key"], day_key, slot_key))
-            b2.button("Zurücksetzen", key=f"mvr_{place}_{t['key']}", on_click=_reset_todo, args=(t["key"],))
+        # Kleine Karte: Fach fett, darunter kurze Aufgabe; voller Text als Tooltip
+        with st.container(key=f"tdcard_{t['module_id']}_{place}_{re.sub(r'\W', '_', t['key'])}"):
+            with st.container(horizontal=True, vertical_alignment="top", gap="small"):
+                st.checkbox(f"**{module['short']}**  \n{'⚠️ ' if overdue else ''}{_short_label(t)}", key=key,
+                            on_change=toggle_todo, args=(t, key),
+                            help=f"{t['title']} · Frist: {planner.format_due(t['due'], now)}")
+                _move_popover(t, monday, place)
+        return
+    with st.container(horizontal=True, vertical_alignment="top", gap="small"):
+        st.checkbox(f"{module['icon']} **{module['short']}** · {t['title']}  \n"
+                    f"{'⚠️ ' if overdue else ''}Frist: {planner.format_due(t['due'], now)}",
+                    key=key, on_change=toggle_todo, args=(t, key))
+        _move_popover(t, monday, place)
 
 
-# ---------------------------------------------------------------------------
-# Detailansicht einer Veranstaltung
-# ---------------------------------------------------------------------------
-
-def _download_docs(docs: list[dict], prefix: str) -> None:
-    for doc in docs:
-        try:
-            path = abs_data_path(doc["path"])
-            content = path.read_bytes()
-        except (ValueError, OSError, KeyError):
-            continue
-        st.download_button(f"📄 {doc['filename']}", content, file_name=doc["filename"], mime="application/pdf",
-                           key=f"dl_{prefix}_{doc['id']}")
+def _open_event(ev: dict) -> None:
+    """Klick auf eine Veranstaltung: Details merken und direkt ins Modul springen."""
+    _select_event(ev)
+    goto(1, ev["module_id"])
+    st.session_state[f"mtabs_{ev['module_id']}"] = MODULE_TAB_LABELS["syllabus"]
 
 
-def _event_detail(cfg: dict, ev: dict, modules_data: dict) -> None:
-    mid = ev["module_id"]
-    module = get_module(cfg, mid)
-    data = modules_data[mid]
-    ev_date = date.fromisoformat(ev["date"])
-    todo_state = load_todos()
-    is_exercise = ev.get("type") in EXERCISE_TYPES
-
-    with st.container(border=True):
-        head, close = st.columns([8, 1])
-        head.markdown(f"### {module['icon']} {module['name']} – {ev.get('type', '')}")
-        close.button("✖", key="close_event", help="Schließen", on_click=lambda: st.session_state.pop("sel_event", None))
-        st.caption(f"{WEEKDAYS[ev_date.weekday()]}, {ev_date:%d.%m.%Y} · {ev.get('start', '')}–{ev.get('end', '')} Uhr"
-                   f" · {ev.get('room', '')}")
-
-        chapter_id = None
-        if is_exercise:
-            monday = planner.monday_of(ev_date)
-            exercises = planner.exercises_of(module)
-            ex = next((e for e in exercises if e["due"] == ev_date), None) or \
-                next((e for e in exercises if e["week_of"] == monday), None)
-            if ex:
-                chapter_id = ex.get("chapter_id")
-                st.markdown(f"**✏️ {ex['title']}**")
-                key = planner.exercise_key(mid, ex)
-                wkey = f"evx_{key}"
-                st.session_state[wkey] = bool(todo_state.get(key))
-                st.checkbox("Übung vorbereitet / Blatt gelöst", key=wkey, on_change=_toggle_todo,
-                            args=({"key": key, "module_id": mid, "chapter_id": chapter_id, "sync": "uebung"}, wkey))
-            else:
-                st.caption("Für diesen Termin ist im Kursplan kein Übungsblatt hinterlegt.")
-        else:
-            lecture = next((lec for lec in planner.lectures_of(module) if lec["date"] == ev_date), None)
-            if lecture:
-                chapter_id = lecture.get("chapter_id")
-                st.markdown(f"**🎬 {lecture['topic']}**")
-                c1, c2 = st.columns(2)
-                for col, field, label in ((c1, "vorbereitet", "Vorbereitet"), (c2, "nachbereitet", "Nachbereitet")):
-                    key = planner.lecture_key(mid, ev_date, field)
-                    wkey = f"evl_{key}"
-                    st.session_state[wkey] = bool(todo_state.get(key))
-                    col.checkbox(label, key=wkey, on_change=_toggle_todo,
-                                 args=({"key": key, "module_id": mid, "chapter_id": chapter_id, "sync": field}, wkey))
-            else:
-                st.caption("Für dieses Datum steht im Kursplan keine Vorlesung (z. B. Ausfall oder Ferien).")
-        if chapter_id:
-            st.caption(f"Kapitel: {chapter_label(data, chapter_id)}")
-
-        tab_files, tab_prep, tab_notes, tab_q = st.tabs(["📂 Dateien", "🎬 Vorbereitung", "📝 Nachbereitung",
-                                                         "❓ Fragen fürs Tutorium"])
-        docs = [d for d in data["documents"] if chapter_id and d.get("chapter_id") == chapter_id]
-        with tab_files:
-            if docs:
-                _download_docs(docs, f"{mid}_{ev['date']}")
-            else:
-                st.caption("Noch keine Dateien für dieses Kapitel. Hochladen über 📂 Bulk-Upload oder im Modul.")
-        with tab_prep:
-            analysed = [d for d in docs if d.get("analysis")]
-            if analysed:
-                a = analysed[0]["analysis"]
-                st.markdown(a.get("summary", ""))
-                for i, q in enumerate(a.get("check_questions", [])[:3], start=1):
-                    with st.expander(f"❓ {q['question']}"):
-                        st.markdown(q["answer"])
-            elif docs:
-                st.caption("Die Folien sind noch nicht analysiert.")
-                if st.button("✨ Folien jetzt analysieren", key=f"evd_an_{mid}_{ev['date']}"):
-                    from views.module_tabs.preparation import _run_analysis
-
-                    with st.spinner("Analysiere …"):
-                        try:
-                            _run_analysis(cfg, mid, docs[0])
-                            st.rerun()
-                        except ai.AIError as exc:
-                            st.error(str(exc))
-            else:
-                st.caption("Lade zuerst die Folien hoch.")
-            st.button("🎬 Vorbereitung im Modul öffnen", key=f"evd_prep_{mid}_{ev['date']}",
-                      on_click=open_module_tab, args=(mid, "prep", chapter_id))
-        with tab_notes:
-            if chapter_id:
-                notes = get_notes(data, chapter_id)
-                with st.form(f"ev_notes_{mid}_{chapter_id}_{ev['date']}"):
-                    text = st.text_area("Notizen", notes["text"], height=120)
-                    emphasized = st.text_area("Vom Dozenten betont", notes["emphasized"], height=80)
-                    examples = st.text_area("Beispiele", notes["examples"], height=80)
-                    if st.form_submit_button("💾 Speichern"):
-                        notes.update({"text": text, "emphasized": emphasized, "examples": examples})
-                        save_module(mid)
-                        st.success("Gespeichert.")
-            st.button("📝 Nachbereitung im Modul öffnen", key=f"evd_rev_{mid}_{ev['date']}",
-                      on_click=open_module_tab, args=(mid, "review", chapter_id))
-        with tab_q:
-            from views.module_tabs.notes import question_list
-
-            question_list(mid, data, key_prefix=f"evq_{ev['date']}")
+def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:
+    module = get_module(cfg, ev["module_id"])
+    with st.container(key=f"evcard_{ev['module_id']}_{key}"):
+        st.button(f"{module['icon']} {module['short']} · {ev.get('type', '')}", key=f"evbtn_{key}",
+                  type="tertiary", on_click=_open_event, args=(ev,), help="Modul mit allen Unterlagen öffnen")
+        when = f"{ev.get('start', '')}–{ev.get('end', '')}"
+        st.caption(f"{when}  \n{ev.get('room', '')}" if ev.get("room") else when)
 
 
 # ---------------------------------------------------------------------------
@@ -245,11 +151,21 @@ def _grid_css(cfg: dict) -> None:
              " padding: 4px 6px;}",
              "[class*='st-key-head_today'] {background: rgba(127,127,127,0.22); border-radius: 8px;"
              " padding: 2px 6px;}",
-             "[class*='st-key-ev_'] button {text-align: left; justify-content: flex-start; padding: 4px 8px;"
-             " min-height: 0; font-size: 0.82rem; line-height: 1.25;}",
-             "[class*='st-key-ev_'] button p {font-size: 0.82rem;}"]
+             # Veranstaltungs-Karten
+             "[class*='st-key-evcard_'] {background: rgba(127,127,127,0.08); border-radius: 6px;"
+             " padding: 4px 8px 6px 8px; gap: 0 !important;}",
+             "[class*='st-key-evcard_'] button {padding: 0; min-height: 0; font-weight: 600; text-align: left;}",
+             "[class*='st-key-evcard_'] button p {font-size: 0.85rem; font-weight: 600;}",
+             "[class*='st-key-evcard_'] [data-testid='stCaptionContainer'] p {font-size: 0.75rem;"
+             " line-height: 1.25; margin: 0;}",
+             # To-do-Karten
+             "[class*='st-key-tdcard_'] {border: 1px solid rgba(127,127,127,0.25); border-radius: 6px;"
+             " padding: 3px 6px; margin-bottom: 2px;}",
+             "[class*='st-key-tdcard_'] label p {font-size: 0.78rem; line-height: 1.25;}",
+             "[class*='st-key-tdcard_'] [data-testid='stPopover'] button {padding: 0 2px; min-height: 0;}"]
     for m in cfg["modules"]:
-        rules.append(f"[class*='st-key-ev_{m['id']}_'] button {{border-left: 5px solid {m['color']};}}")
+        rules.append(f"[class*='st-key-evcard_{m['id']}_'] {{border-left: 4px solid {m['color']};}}")
+        rules.append(f"[class*='st-key-tdcard_{m['id']}_'] {{border-left: 4px solid {m['color']};}}")
     st.markdown(f"<style>{' '.join(rules)}</style>", unsafe_allow_html=True)
 
 
@@ -284,7 +200,7 @@ def render(cfg: dict) -> None:
         st.rerun()
     monday = planner.monday_of(now) + timedelta(weeks=offset)
     week_no = planner.semester_week(sem_start, monday, breaks)
-    c4.markdown(f"#### 📅 Woche {monday:%d.%m.} – {monday + timedelta(days=6):%d.%m.%Y}"
+    c4.markdown(f"#### Woche {monday:%d.%m.} – {monday + timedelta(days=6):%d.%m.%Y}"
                 + (" · 🎄 vorlesungsfrei" if planner.is_break_week(monday, breaks)
                    else f" · Vorlesungswoche {week_no}" if 1 <= week_no and monday <= sem_end else ""))
 
@@ -300,7 +216,8 @@ def render(cfg: dict) -> None:
     days = [monday + timedelta(days=i) for i in range(7)]
 
     list_view = st.toggle("📱 Listenansicht (fürs Handy)", key="dash_list_view")
-    st.caption("Tippe auf eine Veranstaltung für Dateien, Vor- und Nachbereitung · ↔️ verschiebt ein To-do.")
+    st.caption("Tippe auf eine Veranstaltung, um das Modul mit Dateien, Vor- und Nachbereitung zu öffnen · "
+               "↔️ verschiebt ein To-do.")
 
     # --- Stundenplan-Raster ---------------------------------------------------
     if not list_view:
@@ -315,22 +232,17 @@ def render(cfg: dict) -> None:
                         st.caption("🎄 frei")
                     for mid in modules_data:
                         if get_exam_date(mid) == day:
-                            st.error(f"📝 Klausur {get_module(cfg, mid)['short']}")
+                            st.error(f"Klausur {get_module(cfg, mid)['short']}")
         for slot in SLOTS + [None]:
             row = st.columns(widths)
-            row[0].markdown(f"**{SLOT_LABELS[slot]}**" if slot is not None else "**📋 Aufgaben**")
+            row[0].markdown(f"**{SLOT_LABELS[slot]}**" if slot is not None else "**Aufgaben**")
             for col, day in zip(row[1:], days):
                 with col:
                     with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_{slot or 'x'}"):
                         if slot is not None:
                             for i, ev in enumerate(e for e in events if e["date"] == day
                                                    and _slot_of(e.get("start", "")) == slot):
-                                module = get_module(cfg, ev["module_id"])
-                                st.button(f"**{module['icon']} {module['short']}** · {ev.get('type', '')}  \n"
-                                          f"{ev.get('start', '')}–{ev.get('end', '')}",
-                                          key=f"ev_{ev['module_id']}_{day:%Y%m%d}_{slot}_{i}",
-                                          help=ev.get("room", ""), width="stretch",
-                                          on_click=_select_event, args=(ev,))
+                                _event_card(cfg, ev, f"{day:%Y%m%d}_{slot}_{i}")
                         for t in placed.get((day, slot), []):
                             _todo_widget(t, cfg, modules_data, todo_state, monday, now,
                                          place=f"g{day:%d}{slot or 0}", compact=True)
@@ -343,16 +255,9 @@ def render(cfg: dict) -> None:
             with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_list", border=True):
                 st.markdown(f"**{WEEKDAYS[day.weekday()]}, {day:%d.%m.}**")
                 for i, ev in enumerate(day_events):
-                    module = get_module(cfg, ev["module_id"])
-                    st.button(f"**{ev.get('start', '')}–{ev.get('end', '')}** · {module['icon']} {module['short']} · "
-                              f"{ev.get('type', '')}", key=f"ev_{ev['module_id']}_{day:%Y%m%d}_l{i}",
-                              help=ev.get("room", ""), width="stretch", on_click=_select_event, args=(ev,))
+                    _event_card(cfg, ev, f"{day:%Y%m%d}_l{i}")
                 for t in day_todos:
                     _todo_widget(t, cfg, modules_data, todo_state, monday, now, place=f"l{day:%d}", compact=True)
-
-    if sel := st.session_state.get("sel_event"):
-        if sel.get("module_id") in modules_data:
-            _event_detail(cfg, sel, modules_data)
 
     # --- To-do-Liste & Fortschritt ----------------------------------------------
     left, right = st.columns([3, 2], gap="large")

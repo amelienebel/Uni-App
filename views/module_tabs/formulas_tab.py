@@ -7,7 +7,7 @@ import streamlit as st
 from utils import ai
 from utils.config import get_module
 from utils.pdf_parser import find_formula_candidates
-from utils.storage import (add_formulas, chapter_label, get_document_pages, get_document_text, load_module,
+from utils.storage import (add_formulas, chapter_label, suggest_formulas, get_document_pages, get_document_text, load_module,
                            save_module)
 from views.common import ai_hint, chapter_select, render_formula
 
@@ -21,11 +21,54 @@ allgemeingültige Formeln. Bereits vorhanden (nicht erneut liefern): {existing}
 </unterlagen>"""
 
 
+def _review_inbox(module_id: str, data: dict) -> None:
+    """Formel-Vorschläge prüfen: nur angehakte Formeln kommen in die Formelsammlung."""
+    if msg := st.session_state.pop("inbox_msg", None):
+        st.success(msg)
+    inbox = data.get("formula_inbox", [])
+    if not inbox:
+        return
+    with st.container(border=True):
+        st.markdown(f"#### 📥 Formel-Vorschläge prüfen ({len(inbox)})")
+        st.caption("Automatisch erkannte Formeln können Fehler enthalten. Hake nur an, was übernommen werden soll – "
+                   "Name und LaTeX kannst du vorher korrigieren.")
+        for f in inbox:
+            with st.container(border=True):
+                c1, c2 = st.columns([1, 6], vertical_alignment="top")
+                c1.checkbox("Übernehmen", key=f"inb_ok_{f['id']}")
+                with c2:
+                    st.text_input("Name", f["name"], key=f"inb_name_{f['id']}")
+                    latex = st.text_input("LaTeX", f["latex"], key=f"inb_latex_{f['id']}")
+                    try:
+                        st.latex(latex)
+                    except Exception:  # noqa: BLE001
+                        st.code(latex)
+                    st.caption(f"Quelle: {f.get('source', '–')}" + (f" · Seite {f['page']}" if f.get("page") else "")
+                               + (f" · {f['explanation']}" if f.get("explanation") else ""))
+        b1, b2 = st.columns(2)
+        if b1.button("✅ Angehakte übernehmen", type="primary", key=f"inb_take_{module_id}"):
+            chosen = [f for f in inbox if st.session_state.get(f"inb_ok_{f['id']}")]
+            for f in chosen:
+                f["name"] = st.session_state.get(f"inb_name_{f['id']}", f["name"])
+                f["latex"] = st.session_state.get(f"inb_latex_{f['id']}", f["latex"])
+            data["formula_inbox"] = []
+            save_module(module_id)
+            added = add_formulas(module_id, chosen, "geprüft")
+            st.session_state["inbox_msg"] = f"{added} Formel(n) übernommen, {len(inbox) - len(chosen)} verworfen."
+            st.rerun()
+        if b2.button("🗑️ Alle Vorschläge verwerfen", key=f"inb_drop_{module_id}"):
+            data["formula_inbox"] = []
+            save_module(module_id)
+            st.rerun()
+
+
 def render(cfg: dict, module_id: str) -> None:
     module = get_module(cfg, module_id)
     data = load_module(module_id)
 
     st.subheader("📐 Formelsammlung")
+    _review_inbox(module_id, data)
+
     with st.expander("🔎 Formeln aus Dokumenten extrahieren"):
         has_ai = ai_hint("Die Formelextraktion")
         docs = data["documents"]
@@ -44,10 +87,10 @@ def render(cfg: dict, module_id: str) -> None:
                         else:
                             formulas = find_formula_candidates(get_document_pages(doc))
                             source = f"{doc['filename']} (heuristisch)"
-                        total += add_formulas(module_id, formulas, source, chapter_id=doc.get("chapter_id"))
+                        total += suggest_formulas(module_id, formulas, source, chapter_id=doc.get("chapter_id"))
                     except ai.AIError as exc:
                         st.error(str(exc))
-            st.success(f"{total} neue Formel(n) übernommen.")
+            st.success(f"{total} Vorschlag/Vorschläge gefunden – bitte unten prüfen.")
 
     with st.expander("➕ Formel manuell hinzufügen"):
         name = st.text_input("Name", key=f"f_name_{module_id}")

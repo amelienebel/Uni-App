@@ -95,14 +95,12 @@ def render(cfg: dict) -> None:
     st.subheader("🧠 Lernparameter")
     learning = settings["learning"]
     with st.form("learning_form"):
-        c1, c2, c3 = st.columns(3)
-        limit = c1.number_input("Max. Wiederholungen pro Modul und Sitzung", 10, 500,
+        limit = st.number_input("Max. Wiederholungen pro Modul und Sitzung", 10, 500,
                                 int(learning["daily_review_limit"]), step=10)
-        prep = c2.number_input("Vorbereitung: Tage vor der Vorlesung", 0, 6, int(learning["prep_days_before"]))
-        review = c3.number_input("Nachbereitung: Tage nach der Vorlesung", 0, 6, int(learning["review_days_after"]))
+        st.caption("Fristen: Vorlesung vorbereiten 1 Tag vorher · nachbereiten 2 Tage danach · "
+                   "Übungsblatt lösen 2 Tage vor der Übung bzw. dem Tutorium.")
         if st.form_submit_button("Speichern"):
-            learning.update({"daily_review_limit": int(limit), "prep_days_before": int(prep),
-                             "review_days_after": int(review)})
+            learning.update({"daily_review_limit": int(limit)})
             save_settings()
             st.success("Gespeichert.")
 

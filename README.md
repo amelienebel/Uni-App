@@ -30,7 +30,7 @@ ablegen. Daten bleiben über einen privaten GitHub-Speicher erhalten, ein Passwo
 | 🏠 **Wochenübersicht & Lernplan** | Klausur-Countdown, Wochenraster aus dem Stundenplan, generierte To-dos mit Fristen (Vorlesung vor-/nachbereiten, Übungsblatt, Wiederholung, Altklausur), Fortschrittsbalken pro Modul, priorisierter Lernfahrplan |
 | 📚 **Modul-Bereiche** | Pro Modul 7 Reiter: Syllabus & Kapitel · Vorlesungsvorbereitung · Nachbereitung · Spaced Repetition · Formelsammlung · Klausuren & Quiz · Verständnis-Chat |
 | 📐 **Zentrale Formelsammlung** | Alle Formeln modulübergreifend, filter- und durchsuchbar, LaTeX-Rendering mit `st.latex`, Markdown-Download |
-| 📂 **Bulk-Upload & Moodle-Import** | Viele PDFs oder Moodle-ZIP-Ordner auf einmal; automatische Zuordnung zu Modul, Dokumenttyp und Kapitel, vor dem Import korrigierbar |
+| 📂 **Bulk-Upload** | Viele PDFs oder Moodle-ZIP-Ordner auf einmal; automatische Zuordnung zu Modul, Dokumenttyp und Kapitel, vor dem Import korrigierbar |
 | 📥 **Export & Backup** | Notizen, Zusammenfassungen, Formeln, Karten als Markdown oder PDF; komplettes Backup/Restore als ZIP |
 | ⚙️ **Einstellungen & Klausurtermine** | Klausurtermine, Semesterzeitraum, Stundenplan, Lernparameter, KI-Modell und Effort |
 

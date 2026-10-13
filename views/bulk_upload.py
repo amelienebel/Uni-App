@@ -1,4 +1,4 @@
-"""📂 Bulk-Upload & Moodle-Import: viele PDFs (oder ZIP-Ordner) automatisch zuordnen."""
+"""📂 Bulk-Upload: viele PDFs (oder ZIP-Ordner) automatisch zuordnen."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ import pandas as pd
 import streamlit as st
 
 from utils.config import get_module, module_label
-from utils.pdf_parser import (extract_pdf, find_formula_candidates, guess_chapter_from_plan, guess_chapter_index,
+from utils.pdf_parser import (extract_pdf, guess_chapter_from_plan, guess_chapter_index,
                               guess_doc_type, guess_module,
                               pdfs_from_zip)
-from utils.storage import add_document, add_formulas, load_module, save_module
+from utils.storage import add_document, load_module, save_module
 
 
 def _collect(files) -> tuple[list[dict], list[str]]:
@@ -32,7 +32,7 @@ def _collect(files) -> tuple[list[dict], list[str]]:
 
 
 def render(cfg: dict) -> None:
-    st.title("📂 Bulk-Upload & Moodle-Import")
+    st.title("📂 Bulk-Upload")
     _upload_tab(cfg)
 
 
@@ -106,7 +106,6 @@ def _upload_tab(cfg: dict) -> None:
             "Seiten": st.column_config.NumberColumn(disabled=True),
             "Sicherheit": st.column_config.TextColumn(disabled=True),
         })
-    extract_formulas = st.checkbox("Formeln direkt heuristisch extrahieren (ohne KI, kostenlos)", value=True)
 
     if st.button("📥 Ausgewählte Dateien importieren", type="primary"):
         name_to_id = {v: k for k, v in module_names.items()}
@@ -127,9 +126,6 @@ def _upload_tab(cfg: dict) -> None:
                                extracted=item["extracted"])
             doc["hash"] = row["_hash"]
             save_module(module_id)
-            if extract_formulas and doc["doc_type"] in ("folien", "skript", "loesung"):
-                add_formulas(module_id, find_formula_candidates(item["extracted"]["pages"]),
-                             f"{item['name']} (heuristisch)", chapter_id)
             imported += 1
         st.session_state["bulk_round"] = st.session_state.get("bulk_round", 0) + 1
         st.session_state["bulk_result"] = (imported, skipped)

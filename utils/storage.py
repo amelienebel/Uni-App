@@ -432,6 +432,29 @@ def add_formulas(module_id: str, formulas: list[dict], source: str, chapter_id: 
     return added
 
 
+def suggest_formulas(module_id: str, formulas: list[dict], source: str, chapter_id: str | None = None) -> int:
+    """Legt Formeln als Vorschläge ab – sie landen erst nach deiner Prüfung in der Formelsammlung."""
+    data = load_module(module_id)
+    inbox = data.setdefault("formula_inbox", [])
+
+    def norm(latex: str) -> str:
+        return re.sub(r"\s+", "", latex or "")
+
+    known = {norm(f["latex"]) for f in data["formulas"]} | {norm(f["latex"]) for f in inbox}
+    added = 0
+    for f in formulas:
+        latex = (f.get("latex") or "").strip()
+        if not latex or norm(latex) in known:
+            continue
+        inbox.append({"id": new_id(), "name": (f.get("name") or "Formel").strip(), "latex": latex,
+                      "explanation": (f.get("explanation") or "").strip(),
+                      "chapter_id": f.get("chapter_id") or chapter_id, "source": source, "page": f.get("page")})
+        known.add(norm(latex))
+        added += 1
+    save_module(module_id)
+    return added
+
+
 # ---------------------------------------------------------------------------
 # To-dos
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ from utils import planner
 from utils.config import WEEKDAYS, get_module, module_label
 from utils.storage import (get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
-from views.common import MODULE_TAB_LABELS, goto
+from views.common import MODULE_TAB_LABELS, escape, goto
 from views.event_detail import toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
@@ -104,26 +104,34 @@ def _move_popover(t: dict, monday: date, place: str) -> None:
 
 
 def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monday: date, now: date,
-                 place: str, compact: bool) -> None:
+                 place: str, compact: bool = False) -> None:
+    """Volle Zeile: Abhaken links, Frist in der Mitte, Verschieben rechts."""
     module = get_module(cfg, t["module_id"])
     key = f"todo_{place}_{t['key']}_{monday.isoformat()}"
     done = planner.todo_done(t, modules_data, todo_state)
     st.session_state[key] = done
     overdue = not done and t["due"] < now
-    if compact:
-        # Kleine Karte: Fach fett, darunter kurze Aufgabe; voller Text als Tooltip
-        with st.container(key=f"tdcard_{t['module_id']}_{place}_{re.sub(r'\W', '_', t['key'])}"):
-            with st.container(horizontal=True, vertical_alignment="top", gap="small"):
-                st.checkbox(f"**{module['short']}**  \n{'⚠️ ' if overdue else ''}{_short_label(t)}", key=key,
-                            on_change=toggle_todo, args=(t, key),
-                            help=f"{t['title']} · Frist: {planner.format_due(t['due'], now)}")
-                _move_popover(t, monday, place)
-        return
-    with st.container(horizontal=True, vertical_alignment="top", gap="small"):
-        st.checkbox(f"{module['icon']} **{module['short']}** · {t['title']}  \n"
-                    f"{'⚠️ ' if overdue else ''}Frist: {planner.format_due(t['due'], now)}",
-                    key=key, on_change=toggle_todo, args=(t, key))
-        _move_popover(t, monday, place)
+    _, slot = _placement(t, monday)
+    with st.container(key=f"tdrow_{t['module_id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
+        c1, c2, c3 = st.columns([7, 3, 1], vertical_alignment="center")
+        c1.checkbox(f"{module['icon']} **{module['short']}** · {t['title']}", key=key,
+                    on_change=toggle_todo, args=(t, key))
+        c2.caption(("⚠️ " if overdue else "") + f"Frist: {planner.format_due(t['due'], now)}"
+                   + (f" · geplant {SLOT_LABELS[slot]} Uhr" if slot else ""))
+        with c3:
+            _move_popover(t, monday, place)
+
+
+def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: date) -> None:
+    """Nur-Anzeige im Raster: kleines, gut lesbares Kärtchen (abhaken/verschieben in der Liste darunter)."""
+    module = get_module(cfg, t["module_id"])
+    done = planner.todo_done(t, modules_data, todo_state)
+    overdue = not done and t["due"] < now
+    style = "text-decoration: line-through; opacity: 0.55;" if done else ""
+    mark = "✓ " if done else ("⚠ " if overdue else "")
+    st.markdown(
+        f"<div class='todo-chip' title='{escape(t['title'])}' style='border-left-color:{module['color']};{style}'>"
+        f"<b>{mark}{escape(module['short'])}</b><br>{escape(_short_label(t))}</div>", unsafe_allow_html=True)
 
 
 def _open_event(ev: dict) -> None:
@@ -158,14 +166,14 @@ def _grid_css(cfg: dict) -> None:
              "[class*='st-key-evcard_'] button p {font-size: 0.85rem; font-weight: 600;}",
              "[class*='st-key-evcard_'] [data-testid='stCaptionContainer'] p {font-size: 0.75rem;"
              " line-height: 1.25; margin: 0;}",
-             # To-do-Karten
-             "[class*='st-key-tdcard_'] {border: 1px solid rgba(127,127,127,0.25); border-radius: 6px;"
-             " padding: 3px 6px; margin-bottom: 2px;}",
-             "[class*='st-key-tdcard_'] label p {font-size: 0.78rem; line-height: 1.25;}",
-             "[class*='st-key-tdcard_'] [data-testid='stPopover'] button {padding: 0 2px; min-height: 0;}"]
+             # To-do-Kärtchen im Raster (nur Anzeige)
+             ".todo-chip {border: 1px solid rgba(127,127,127,0.25); border-left: 4px solid #888;"
+             " border-radius: 6px; padding: 3px 7px; margin: 3px 0; font-size: 0.78rem; line-height: 1.3;}",
+             # To-do-Zeilen in der Liste
+             "[class*='st-key-tdrow_'] {border-bottom: 1px solid rgba(127,127,127,0.15); padding: 2px 0;}",
+             "[class*='st-key-tdrow_'] [data-testid='stPopover'] button {padding: 0 6px; min-height: 0;}"]
     for m in cfg["modules"]:
         rules.append(f"[class*='st-key-evcard_{m['id']}_'] {{border-left: 4px solid {m['color']};}}")
-        rules.append(f"[class*='st-key-tdcard_{m['id']}_'] {{border-left: 4px solid {m['color']};}}")
     st.markdown(f"<style>{' '.join(rules)}</style>", unsafe_allow_html=True)
 
 
@@ -214,6 +222,12 @@ def render(cfg: dict) -> None:
     for t in todos:
         placed.setdefault(_placement(t, monday), []).append(t)
     days = [monday + timedelta(days=i) for i in range(7)]
+    calendar: dict[date, list[str]] = {}
+    for entry in cfg["app"].get("calendar", []):
+        try:
+            calendar.setdefault(date.fromisoformat(entry["date"]), []).append(entry["text"])
+        except (KeyError, ValueError):
+            continue
 
     list_view = st.toggle("📱 Listenansicht (fürs Handy)", key="dash_list_view")
     st.caption("Tippe auf eine Veranstaltung, um das Modul mit Dateien, Vor- und Nachbereitung zu öffnen · "
@@ -233,6 +247,8 @@ def render(cfg: dict) -> None:
                     for mid in modules_data:
                         if get_exam_date(mid) == day:
                             st.error(f"Klausur {get_module(cfg, mid)['short']}")
+                    for entry in calendar.get(day, []):
+                        st.warning(entry)
         for slot in SLOTS + [None]:
             row = st.columns(widths)
             row[0].markdown(f"**{SLOT_LABELS[slot]}**" if slot is not None else "**Aufgaben**")
@@ -244,33 +260,40 @@ def render(cfg: dict) -> None:
                                                    and _slot_of(e.get("start", "")) == slot):
                                 _event_card(cfg, ev, f"{day:%Y%m%d}_{slot}_{i}")
                         for t in placed.get((day, slot), []):
-                            _todo_widget(t, cfg, modules_data, todo_state, monday, now,
-                                         place=f"g{day:%d}{slot or 0}", compact=True)
+                            _todo_chip(t, cfg, modules_data, todo_state, now)
     else:
         for day in days:
             day_events = [e for e in events if e["date"] == day]
             day_todos = [t for (d, _s), ts in placed.items() if d == day for t in ts]
-            if not day_events and not day_todos:
+            if not day_events and not day_todos and not calendar.get(day):
                 continue
             with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_list", border=True):
                 st.markdown(f"**{WEEKDAYS[day.weekday()]}, {day:%d.%m.}**")
+                for entry in calendar.get(day, []):
+                    st.warning(entry)
                 for i, ev in enumerate(day_events):
                     _event_card(cfg, ev, f"{day:%Y%m%d}_l{i}")
                 for t in day_todos:
-                    _todo_widget(t, cfg, modules_data, todo_state, monday, now, place=f"l{day:%d}", compact=True)
+                    _todo_chip(t, cfg, modules_data, todo_state, now)
 
-    # --- To-do-Liste & Fortschritt ----------------------------------------------
-    left, right = st.columns([3, 2], gap="large")
-    with left:
-        with st.expander(f"✅ Alle To-dos dieser Woche als Liste ({len(todos)})", expanded=False):
-            if not todos:
-                st.info("Für diese Woche sind keine Aufgaben geplant.")
-            open_count = sum(1 for t in todos if not planner.todo_done(t, modules_data, todo_state))
-            if todos:
-                st.progress(1 - open_count / len(todos), text=f"{len(todos) - open_count} von {len(todos)} erledigt")
-            for t in sorted(todos, key=lambda t: t["due"]):
+    # --- Aufgaben dieser Woche (abhaken & verschieben) ---------------------------
+    st.subheader("Aufgaben dieser Woche")
+    if not todos:
+        st.caption("Für diese Woche sind keine Aufgaben geplant.")
+    else:
+        open_count = sum(1 for t in todos if not planner.todo_done(t, modules_data, todo_state))
+        st.progress(1 - open_count / len(todos), text=f"{len(todos) - open_count} von {len(todos)} erledigt")
+        for day in days:
+            day_todos = sorted((t for t in todos if _placement(t, monday)[0] == day),
+                               key=lambda t: (_placement(t, monday)[1] or 99, t["module_id"]))
+            if not day_todos:
+                continue
+            st.markdown(f"**{WEEKDAYS[day.weekday()]}, {day:%d.%m.}**")
+            for t in day_todos:
                 _todo_widget(t, cfg, modules_data, todo_state, monday, now, place="list", compact=False)
-    with right:
+
+    st.divider()
+    with st.container():
         st.subheader("📈 Fortschritt pro Modul")
         for module in cfg["modules"]:
             progress = planner.module_progress(modules_data[module["id"]])

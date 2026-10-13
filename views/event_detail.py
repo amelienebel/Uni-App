@@ -8,8 +8,8 @@ import streamlit as st
 
 from utils import ai, planner
 from utils.config import WEEKDAYS, get_module, load_config
-from utils.storage import (abs_data_path, chapter_label, get_notes, load_module, load_todos, save_module,
-                           save_todos)
+from utils.storage import (abs_data_path, chapter_label, get_notes, get_schedule, lecture_breaks, load_module,
+                           load_todos, save_module, save_todos)
 from views.common import open_module_tab
 
 EXERCISE_TYPES = ("Übung", "Tutorium")
@@ -66,8 +66,10 @@ def render(cfg: dict, ev: dict) -> None:
         if is_exercise:
             monday = planner.monday_of(ev_date)
             exercises = planner.exercises_of(module)
-            ex = next((e for e in exercises if e["due"] == ev_date), None) or \
-                next((e for e in exercises if e["week_of"] == monday), None)
+            schedule = get_schedule(load_config())
+            ex = next((e for e in exercises
+                       if planner.exercise_session(mid, e, schedule, lecture_breaks(load_config())) == ev_date), None) \
+                or next((e for e in exercises if e["week_of"] == monday), None)
             if ex:
                 chapter_id = ex.get("chapter_id")
                 st.markdown(f"**✏️ {ex['title']}**")

@@ -74,6 +74,63 @@ def tasks_of(module_cfg: dict) -> list[dict]:
             for i, t in enumerate(module_cfg.get("tasks", []))]
 
 
+PREP_DAYS_BEFORE = 1      # Vorlesung vorbereiten: 1 Tag vorher
+REVIEW_DAYS_AFTER = 2     # Vorlesung nachbereiten: 2 Tage danach
+EXERCISE_DAYS_BEFORE = 2  # Übungsblatt lösen: 2 Tage vor der Übung/dem Tutorium
+
+
+def exercise_session(module_id: str, ex: dict, schedule: list[dict], breaks=()) -> date:
+    """Datum der Übung/des Tutoriums, in dem das Blatt besprochen wird."""
+    if ex.get("due"):
+        return ex["due"]  # fester Termin laut Kursplan (z. B. Montags-Tutorium der Folgewoche)
+    sessions = [e["date"] for e in week_events(schedule, ex["week_of"])
+                if e.get("module_id") == module_id and e.get("type") in ("Übung", "Tutorium")
+                and not break_for(e["date"], breaks)]
+    return min(sessions) if sessions else ex["week_of"] + timedelta(days=4)
+
+
+def next_session(cfg: dict, module_cfg: dict, schedule: list[dict], now: date) -> dict | None:
+    """Nächster Termin eines Moduls (Vorlesung oder Übung/Tutorium) inkl. Thema bzw. Übungsblatt."""
+    from utils.storage import lecture_breaks, semester_dates
+
+    breaks = lecture_breaks(cfg)
+    _, sem_end = semester_dates(cfg)
+    module_id = module_cfg["id"]
+    lectures = {lec["date"]: lec for lec in lectures_of(module_cfg)}
+    exercises = exercises_of(module_cfg)
+    monday = monday_of(now)
+    # Sondertermine: Blatt mit festem Datum, an dem laut Stundenplan keine Übung/kein Tutorium stattfindet
+    session_days = {ev["date"] for week in range(0, 20) for ev in week_events(schedule, monday + timedelta(weeks=week))
+                    if ev.get("module_id") == module_id and ev.get("type") in ("Übung", "Tutorium")}
+    special = min(({"date": ex["due"], "type": "Übung", "start": ex.get("start", ""), "end": ex.get("end", ""),
+                    "room": ex.get("room", ""), "module_id": module_id, "topic": ex["title"],
+                    "chapter_id": ex.get("chapter_id")}
+                   for ex in exercises if ex["due"] and ex["due"] >= now and ex["due"] not in session_days),
+                  key=lambda e: e["date"], default=None)
+    regular = _next_regular(module_id, schedule, now, monday, sem_end, breaks, lectures, exercises)
+    candidates = [e for e in (special, regular) if e]
+    return min(candidates, key=lambda e: (e["date"], e.get("start", ""))) if candidates else None
+
+
+def _next_regular(module_id, schedule, now, monday, sem_end, breaks, lectures, exercises) -> dict | None:
+    for week in range(0, 20):
+        for ev in week_events(schedule, monday + timedelta(weeks=week)):
+            if ev.get("module_id") != module_id or ev["date"] < now or ev["date"] > sem_end \
+                    or break_for(ev["date"], breaks):
+                continue
+            if ev.get("type") == "Vorlesung":
+                lec = lectures.get(ev["date"])
+                if lectures and not lec:
+                    continue  # laut Kursplan keine Vorlesung (Ausfall)
+                return {**ev, "topic": lec["topic"] if lec else "", "chapter_id": lec.get("chapter_id") if lec else None}
+            if ev.get("type") in ("Übung", "Tutorium"):
+                ex = next((e for e in exercises if exercise_session(module_id, e, schedule, breaks) == ev["date"]), None)
+                if exercises and not ex:
+                    continue  # an diesem Termin ist laut Kursplan kein Blatt dran
+                return {**ev, "topic": ex["title"] if ex else "", "chapter_id": ex.get("chapter_id") if ex else None}
+    return None
+
+
 def lecture_key(module_id: str, lecture_date: date, field: str) -> str:
     return f"{module_id}:vl:{lecture_date.isoformat()}:{field}"
 
@@ -127,14 +184,14 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                    semester_start: date, semester_end: date, learning: dict, breaks=()) -> list[dict]:
     """Erzeugt konkrete Aufgaben mit Fristen für die Woche ab `monday`.
 
-    - Vorlesung vorbereiten: fällig `prep_days_before` Tage vor der Vorlesung
-    - Vorlesung nachbereiten: fällig `review_days_after` Tage nach der Vorlesung
+    - Vorlesung vorbereiten: fällig 1 Tag vor der Vorlesung
+    - Vorlesung nachbereiten: fällig 2 Tage nach der Vorlesung
+    - Übungsblatt lösen: fällig 2 Tage vor der Übung bzw. dem Tutorium
     - Übungsblatt lösen: fällig am Tag vor der Übung (Stoff der Vorwoche)
     - Spaced-Repetition-Wiederholungen und Klausurvorbereitung je nach Klausurnähe
     Aufgaben mit Kapitelbezug sind direkt mit dem Kapitelstatus verknüpft.
     """
-    prep_before = int(learning.get("prep_days_before", 1))
-    review_after = int(learning.get("review_days_after", 2))
+    prep_before, review_after = PREP_DAYS_BEFORE, REVIEW_DAYS_AFTER
     week = semester_week(semester_start, monday, breaks)
     in_lecture_period = monday_of(semester_start) <= monday <= semester_end
     todos: list[dict] = []
@@ -185,7 +242,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                 "module_id": module_id, "chapter_id": chapter["id"], "status_field": "uebung",
                 "kind": "Übungsblatt",
                 "title": f"Übungsblatt lösen – Kap. {idx}: {chapter['title']}",
-                "due": event["date"] - timedelta(days=1),
+                "due": event["date"] - timedelta(days=EXERCISE_DAYS_BEFORE),
             })
 
     # Module mit Ablaufplan aus dem Syllabus: konkrete Termine statt Wochenraster
@@ -193,7 +250,6 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
         module_id = module["id"]
         if module_id not in planned:
             continue
-        events = [e for e in week_events(schedule, monday) if e.get("module_id") == module_id]
         for lec in lectures_of(module):
             if not (monday <= lec["date"] <= sunday) or break_for(lec["date"], breaks):
                 continue
@@ -206,18 +262,14 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                  "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "nachbereitet",
                  "kind": "Nachbereitung", "title": f"Vorlesung nachbereiten – {label}",
                  "due": lec["date"] + timedelta(days=review_after)})
-        exercise_events = [e for e in events if e.get("type") in ("Übung", "Tutorium")
-                           and not break_for(e["date"], breaks)]
         for ex in exercises_of(module):
-            if ex["week_of"] != monday:
+            session = exercise_session(module_id, ex, schedule, breaks)
+            due = session - timedelta(days=EXERCISE_DAYS_BEFORE)
+            if not (monday <= due <= sunday):
                 continue
-            if ex["due"]:
-                due = ex["due"]  # feste Frist laut Kursplan (z. B. Besprechung erst in der Folgewoche)
-            else:
-                due = exercise_events[0]["date"] - timedelta(days=1) if exercise_events else monday + timedelta(days=4)
             add({"key": exercise_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),
                  "status_field": None, "sync": "uebung", "kind": "Übungsblatt",
-                 "title": f"Übung vorbereiten – {ex['title']}", "due": max(due, monday)})
+                 "title": f"Übungsblatt lösen – {ex['title']}", "due": due})
 
     # Zusätzliche Termine mit Zeitraum (Klausuranmeldung, Quizze, Extra-Sessions) – für alle Module
     for module in cfg["modules"]:

@@ -16,7 +16,7 @@ st.set_page_config(page_title="BWL-Lernplattform LMU", page_icon="🎓", layout=
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
 from utils.config import WEEKDAYS, get_secret, load_config, module_ids, module_label  # noqa: E402
 from views import bulk_upload, dashboard, export_view, formulas, module_view, settings_view  # noqa: E402
-from views.common import NAV_PAGES  # noqa: E402
+from views.common import NAV_PAGES, goto  # noqa: E402
 
 
 
@@ -61,6 +61,8 @@ st.markdown("""
 <style>
   div[data-testid="stMetricValue"] { font-size: 1.6rem; }
   .small-muted { color: #888; font-size: 0.85rem; }
+  /* Modul-Unterpunkte in der Seitenleiste: eingerückt, linksbündig */
+  [class*="st-key-navmod_"] button { justify-content: flex-start; padding-left: 1.6rem; min-height: 2rem; }
   /* Handy: weniger Rand, kleinere Überschriften, Reiter horizontal scrollbar */
   @media (max-width: 640px) {
     .block-container { padding: 2.8rem 0.7rem 4rem 0.7rem !important; }
@@ -77,12 +79,15 @@ with st.sidebar:
     st.caption(f"{cfg['app'].get('semester_label', '')} · {WEEKDAYS[storage.today().weekday()]}, {storage.today():%d.%m.%Y}")
     page = st.radio("Hauptnavigation", NAV_PAGES, key="nav", label_visibility="collapsed")
 
-    module_id = None
-    if page == NAV_PAGES[1]:
-        if st.session_state.get("nav_module") not in ids:
-            st.session_state["nav_module"] = ids[0]
-        module_id = st.selectbox("📚 Modul wählen", ids, key="nav_module",
-                                 format_func=lambda mid: module_label(cfg, mid))
+    # Module direkt als Unterpunkte (ohne Aufklappen)
+    if st.session_state.get("nav_module") not in ids:
+        st.session_state["nav_module"] = ids[0]
+    module_id = st.session_state["nav_module"]
+    st.markdown("<div class='small-muted' style='margin:0.4rem 0 0.2rem 0'>Module</div>", unsafe_allow_html=True)
+    for mid in ids:
+        active = page == NAV_PAGES[1] and mid == module_id
+        st.button(module_label(cfg, mid, short=True), key=f"navmod_{mid}", type="primary" if active else "tertiary",
+                  width="stretch", on_click=goto, args=(1, mid))
 
     st.divider()
     st.markdown("**Nächste Klausuren**")

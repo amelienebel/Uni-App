@@ -16,7 +16,7 @@ NAV_PAGES = [
     "🏠 Wochenübersicht & Lernplan",
     "📚 Modul-Bereiche",
     "📐 Zentrale Formelsammlung",
-    "📂 Bulk-Upload & Moodle-Import",
+    "📂 Bulk-Upload",
     "📥 Export & Backup",
     "⚙️ Einstellungen & Klausurtermine",
 ]

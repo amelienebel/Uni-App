@@ -7,8 +7,8 @@ import streamlit as st
 from utils import ai, planner
 from utils.config import get_module
 from utils.pdf_parser import heuristic_analysis
-from utils.storage import (add_document, add_formulas, chapter_label, documents_of, get_document_pages,
-                           get_document_text, load_module, now_iso, save_module, today)
+from utils.storage import (add_document, chapter_label, documents_of, get_document_pages,
+                           get_document_text, load_module, now_iso, save_module, suggest_formulas, today)
 from views.common import ai_hint, chapter_select, render_formula
 
 ANALYSIS_PROMPT = """Bereite mich auf die kommende Vorlesung vor. Unten stehen die Folien aus Moodle für das Modul
@@ -44,10 +44,12 @@ def _run_analysis(cfg: dict, module_id: str, doc: dict) -> None:
     result["created_at"] = now_iso()
     doc["analysis"] = result
     save_module(module_id)
-    added = add_formulas(module_id, result.get("formulas", []),
-                         source=f"{doc['filename']} ({'KI' if result['mode'] == 'ki' else 'heuristisch'})",
-                         chapter_id=doc.get("chapter_id"))
-    st.session_state[f"prep_msg_{module_id}"] = f"Analyse fertig. {added} neue Formel(n) in die Formelsammlung übernommen."
+    added = suggest_formulas(module_id, result.get("formulas", []),
+                             source=f"{doc['filename']} ({'KI' if result['mode'] == 'ki' else 'heuristisch'})",
+                             chapter_id=doc.get("chapter_id"))
+    st.session_state[f"prep_msg_{module_id}"] = (
+        f"Analyse fertig. {added} Formel-Vorschlag/-Vorschläge – bitte im Reiter „📐 Formelsammlung“ prüfen, "
+        "welche übernommen werden sollen." if added else "Analyse fertig.")
 
 
 def render(cfg: dict, module_id: str) -> None:

@@ -1,4 +1,4 @@
-"""📂 Bulk-Upload: viele PDFs (oder ZIP-Ordner) automatisch zuordnen."""
+"""📂 Bulk-Upload: viele PDFs (oder ZIP-Ordner) automatisch Modul, Vorlesung bzw. Übung zuordnen."""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ import zipfile
 import pandas as pd
 import streamlit as st
 
+from utils import ai, units
 from utils.config import get_module, module_label
+from utils.learning import run_analysis
 from utils.pdf_parser import (extract_pdf, guess_chapter_from_plan, guess_chapter_index,
                               guess_doc_type, guess_module,
                               pdfs_from_zip)
@@ -40,11 +42,14 @@ def _upload_tab(cfg: dict) -> None:
     st.markdown(
         "Lade ganze Wochenordner hoch – einzelne PDFs oder den **ZIP-Download eines Moodle-Ordners**. "
         "Die App ordnet jede Datei anhand von Dateiname, Ordnerpfad und Inhalt automatisch **Modul**, "
-        "**Dokumenttyp** (Folien, Übungsblatt, Musterlösung, Altklausur) und **Kapitel** zu. "
-        "Du kannst die Zuordnung vor dem Import korrigieren.")
+        "**Dokumenttyp** (Folien, Übungsblatt, Musterlösung, Altklausur) und **Kapitel** zu – und damit der "
+        "passenden **Vorlesung bzw. Übung**. Du kannst die Zuordnung vor dem Import korrigieren. "
+        "Von Folien wird direkt die Zusammenfassung erstellt.")
     if result := st.session_state.pop("bulk_result", None):
         st.success(f"✅ {result[0]} Datei(en) importiert"
                    + (f", {result[1]} Duplikat(e) übersprungen." if result[1] else "."))
+        for err in result[2]:
+            st.error(err)
 
     files = st.file_uploader("PDFs oder ZIP-Archive", type=["pdf", "zip"], accept_multiple_files=True,
                              key=f"bulk_files_{st.session_state.get('bulk_round', 0)}")
@@ -110,7 +115,8 @@ def _upload_tab(cfg: dict) -> None:
     if st.button("📥 Ausgewählte Dateien importieren", type="primary"):
         name_to_id = {v: k for k, v in module_names.items()}
         type_to_key = {v: k for k, v in type_names.items()}
-        imported, skipped = 0, 0
+        imported, skipped, to_analyse, errors = 0, 0, [], []
+        unit_cache: dict[str, tuple[list, list]] = {}
         for item, (_, row) in zip(items, edited.iterrows()):
             if not row["Importieren"]:
                 continue
@@ -122,13 +128,28 @@ def _upload_tab(cfg: dict) -> None:
                 continue
             chapter_nr = int(row["Kapitel-Nr."] or 0)
             chapter_id = data["chapters"][chapter_nr - 1]["id"] if 1 <= chapter_nr <= len(data["chapters"]) else None
-            doc = add_document(module_id, item["name"], item["content"], type_to_key[row["Typ"]], chapter_id,
-                               extracted=item["extracted"])
+            if module_id not in unit_cache:
+                unit_cache[module_id] = units.all_units(cfg, get_module(cfg, module_id), data)
+            doc_type = type_to_key[row["Typ"]]
+            unit = units.guess_unit(item["path"], doc_type, chapter_id, *unit_cache[module_id])
+            doc = add_document(module_id, item["name"], item["content"], doc_type, chapter_id,
+                               extracted=item["extracted"], unit=unit)
             doc["hash"] = row["_hash"]
             save_module(module_id)
             imported += 1
+            if doc_type == "folien" and doc["n_chars"] >= 50:
+                to_analyse.append((module_id, doc))
+        if to_analyse:
+            bar = st.progress(0.0, text="Erstelle Zusammenfassungen der Folien …")
+            for i, (module_id, doc) in enumerate(to_analyse):
+                bar.progress(i / len(to_analyse), text=f"Fasse {doc['filename']} zusammen …")
+                try:
+                    run_analysis(cfg, module_id, doc)
+                except ai.AIError as exc:
+                    errors.append(f"{doc['filename']}: Zusammenfassung fehlgeschlagen – {exc}")
+            bar.empty()
         st.session_state["bulk_round"] = st.session_state.get("bulk_round", 0) + 1
-        st.session_state["bulk_result"] = (imported, skipped)
+        st.session_state["bulk_result"] = (imported, skipped, errors)
         st.rerun()
 
 

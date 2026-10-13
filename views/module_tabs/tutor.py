@@ -17,44 +17,51 @@ TUTOR_SYSTEM = (
 )
 
 
-def render(cfg: dict, module_id: str) -> None:
+def render(cfg: dict, module_id: str, scope_key: str = "main", context: str | None = None,
+           scope_label: str | None = None) -> None:
+    """Tutor-Chat zum ganzen Modul oder – mit scope_key/context – zu ausgewählten Vorlesungen."""
     module = get_module(cfg, module_id)
     data = load_module(module_id)
+    history = data["chat"] if scope_key == "main" else data.setdefault("chats", {}).setdefault(scope_key, [])
 
-    st.subheader("💬 Verständnis-Chat")
     if not ai.is_available():
         st.info("Der Tutor-Chat benötigt einen API-Key (`ANTHROPIC_API_KEY` in `.env`).", icon="🔌")
         return
 
     c1, c2 = st.columns([3, 1])
-    fulltext = c1.toggle("Volltexte aller Unterlagen einbeziehen (genauer, aber mehr Tokens)",
-                         key=f"tutor_full_{module_id}")
-    if c2.button("🧹 Chat leeren", key=f"tutor_clear_{module_id}"):
-        data["chat"] = []
+    if context is None:
+        fulltext = c1.toggle("Volltexte aller Unterlagen einbeziehen (genauer, aber mehr Tokens)",
+                             key=f"tutor_full_{module_id}")
+        context, size = module_context(module_id, include_fulltext=fulltext)
+    else:
+        size = len(context)
+        if scope_label:
+            c1.caption(f"Bezieht sich auf: {scope_label}")
+    if c2.button("🧹 Chat leeren", key=f"tutor_clear_{module_id}_{scope_key}"):
+        history.clear()
         save_module(module_id)
         st.rerun()
-    context, size = module_context(module_id, include_fulltext=fulltext)
     st.caption(f"Kontext: ca. {size // 4:,} Tokens".replace(",", ".")
                + " · wird gecacht, Folgefragen sind günstiger.")
 
-    if not data["chat"]:
+    if not history:
         st.markdown("_Beispiele:_ „Erklär mir den Unterschied zwischen Kapitalwert und Annuität“, "
                     "„Stell mir drei Fragen zu Kapitel 2“, „Wo liegt mein Fehler in dieser Rechnung: …“")
 
-    chat_box = st.container(height=520)
+    chat_box = st.container(height=460)
     with chat_box:
-        for msg in data["chat"]:
+        for msg in history:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-    prompt = st.chat_input(f"Frage zu {module['short']} …", key=f"tutor_input_{module_id}")
+    prompt = st.chat_input(f"Frage zu {module['short']} …", key=f"tutor_input_{module_id}_{scope_key}")
     if prompt:
-        data["chat"].append({"role": "user", "content": prompt})
+        history.append({"role": "user", "content": prompt})
         with chat_box:
             with st.chat_message("user"):
                 st.markdown(prompt)
             with st.chat_message("assistant"):
                 answer = st.write_stream(ai.stream_chat(
-                    data["chat"], system=TUTOR_SYSTEM.format(module=module["name"], context=context)))
-        data["chat"].append({"role": "assistant", "content": answer if isinstance(answer, str) else "".join(map(str, answer))})
+                    history, system=TUTOR_SYSTEM.format(module=module["name"], context=context)))
+        history.append({"role": "assistant", "content": answer if isinstance(answer, str) else "".join(map(str, answer))})
         save_module(module_id)

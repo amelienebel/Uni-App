@@ -12,8 +12,7 @@ from utils import planner
 from utils.config import WEEKDAYS, get_module, module_label
 from utils.storage import (get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
-from views.common import MODULE_TAB_LABELS, escape, goto
-from views.event_detail import toggle_todo
+from views.common import escape, goto, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -138,14 +137,13 @@ def _open_event(ev: dict) -> None:
     """Klick auf eine Veranstaltung: Details merken und direkt ins Modul springen."""
     _select_event(ev)
     goto(1, ev["module_id"])
-    st.session_state[f"mtabs_{ev['module_id']}"] = MODULE_TAB_LABELS["syllabus"]
 
 
 def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:
     module = get_module(cfg, ev["module_id"])
     with st.container(key=f"evcard_{ev['module_id']}_{key}"):
         st.button(f"{module['icon']} {module['short']} · {ev.get('type', '')}", key=f"evbtn_{key}",
-                  type="tertiary", on_click=_open_event, args=(ev,), help="Modul mit allen Unterlagen öffnen")
+                  type="tertiary", on_click=_open_event, args=(ev,), help="Vorlesung bzw. Übung mit allen Unterlagen öffnen")
         when = f"{ev.get('start', '')}–{ev.get('end', '')}"
         st.caption(f"{when}  \n{ev.get('room', '')}" if ev.get("room") else when)
 
@@ -230,7 +228,7 @@ def render(cfg: dict) -> None:
             continue
 
     list_view = st.toggle("📱 Listenansicht (fürs Handy)", key="dash_list_view")
-    st.caption("Tippe auf eine Veranstaltung, um das Modul mit Dateien, Vor- und Nachbereitung zu öffnen · "
+    st.caption("Tippe auf eine Veranstaltung, um die Vorlesung bzw. Übung mit Dateien, Vor- und Nachbereitung zu öffnen · "
                "↔️ verschiebt ein To-do.")
 
     # --- Stundenplan-Raster ---------------------------------------------------

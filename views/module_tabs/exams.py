@@ -82,12 +82,15 @@ def _offline_quiz(data: dict, chapter_ids: list[str], n: int) -> list[dict]:
     return questions[:n]
 
 
-def _quiz_section(cfg: dict, module_id: str, data: dict) -> None:
+def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main", scope_label: str | None = None,
+                 context: str | None = None, chapter_ids: list[str] | None = None) -> None:
+    """Quiz zum ganzen Modul, zu ausgewählten Vorlesungen (scope_label + context) oder zu einer Vorlesung."""
     module = get_module(cfg, module_id)
     has_ai = ai_hint("Der Quiz-Generator")
-    with st.form(f"quiz_cfg_{module_id}"):
-        chapter_ids = st.multiselect("Kapitel", [ch["id"] for ch in data["chapters"]],
-                                     format_func=lambda cid: chapter_label(data, cid))
+    with st.form(f"quiz_cfg_{module_id}_{scope_key}"):
+        if chapter_ids is None:
+            chapter_ids = st.multiselect("Kapitel", [ch["id"] for ch in data["chapters"]],
+                                         format_func=lambda cid: chapter_label(data, cid))
         c1, c2, c3 = st.columns(3)
         types = c1.selectbox("Fragetyp", ["Gemischt", "Multiple Choice", "Freitext"])
         n = c2.slider("Anzahl", 3, 20, 6)
@@ -98,13 +101,14 @@ def _quiz_section(cfg: dict, module_id: str, data: dict) -> None:
         with st.spinner("Erstelle Quiz …"):
             try:
                 if has_ai:
-                    context, _ = module_context(module_id)
+                    if context is None:
+                        context, _ = module_context(module_id)
                     exam_hint = ""
                     exams = documents_of(data, ("altklausur",))
                     if use_exams and exams:
                         exam_hint = ("\nOrientiere dich an Aufbau und Stil dieser Altklausuren:\n<altklausuren>\n"
                                      + "\n\n".join(get_document_text(d) for d in exams) + "\n</altklausuren>\n")
-                    titles = ", ".join(chapter_label(data, c) for c in chapter_ids) or "alle Kapitel"
+                    titles = scope_label or ", ".join(chapter_label(data, c) for c in chapter_ids) or "alle Kapitel"
                     type_text = {"Gemischt": "gemischt (ca. halb MC, halb Freitext)", "Multiple Choice": "nur mc",
                                  "Freitext": "nur freitext"}[types]
                     result = ai.complete_json(QUIZ_PROMPT.format(module=module["name"], chapters=titles, n=n,
@@ -122,15 +126,16 @@ def _quiz_section(cfg: dict, module_id: str, data: dict) -> None:
                     st.warning("Offline konnten keine Fragen erzeugt werden – lege zuerst Formeln oder Lernkarten an.")
                 else:
                     data["quizzes"].append({"id": new_id(), "created_at": now_iso(), "questions": questions,
-                                            "chapters": chapter_ids, "results": {}})
-                    data["quizzes"] = data["quizzes"][-20:]
+                                            "chapters": chapter_ids, "results": {}, "scope": scope_key})
+                    data["quizzes"] = data["quizzes"][-30:]
                     save_module(module_id)
             except ai.AIError as exc:
                 st.error(str(exc))
 
-    if not data["quizzes"]:
+    quizzes = [q for q in data["quizzes"] if q.get("scope", "main") == scope_key]
+    if not quizzes:
         return
-    quiz = data["quizzes"][-1]
+    quiz = quizzes[-1]
     st.markdown(f"#### 📝 Aktuelles Quiz ({len(quiz['questions'])} Fragen, erstellt {quiz['created_at'][:16].replace('T', ' ')})")
     total, reached = 0, 0
     for i, q in enumerate(quiz["questions"]):
@@ -268,14 +273,10 @@ def _signal_section(cfg: dict, module_id: str, data: dict) -> None:
             st.markdown(f"1. {rec}")
 
 
-def render(cfg: dict, module_id: str) -> None:
+def altklausuren(cfg: dict, module_id: str) -> None:
     data = load_module(module_id)
-    st.subheader("🎯 Klausuren, Quiz & Signalwort-Analyse")
-    t1, t2, t3 = st.tabs(["🎲 Quiz-Generator", "📄 Altklausuren", "🔎 Signalwort-Analyse"])
+    t1, t2 = st.tabs(["📄 Altklausuren", "🔎 Signalwort-Analyse"])
     with t1:
-        _quiz_section(cfg, module_id, data)
-    with t2:
         _altklausuren_section(cfg, module_id, data)
-    with t3:
+    with t2:
         _signal_section(cfg, module_id, data)
-

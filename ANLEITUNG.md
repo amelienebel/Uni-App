@@ -103,7 +103,7 @@ Jetzt startest du die Lernplattform wie jede andere App über ihr Symbol.
   Deine Daten sind dabei sicher, sie werden aus dem GitHub-Speicher wieder geladen.
 - **Wird gespeichert?** Unten in der Seitenleiste steht **„☁️ Alles im Cloud-Speicher gesichert“**. Änderungen
   werden spätestens nach einer Minute gesichert; mit **„Jetzt sichern“** geht es sofort.
-- **Fotos von Tafelbildern:** Im Reiter *Nachbereitung* kannst du am Handy direkt die Kamera verwenden.
+- **Fotos von Tafelbildern:** Auf der Seite einer Vorlesung unter *Nachbereiten* kannst du am Handy direkt die Kamera verwenden.
 - **Kosten:** Streamlit und GitHub sind kostenlos. Die KI kostet je nach Nutzung – behalte dein Guthaben in der
   Anthropic-Konsole im Blick. Günstigere KI-Modelle kannst du in der App unter ⚙️ Einstellungen wählen.
 - **Schlüssel oder Passwort ändern:** Auf share.streamlit.io bei deiner App auf **⋮** → **„Settings“** →

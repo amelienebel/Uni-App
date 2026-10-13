@@ -335,7 +335,7 @@ def delete_data_file(rel_path: str | None) -> None:
 
 
 def add_document(module_id: str, filename: str, content: bytes, doc_type: str,
-                 chapter_id: str | None, extracted: dict | None = None) -> dict:
+                 chapter_id: str | None, extracted: dict | None = None, unit: str | None = None) -> dict:
     """Legt ein PDF-Dokument an: Datei speichern, Text extrahieren, Metadaten anlegen."""
     from utils.pdf_parser import extract_pdf  # lokaler Import vermeidet Zyklen
 
@@ -350,11 +350,31 @@ def add_document(module_id: str, filename: str, content: bytes, doc_type: str,
         "path": rel_path,
         "doc_type": doc_type,
         "chapter_id": chapter_id,
+        "unit": unit,
         "n_pages": len(extracted["pages"]),
         "n_chars": sum(len(p) for p in extracted["pages"]),
         "uploaded_at": now_iso(),
         "analysis": None,
     }
+    data["documents"].append(doc)
+    save_module(module_id)
+    return doc
+
+
+IMAGE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp",
+               "gif": "image/gif"}
+
+
+def add_file(module_id: str, filename: str, content: bytes, doc_type: str, chapter_id: str | None,
+             unit: str | None) -> dict:
+    """PDF (mit Textextraktion) oder Foto (z. B. handschriftliche Lösung) einer Einheit hinzufügen."""
+    ext = Path(filename).suffix.lower().lstrip(".")
+    if ext not in IMAGE_TYPES:
+        return add_document(module_id, filename, content, doc_type, chapter_id, unit=unit)
+    data = load_module(module_id)
+    doc = {"id": new_id(), "filename": filename, "path": save_upload(module_id, filename, content, "images"),
+           "doc_type": doc_type, "chapter_id": chapter_id, "unit": unit, "kind": "image",
+           "mime": IMAGE_TYPES[ext], "n_pages": 0, "n_chars": 0, "uploaded_at": now_iso(), "analysis": None}
     data["documents"].append(doc)
     save_module(module_id)
     return doc

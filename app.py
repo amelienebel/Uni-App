@@ -16,7 +16,7 @@ st.set_page_config(page_title="BWL-Lernplattform LMU", page_icon="🎓", layout=
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
 from utils.config import WEEKDAYS, get_secret, load_config, module_ids, module_label  # noqa: E402
 from views import bulk_upload, dashboard, export_view, formulas, module_view, settings_view  # noqa: E402
-from views.common import NAV_PAGES, goto  # noqa: E402
+from views.common import NAV_PAGES, open_unit  # noqa: E402
 
 
 
@@ -63,6 +63,10 @@ st.markdown("""
   .small-muted { color: #888; font-size: 0.85rem; }
   /* Modul-Unterpunkte in der Seitenleiste: eingerückt, linksbündig */
   [class*="st-key-navmod_"] button { justify-content: flex-start; padding-left: 1.6rem; min-height: 2rem; }
+  [class*="st-key-navmod_"] button div, [class*="st-key-row_"] button div { justify-content: flex-start;
+    text-align: left; }
+  [class*="st-key-row_"] button { justify-content: flex-start; text-align: left; }
+  [class*="st-key-row_"] { margin-bottom: -0.6rem; }
   /* Handy: weniger Rand, kleinere Überschriften, Reiter horizontal scrollbar */
   @media (max-width: 640px) {
     .block-container { padding: 2.8rem 0.7rem 4rem 0.7rem !important; }
@@ -87,7 +91,7 @@ with st.sidebar:
     for mid in ids:
         active = page == NAV_PAGES[1] and mid == module_id
         st.button(module_label(cfg, mid, short=True), key=f"navmod_{mid}", type="primary" if active else "tertiary",
-                  width="stretch", on_click=goto, args=(1, mid))
+                  width="stretch", on_click=open_unit, args=(mid, None))
 
     st.divider()
     st.markdown("**Nächste Klausuren**")

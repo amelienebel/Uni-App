@@ -29,25 +29,33 @@ def goto(page_index: int, module_id: str | None = None) -> None:
         st.session_state["nav_module"] = module_id
 
 
-MODULE_TAB_LABELS = {
-    "syllabus": "📖 Syllabus & Kapitel",
-    "prep": "🎬 Vorlesungsvorbereitung",
-    "review": "📝 Nachbereitung",
-    "cards": "🃏 Spaced Repetition",
-    "formulas": "📐 Formelsammlung",
-    "exams": "🎯 Klausuren & Quiz",
-    "notes": "🗒️ Notizen",
-    "chat": "💬 Verständnis-Chat",
-}
+def toggle_todo(todo: dict, widget_key: str) -> None:
+    """Callback für Abhak-Kästchen (Wochenübersicht, Vorlesungs- und Übungsseiten)."""
+    from utils import planner
+    from utils.storage import load_todos, save_module, save_todos
+
+    value = st.session_state[widget_key]
+    if todo.get("status_field"):
+        data = load_module(todo["module_id"])
+        for ch in data["chapters"]:
+            if ch["id"] == todo["chapter_id"]:
+                ch["status"][todo["status_field"]] = value
+        save_module(todo["module_id"])
+        return
+    state = load_todos()
+    state[todo["key"]] = value
+    save_todos()
+    if todo.get("sync") and todo.get("chapter_id"):
+        data = load_module(todo["module_id"])
+        planner.sync_chapter_status(get_module(load_config(), todo["module_id"]), data, todo["chapter_id"],
+                                    todo["sync"], state)
+        save_module(todo["module_id"])
 
 
-def open_module_tab(module_id: str, tab: str, chapter_id: str | None = None) -> None:
-    """Callback: springt in ein Modul, öffnet einen Reiter und wählt (falls angegeben) das Kapitel vor."""
+def open_unit(module_id: str, unit_id: str | None) -> None:
+    """Callback: Vorlesung/Übung öffnen (None = zurück zum Ablauf)."""
     goto(1, module_id)
-    st.session_state[f"mtabs_{module_id}"] = MODULE_TAB_LABELS[tab]
-    if chapter_id:
-        st.session_state[f"rev_ch_{module_id}"] = chapter_id
-        st.session_state[f"prep_focus_{module_id}"] = chapter_id
+    st.session_state[f"unit_{module_id}"] = unit_id
 
 
 def ai_hint(feature: str = "Diese Funktion") -> bool:
@@ -119,6 +127,14 @@ def module_context(module_id: str, include_fulltext: bool = False) -> tuple[str,
                    if notes.get(field, "").strip()]
         if content:
             notes_parts.append(f"### {chapter_label(data, ch['id'])}\n" + "\n".join(content))
+    for unit_id, notes in sorted(data.get("lecture_notes", {}).items()):
+        content = [f"{label}: {notes[field]}" for field, label in
+                   (("text", "Notizen"), ("emphasized", "Vom Dozenten betont"),
+                    ("briefly", "Nur kurz angerissen"), ("examples", "Beispiele aus der Vorlesung"))
+                   if (notes.get(field) or "").strip()]
+        content += [f"Tafelbild: {img['transcript']}" for img in notes.get("images", []) if img.get("transcript")]
+        if content:
+            notes_parts.append(f"### Vorlesung vom {unit_id.removeprefix('vl:')}\n" + "\n".join(content))
     if notes_parts:
         parts += ["", "## Eigene Vorlesungsnotizen"] + notes_parts
 

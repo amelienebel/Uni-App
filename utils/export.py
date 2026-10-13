@@ -55,9 +55,21 @@ def build_blocks(cfg: dict, modules_data: dict[str, dict], module_ids: list[str]
                     notes = get_notes(data, ch["id"])
                     ch_blocks.append(("h3", "Eigene Notizen"))
                     for field, label in (("text", "Notizen"), ("emphasized", "Vom Dozenten betont"),
-                                         ("briefly", "Nur kurz angerissen"), ("examples", "Genannte Beispiele"),
-                                         ("pitch", "Audio-Pitch")):
+                                         ("briefly", "Nur kurz angerissen"), ("examples", "Genannte Beispiele")):
                         if notes.get(field, "").strip():
+                            ch_blocks.append(("h4", label))
+                            ch_blocks.append(("p", notes[field]))
+            if include.get("notes"):
+                for lec in module.get("lectures", []):
+                    notes = data.get("lecture_notes", {}).get(f"vl:{lec['date']}") or {}
+                    if lec.get("chapter_id") != ch["id"] or not any(
+                            (notes.get(k) or "").strip() for k in ("text", "emphasized", "briefly", "examples")):
+                        continue
+                    ch_blocks.append(("h3", f"Nachbereitung Vorlesung {lec['date'][8:10]}.{lec['date'][5:7]}.: "
+                                            f"{lec.get('topic', '')}"))
+                    for field, label in (("text", "Notizen"), ("emphasized", "Vom Dozenten betont"),
+                                         ("briefly", "Nur kurz angerissen"), ("examples", "Genannte Beispiele")):
+                        if (notes.get(field) or "").strip():
                             ch_blocks.append(("h4", label))
                             ch_blocks.append(("p", notes[field]))
             if include.get("formulas"):

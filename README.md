@@ -28,7 +28,7 @@ ablegen. Daten bleiben über einen privaten GitHub-Speicher erhalten, ein Passwo
 | Bereich | Inhalt |
 |---|---|
 | 🏠 **Wochenübersicht & Lernplan** | Klausur-Countdown, Wochenraster aus dem Stundenplan, generierte To-dos mit Fristen (Vorlesung vor-/nachbereiten, Übungsblatt, Wiederholung, Altklausur), Fortschrittsbalken pro Modul, priorisierter Lernfahrplan |
-| 📚 **Modul-Bereiche** | Pro Modul 7 Reiter: Syllabus & Kapitel · Vorlesungsvorbereitung · Nachbereitung · Spaced Repetition · Formelsammlung · Klausuren & Quiz · Verständnis-Chat |
+| 📚 **Modul-Bereiche** | Pro Modul 3 Reiter: **Ablauf** (Kapitel mit Vorlesungen, Übungen und Tutorien – jede Vorlesung/Übung hat eine eigene Seite mit Dateien, Vorbereitung, Nachbereitung und Lernen) · **Lernen & Klausur** (mehrere Vorlesungen auswählen: Karteikarten, Quiz, Tutor, Altklausuren) · **Formeln & Notizen** |
 | 📐 **Zentrale Formelsammlung** | Alle Formeln modulübergreifend, filter- und durchsuchbar, LaTeX-Rendering mit `st.latex`, Markdown-Download |
 | 📂 **Bulk-Upload** | Viele PDFs oder Moodle-ZIP-Ordner auf einmal; automatische Zuordnung zu Modul, Dokumenttyp und Kapitel, vor dem Import korrigierbar |
 | 📥 **Export & Backup** | Notizen, Zusammenfassungen, Formeln, Karten als Markdown oder PDF; komplettes Backup/Restore als ZIP |
@@ -42,7 +42,7 @@ ablegen. Daten bleiben über einen privaten GitHub-Speicher erhalten, ein Passwo
 - **Bewertung:** „Gar nicht kann“, „Etwas kann“, „Gut kann“, „Perfekt kann“ → SM-2-Logik (Anki-Prinzip).
 - **To-dos ↔ Kapitelstatus:** Abhaken von „Vorlesung vorbereiten/nachbereiten/Übungsblatt“ setzt den Kapitelstatus –
   daraus berechnet sich der Fortschrittsbalken (70 % Kapitel, 30 % Kartenbeherrschung).
-- **Audio-Pitch:** wird nur auf Klick erzeugt (spart Tokens) und lokal im Browser vorgelesen (Web Speech API).
+- **Folien-Zusammenfassung:** wird direkt nach dem Hochladen erstellt. **Karteikarten** decken den gesamten Stoff ab (Folien + Nachbereitung) und werden beim Abschließen der Nachbereitung automatisch erstellt bzw. ergänzt.
 - **Signalwort-Analyse:** erkennt Operatoren wie „Erläutern Sie“, „Berechnen Sie“, „Zeigen Sie rechnerisch“,
   „Bilden Sie die Buchungssätze“, ordnet Anforderungsbereiche zu und erklärt, wie die Antwort aufgebaut sein muss.
 
@@ -72,7 +72,7 @@ data/                       Deine Lerndaten (nicht im Git, siehe .gitignore)
 - **Weiteres Modul:** einfach einen Eintrag in `config.json` → `modules` ergänzen (id, name, short, icon, keywords,
   schedule, chapters, base_formulas). Es erscheint automatisch überall.
 - **Stundenplan & Kapitel:** Die Vorgaben in `config.json` sind **Beispielwerte**. Trage deinen echten LSF-Stundenplan
-  unter ⚙️ Einstellungen ein und passe die Kapitel im Reiter „Syllabus & Kapitel“ an den tatsächlichen Vorlesungsverlauf an.
+  unter ⚙️ Einstellungen ein und passe die Kapitel im Reiter „Ablauf“ (⚙️ Kapitel bearbeiten) an den tatsächlichen Vorlesungsverlauf an.
 - **KI-Modell:** Standard ist Claude Opus 5.5 mit Effort „Mittel“. Sonnet 5.5 bzw. Haiku 5.5 sind günstiger.
   Für Opus/Sonnet ist der serverseitige Fallback (`fallbacks="default"`) aktiv: Lehnt das Modell eine Anfrage ab,
   übernimmt automatisch ein anderes Modell.

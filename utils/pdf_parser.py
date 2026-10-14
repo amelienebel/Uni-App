@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import io
 import re
 import zipfile
@@ -12,30 +13,33 @@ import streamlit as st
 MAX_ZIP_MEMBER_BYTES = 150 * 1024 * 1024  # Schutz vor übergroßen Archiv-Einträgen
 
 
-@st.cache_data(show_spinner=False, max_entries=64)
+@st.cache_data(show_spinner=False, max_entries=8)
 def extract_pdf(content: bytes) -> dict:
-    """Extrahiert den Text seitenweise. pdfplumber zuerst, pypdf als Fallback."""
+    """Extrahiert den Text seitenweise. pypdf zuerst (sparsam), pdfplumber nur als Fallback bei kleinen Dateien."""
     pages: list[str] = []
-    method = "pdfplumber"
+    method = "pypdf"
     try:
-        import pdfplumber
+        from pypdf import PdfReader
 
-        with pdfplumber.open(io.BytesIO(content)) as pdf:
-            for page in pdf.pages:
-                pages.append(page.extract_text() or "")
+        reader = PdfReader(io.BytesIO(content))
+        pages = [(page.extract_text() or "") for page in reader.pages]
     except Exception:  # noqa: BLE001 - jede Parser-Ausnahme -> Fallback
         pages = []
-    if not any(p.strip() for p in pages):
-        method = "pypdf"
+    # pdfplumber braucht viel Arbeitsspeicher – nur für kleinere PDFs, wenn pypdf nichts findet
+    if not any(p.strip() for p in pages) and len(content) <= 25 * 1024 * 1024:
+        method = "pdfplumber"
         try:
-            from pypdf import PdfReader
+            import pdfplumber
 
-            reader = PdfReader(io.BytesIO(content))
-            pages = [(page.extract_text() or "") for page in reader.pages]
+            with pdfplumber.open(io.BytesIO(content)) as pdf:
+                pages = []
+                for page in pdf.pages:
+                    pages.append(page.extract_text() or "")
+                    page.flush_cache()
         except Exception:  # noqa: BLE001
-            pages = pages or []
             method = "fehlgeschlagen"
     pages = [_clean(p) for p in pages]
+    gc.collect()
     return {"pages": pages, "method": method}
 
 

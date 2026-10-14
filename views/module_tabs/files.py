@@ -70,9 +70,10 @@ def file_list(module_id: str, docs: list[dict], key: str, all_units: list[dict] 
     units = unit_options(cfg, module_id)[1] if show_unit else {}
     for doc in docs:
         try:
-            content = abs_data_path(doc["path"]).read_bytes()
-        except (ValueError, OSError, KeyError):
-            content = None
+            path = abs_data_path(doc["path"])
+            path = path if path.exists() else None
+        except (ValueError, KeyError):
+            path = None
         c1, c2, c3 = st.columns([6, 1.3, 1], vertical_alignment="center")
         extra = ""
         if show_unit:
@@ -82,14 +83,15 @@ def file_list(module_id: str, docs: list[dict], key: str, all_units: list[dict] 
         c1.markdown(f"**{doc['filename']}**  \n<span class='small-muted'>{doc_type_label(doc['doc_type'])}"
                     f"{' · ' + str(doc['n_pages']) + ' Seiten' if doc.get('n_pages') else ''}{extra}</span>",
                     unsafe_allow_html=True)
-        if content is not None:
-            c2.download_button("Öffnen", content, file_name=doc["filename"], key=f"dl_{key}_{doc['id']}",
+        if path is not None:
+            # Datei erst beim Antippen laden – sonst landen alle PDFs im Arbeitsspeicher
+            c2.download_button("Öffnen", path.read_bytes, file_name=doc["filename"], key=f"dl_{key}_{doc['id']}",
                                mime=doc.get("mime", "application/pdf"), icon=":material/download:")
         with c3.popover("⋯", help="Zuordnung ändern oder löschen"):
             doc_editor(cfg, module_id, doc, f"{key}_{doc['id']}")
-        if doc.get("kind") == "image" and content is not None:
+        if doc.get("kind") == "image" and path is not None:
             try:
-                st.image(content, width=320)
+                st.image(str(path), width=320)
             except Exception:  # noqa: BLE001 - beschädigtes/unbekanntes Bildformat
                 st.caption("(Vorschau nicht möglich – Datei über Öffnen herunterladen)")
 

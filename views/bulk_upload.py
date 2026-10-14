@@ -70,8 +70,8 @@ def _upload_tab(cfg: dict) -> None:
         progress = st.progress(0.0, text="Analysiere Dateien …")
         unit_cache: dict[str, tuple[list, list]] = {}
         for i, item in enumerate(items):
-            item["extracted"] = extract_pdf(item["content"])
-            text = "\n".join(item["extracted"]["pages"])
+            extracted = extract_pdf(item["content"])
+            text = "\n".join(extracted["pages"])
             module_id, score = guess_module(item["path"], text, cfg["modules"])
             module_id = module_id or cfg["modules"][0]["id"]
             doc_type = guess_doc_type(item["path"], text)
@@ -84,8 +84,11 @@ def _upload_tab(cfg: dict) -> None:
             if module_id not in unit_cache:
                 unit_cache[module_id] = units.all_units(cfg, get_module(cfg, module_id), load_module(module_id))
             item.update({"module_id": module_id, "doc_type": doc_type, "score": score,
+                         "n_pages": len(extracted["pages"]),
                          "unit": units.guess_unit(item["path"], doc_type, planned, *unit_cache[module_id]),
                          "hash": hashlib.sha1(item["content"]).hexdigest()})
+            del item["content"]  # Inhalt nicht im Sitzungsspeicher halten (Arbeitsspeicher!)
+            del extracted
             progress.progress((i + 1) / len(items), text=f"Analysiere {item['name']} …")
         progress.empty()
         st.session_state[cache_key] = {"signature": signature, "items": items, "errors": errors}
@@ -107,7 +110,7 @@ def _upload_tab(cfg: dict) -> None:
         with st.container(border=True):
             top = st.columns([5, 1], vertical_alignment="center")
             top[0].markdown(f"**{item['name']}**  \n<span class='small-muted'>{item['path']} · "
-                            f"{len(item['extracted']['pages'])} Seiten · Sicherheit: {sicher}</span>",
+                            f"{item['n_pages']} Seiten · Sicherheit: {sicher}</span>",
                             unsafe_allow_html=True)
             top[1].checkbox("Importieren", value=True, key=f"bk_on_{k}")
             c1, c2, c3 = st.columns([1, 1, 2])
@@ -123,6 +126,7 @@ def _upload_tab(cfg: dict) -> None:
 
     if st.button("Ausgewählte Dateien importieren", type="primary", icon=":material/download_done:"):
         imported, skipped, to_analyse, errors = 0, 0, [], []
+        contents = {it["path"]: it["content"] for it in _collect(files)[0]}
         for i, item in enumerate(items):
             k = f"{round_no}_{i}"
             if not st.session_state.get(f"bk_on_{k}", True):
@@ -135,9 +139,11 @@ def _upload_tab(cfg: dict) -> None:
                 continue
             _, unit_map = unit_options(cfg, module_id)
             unit = unit_map.get(st.session_state.get(f"bk_unit_{k}_{module_id}"))
-            doc = add_document(module_id, item["name"], item["content"], doc_type,
-                               unit.get("chapter_id") if unit else None, extracted=item["extracted"],
-                               unit=unit["id"] if unit else None)
+            content = contents.get(item["path"])
+            if content is None:
+                continue
+            doc = add_document(module_id, item["name"], content, doc_type,
+                               unit.get("chapter_id") if unit else None, unit=unit["id"] if unit else None)
             doc["hash"] = item["hash"]
             save_module(module_id)
             imported += 1

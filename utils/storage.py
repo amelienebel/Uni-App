@@ -508,3 +508,20 @@ def load_extra(name: str) -> dict:
 
 def save_extra(name: str) -> None:
     _write_json(DATA_DIR / f"{name}.json", load_extra(name))
+
+
+def update_document(module_id: str, doc_id: str, new_module_id: str, doc_type: str, unit: str | None,
+                    chapter_id: str | None) -> None:
+    """Zuordnung einer Datei ändern – auch in ein anderes Modul (Datei und Text bleiben, wo sie sind)."""
+    source = load_module(module_id)
+    doc = next((d for d in source["documents"] if d["id"] == doc_id), None)
+    if doc is None:
+        return
+    if doc_type in ("uebung", "loesung", "eigene_loesung", "altklausur"):
+        doc["analysis"] = None  # Folien-Zusammenfassung passt nicht mehr
+    doc.update({"doc_type": doc_type, "unit": unit, "chapter_id": chapter_id})
+    if new_module_id != module_id:
+        source["documents"].remove(doc)
+        load_module(new_module_id)["documents"].append(doc)
+        save_module(new_module_id)
+    save_module(module_id)

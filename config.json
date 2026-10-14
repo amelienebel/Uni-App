@@ -1104,6 +1104,12 @@
       ],
       "chapters": [
         {
+          "id": "k0",
+          "nr": 0,
+          "title": "Grundlagen: Grundbegriffe der Statistik (Einführung in der Übung)",
+          "week": 1
+        },
+        {
           "id": "k1",
           "title": "Deskriptive Statistik: Einführung und Häufigkeiten",
           "week": 1
@@ -1145,7 +1151,7 @@
         }
       ],
       "base_formulas": [],
-      "syllabus_version": 2,
+      "syllabus_version": 3,
       "lecturer": "Matthias Aßenmacher",
       "lectures": [
         {
@@ -1227,8 +1233,8 @@
       "exercises": [
         {
           "week_of": "2026-10-12",
-          "chapter_id": "k1",
-          "title": "Häufigkeiten, Grafiken, R-Setup (Laptop mitbringen!)"
+          "chapter_id": "k0",
+          "title": "Einführung: Grundbegriffe (Merkmalsträger, Merkmal, Ausprägung, Skalen) · Häufigkeiten, Grafiken, R-Setup"
         },
         {
           "week_of": "2026-10-19",

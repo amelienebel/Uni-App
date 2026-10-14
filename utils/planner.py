@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from utils import spaced_repetition as sr
-from utils.storage import CHAPTER_STATUS_FIELDS, days_until_exam, lecture_breaks, semester_dates
+from utils.storage import CHAPTER_STATUS_FIELDS, chapter_number, days_until_exam, lecture_breaks, semester_dates
 
 
 def monday_of(d: date) -> date:
@@ -258,7 +258,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             chapter = chapter_for_week(data["chapters"], week)
             if not chapter:
                 continue
-            idx = data["chapters"].index(chapter) + 1
+            idx = chapter_number(data, chapter["id"])
             add({
                 "key": f"{module_id}:{chapter['id']}:vorbereitet",
                 "module_id": module_id, "chapter_id": chapter["id"], "status_field": "vorbereitet",
@@ -277,7 +277,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             chapter = chapter_for_week(data["chapters"], week - 1) or chapter_for_week(data["chapters"], week)
             if not chapter:
                 continue
-            idx = data["chapters"].index(chapter) + 1
+            idx = chapter_number(data, chapter["id"])
             add({
                 "key": f"{module_id}:{chapter['id']}:uebung",
                 "module_id": module_id, "chapter_id": chapter["id"], "status_field": "uebung",

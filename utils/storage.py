@@ -193,6 +193,7 @@ def _default_module_data(module_cfg: dict) -> dict:
             "id": ch["id"],
             "title": ch["title"],
             "week": ch.get("week"),
+            **({"nr": ch["nr"]} if ch.get("nr") is not None else {}),
             "status": {key: False for key in CHAPTER_STATUS_FIELDS},
         })
     formulas = []
@@ -293,12 +294,23 @@ def chapter_by_id(module_data: dict, chapter_id: str | None) -> dict | None:
     return None
 
 
+def chapter_number(module_data: dict, chapter_id: str | None) -> int | None:
+    """Kapitelnummer – berücksichtigt ein „Kapitel 0“ (Feld nr in config.json) am Anfang."""
+    ch = chapter_by_id(module_data, chapter_id)
+    if ch is None:
+        return None
+    if ch.get("nr") is not None:
+        return int(ch["nr"])
+    first = module_data["chapters"][0].get("nr") if module_data["chapters"] else None
+    offset = int(first) if first is not None else 1
+    return module_data["chapters"].index(ch) + offset
+
+
 def chapter_label(module_data: dict, chapter_id: str | None) -> str:
     ch = chapter_by_id(module_data, chapter_id)
     if ch is None:
         return "— ohne Kapitel —"
-    idx = module_data["chapters"].index(ch) + 1
-    return f"Kap. {idx}: {ch['title']}"
+    return f"Kap. {chapter_number(module_data, chapter_id)}: {ch['title']}"
 
 
 # ---------------------------------------------------------------------------

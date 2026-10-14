@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
-from utils.storage import get_exam_date
+from utils.storage import chapter_number, get_exam_date
 from utils.weakness import chapter_stats
 
 DEFAULT_START = date(2027, 1, 11)  # erster Montag nach den Weihnachtsferien
@@ -22,7 +22,8 @@ def module_tasks(module: dict, data: dict) -> list[dict]:
     """Alle Lernblöcke eines Moduls in sinnvoller Reihenfolge (ohne den Generalprobe-Block)."""
     tasks = []
     weak = {s["chapter_id"] for s in chapter_stats(data) if s["mastery"] is not None and s["mastery"] < 0.6}
-    for i, ch in enumerate(data["chapters"], start=1):
+    for ch in data["chapters"]:
+        i = chapter_number(data, ch["id"])
         title = re.sub(r"^Kap\.\s*[\d\s,und–-]+:\s*", "", ch["title"])
         tasks.append({"id": f"rev:{ch['id']}", "title": f"Kap. {i} wiederholen: {title}", "chapter_id": ch["id"],
                       "kind": "Wiederholen"})

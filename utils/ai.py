@@ -19,10 +19,9 @@ from utils.config import get_secret
 MODELS = {
     "claude-opus-5-5": "Claude Opus 5.5 – beste Qualität, doppelter Preis",
     "claude-sonnet-5-5": "Claude Sonnet 5.5 – fast so gut, halber Preis (empfohlen)",
-    "claude-haiku-5-5": "Claude Haiku 5.5 – sehr günstig, für einfache Aufgaben",
+    "claude-haiku-5-5": "Claude Haiku 5.5 – sehr günstig (1/40 von Opus), für einfache Aufgaben",
 }
-DEFAULT_MODEL = "claude-sonnet-5-5"       # Standard für Zusammenfassungen, Podcast, Chat, Quiz …
-DEFAULT_CARDS_MODEL = "claude-opus-5-5"   # Karteikarten: hier lohnt sich das stärkste Modell
+DEFAULT_MODEL = "claude-sonnet-5-5"
 EFFORTS = {
     "low": "Niedrig – schnell, spart Tokens",
     "medium": "Mittel (Standard)",
@@ -58,17 +57,46 @@ def _client(key: str) -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=key, max_retries=3)
 
 
+# Preise in US-Dollar pro 1 Million Tokens (Eingabe, Ausgabe)
+PRICES = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}
+
+
+def estimate_cost(task: str, input_tokens: int, output_tokens: int) -> float:
+    model, _ = _settings(task)
+    price_in, price_out = PRICES.get(model, (4.0, 20.0))
+    return (input_tokens * price_in + output_tokens * price_out) / 1_000_000
+
+
+# Welches Modell für welche Aufgabe (änderbar unter Einstellungen → KI-Einstellungen)
+TASKS = {
+    "summary": ("Zusammenfassungen der Folien", "claude-haiku-5-5"),
+    "cards": ("Karteikarten & Definitionen", "claude-sonnet-5-5"),
+    "tutor": ("Tutor-Chat", "claude-opus-5-5"),
+    "default": ("Alles andere (Quiz, Lösungsvergleich, Abtippen, Karten-Nachfragen …)", "claude-sonnet-5-5"),
+}
+
+
 def _settings(task: str | None = None) -> tuple[str, str]:
     from utils.storage import load_settings, save_settings
 
     ai_settings = load_settings().setdefault("ai", {})
-    if "model_cards" not in ai_settings:  # einmalige Umstellung auf die günstigere Modell-Mischung
-        ai_settings.update({"model": DEFAULT_MODEL, "model_cards": DEFAULT_CARDS_MODEL})
+    if "models" not in ai_settings:  # Umstellung auf die Modellwahl pro Aufgabe
+        ai_settings["models"] = {key: default for key, (_, default) in TASKS.items()}
+        ai_settings.pop("model", None)
+        ai_settings.pop("model_cards", None)
         save_settings()
-    key = "model_cards" if task == "cards" else "model"
-    model = ai_settings.get(key) or (DEFAULT_CARDS_MODEL if task == "cards" else DEFAULT_MODEL)
+    models = ai_settings["models"]
+    task = task if task in TASKS else "default"
+    model = models.get(task) or TASKS[task][1]
     effort = ai_settings.get("effort") or "medium"
-    return (model if model in MODELS else DEFAULT_MODEL), (effort if effort in EFFORTS else "medium")
+    return (model if model in MODELS else TASKS[task][1]), (effort if effort in EFFORTS else "medium")
+
+
+def model_overview() -> str:
+    """Kurzfassung für die Seitenleiste, z. B. „Haiku (Zusammenf.) · Sonnet (Karten) · Opus (Tutor)“."""
+    short = {"summary": "Zusammenf.", "cards": "Karten", "tutor": "Tutor"}
+    return " · ".join(f"{MODELS.get(_settings(t)[0], _settings(t)[0]).split(' –')[0].replace('Claude ', '')} ({label})"
+                      for t, label in short.items())
 
 
 def _request(system: str, messages: list[dict], max_tokens: int, json_schema: dict | None = None,
@@ -130,12 +158,12 @@ def _check_stop(message) -> None:
 
 
 def complete(prompt: str | list, system: str = BASE_SYSTEM, history: list[dict] | None = None,
-             max_tokens: int = 16000, effort: str | None = None) -> str:
+             max_tokens: int = 16000, effort: str | None = None, task: str | None = None) -> str:
     """Einzelne Anfrage, gibt den vollständigen Antworttext zurück."""
     client = _client_or_raise()
     messages = list(history or []) + [{"role": "user", "content": prompt}]
     try:
-        with client.beta.messages.stream(**_request(system, messages, max_tokens, effort=effort)) as stream:
+        with client.beta.messages.stream(**_request(system, messages, max_tokens, effort=effort, task=task)) as stream:
             message = stream.get_final_message()
     except anthropic.APIError as exc:
         raise _translate_error(exc) from exc
@@ -166,11 +194,12 @@ def complete_json(prompt: str | list, schema: dict, system: str = BASE_SYSTEM,
         raise AIError("Die KI-Antwort konnte nicht als JSON gelesen werden. Bitte erneut versuchen.") from exc
 
 
-def stream_chat(messages: list[dict], system: str = BASE_SYSTEM, max_tokens: int = 16000) -> Iterator[str]:
+def stream_chat(messages: list[dict], system: str = BASE_SYSTEM, max_tokens: int = 16000,
+                task: str | None = None) -> Iterator[str]:
     """Generator für st.write_stream – liefert Textstücke, Fehler als lesbarer Text."""
     try:
         client = _client_or_raise()
-        with client.beta.messages.stream(**_request(system, messages, max_tokens)) as stream:
+        with client.beta.messages.stream(**_request(system, messages, max_tokens, task=task)) as stream:
             for text in stream.text_stream:
                 yield text
             message = stream.get_final_message()

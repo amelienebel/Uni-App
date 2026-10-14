@@ -45,7 +45,7 @@ DEFAULT_SETTINGS = {
     "semester_end": None,
     "exam_dates": {},  # modul_id -> {"date": "YYYY-MM-DD", "time": "", "room": ""}
     "schedule": None,  # None = Stundenplan aus config.json
-    "ai": {"model": "claude-sonnet-5-5", "model_cards": "claude-opus-5-5", "effort": "medium"},
+    "ai": {"effort": "medium"},
     "learning": {"daily_review_limit": 60, "prep_days_before": 1, "review_days_after": 2},
 }
 
@@ -369,7 +369,7 @@ def delete_data_file(rel_path: str | None) -> None:
 def add_document(module_id: str, filename: str, content: bytes, doc_type: str,
                  chapter_id: str | None, extracted: dict | None = None, unit: str | None = None) -> dict:
     """Legt ein PDF-Dokument an: Datei speichern, Text extrahieren, Metadaten anlegen."""
-    from utils.pdf_parser import extract_pdf  # lokaler Import vermeidet Zyklen
+    from utils.pdf_parser import extract_pdf, figure_pages  # lokaler Import vermeidet Zyklen
 
     data = load_module(module_id)
     rel_path = save_upload(module_id, filename, content, "pdf")
@@ -387,6 +387,7 @@ def add_document(module_id: str, filename: str, content: bytes, doc_type: str,
         "n_chars": sum(len(p) for p in extracted["pages"]),
         "uploaded_at": now_iso(),
         "analysis": None,
+        "figure_pages": figure_pages(content) if doc_type in ("folien", "skript", "uebung", "loesung") else [],
     }
     data["documents"].append(doc)
     save_module(module_id)

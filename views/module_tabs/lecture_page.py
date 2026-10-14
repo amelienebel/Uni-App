@@ -9,9 +9,10 @@ import streamlit as st
 
 from utils import ai, planner, textbook
 from utils.config import WEEKDAYS, get_module, load_config
-from utils.learning import run_analysis, unit_material
+from utils.learning import page_cost_estimate, read_pages_visual, run_analysis, unit_material
+from utils.pdf_parser import figure_pages
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
-                           load_todos, now_iso, save_module, save_todos, save_upload)
+                           load_todos, now_iso, read_data_file, save_module, save_todos, save_upload)
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
 from views.common import LECTURE_TABS, ai_hint, open_unit, render_formula, toggle_todo
 from views.module_tabs import exams, study, tutor
@@ -113,6 +114,45 @@ def _book_chapters(module_id: str, data: dict, lec: dict) -> None:
                    placeholder="Kein Buchkapitel zugeordnet")
 
 
+def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
+    """Seiten mit Abbildungen vorschlagen – die Studentin entscheidet, welche (teurer) genau gelesen werden."""
+    if doc.get("kind") == "image":
+        return
+    if "figure_pages" not in doc:  # ältere Uploads: einmalig nachträglich prüfen
+        try:
+            doc["figure_pages"] = figure_pages(read_data_file(doc["path"]))
+        except (OSError, ValueError):
+            doc["figure_pages"] = []
+        save_module(module_id)
+    pending = [p for p in doc["figure_pages"] if p not in doc.get("visual_pages", [])]
+    if doc.get("visual_pages"):
+        st.caption(f"Genau gelesen: Seite(n) {', '.join(map(str, doc['visual_pages']))}")
+    if not pending:
+        return
+    with st.container(border=True, key=f"figbox_{doc['id']}"):
+        st.markdown(f":material/image: **{len(pending)} Seite(n) mit Abbildungen**, die beim günstigen Text-Lesen "
+                    f"fehlen: {', '.join(map(str, pending))}")
+        wkey = f"figsel_{doc['id']}"
+        chosen = st.multiselect("Welche Seiten sollen genau gelesen werden?", pending, default=pending, key=wkey,
+                                format_func=lambda p: f"Seite {p}")
+        cost = page_cost_estimate(len(chosen)) * 100
+        c1, c2 = st.columns([2, 1])
+        if c1.button(f"Ausgewählte Seiten genau lesen (ca. {cost:.1f} Cent)", key=f"figgo_{doc['id']}",
+                     type="primary", disabled=not chosen or not ai.is_available()):
+            with st.spinner(f"Lese {len(chosen)} Seite(n) genau …"):
+                try:
+                    st.session_state[f"upmsg_{module_id}"] = [("success", read_pages_visual(cfg, module_id, doc,
+                                                                                          chosen))]
+                except ai.AIError as exc:
+                    st.session_state[f"upmsg_{module_id}"] = [("error", str(exc))]
+            st.rerun()
+        if c2.button("Nicht nötig", key=f"figno_{doc['id']}"):
+            doc["visual_pages"] = sorted(set(doc.get("visual_pages", [])) | set(pending))
+            doc["figures_skipped"] = True
+            save_module(module_id)
+            st.rerun()
+
+
 def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
     slides = [d for d in unit_docs(data, lec) if d.get("kind") != "image"]
@@ -157,9 +197,11 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
                     st.markdown(q["answer"])
         if doc.get("text_source") == "ki-genau":
             st.caption("Genau gelesen: Formeln, Tabellen und Grafiken wurden mit erfasst.")
+        else:
+            _figure_pages(cfg, module_id, doc)
         with st.expander("Zusammenfassung neu erstellen"):
-            st.caption("„Genau lesen“ lässt die KI das PDF selbst ansehen – inklusive Formeln, Tabellen und Grafiken. "
-                       "Das verbessert auch Karteikarten, Tutor und Podcast, kostet aber etwa 2–3× so viel.")
+            st.caption("„Genau lesen“ lässt die KI das ganze PDF ansehen – inklusive Formeln, Tabellen und Grafiken. "
+                       "Meist reicht es, oben nur die Seiten mit Abbildungen genau lesen zu lassen.")
             b1, b2 = st.columns(2)
             for col, visual, label in ((b1, False, "Neu erstellen"), (b2, True, "Genau lesen (mit Formeln & Grafiken)")):
                 if col.button(label, key=f"rean_{visual}_{doc['id']}", disabled=visual and not ai.is_available()):

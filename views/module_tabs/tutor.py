@@ -64,6 +64,6 @@ def render(cfg: dict, module_id: str, scope_key: str = "main", context: str | No
                 st.markdown(prompt)
             with st.chat_message("assistant"):
                 answer = st.write_stream(ai.stream_chat(
-                    history, system=TUTOR_SYSTEM.format(module=module["name"], context=context)))
+                    history, system=TUTOR_SYSTEM.format(module=module["name"], context=context), task="tutor"))
         history.append({"role": "assistant", "content": answer if isinstance(answer, str) else "".join(map(str, answer))})
         save_module(module_id)

@@ -171,8 +171,7 @@ with st.sidebar:
         elif not sync_status["error"]:
             st.caption("Alles im Cloud-Speicher gesichert.")
     if ai.is_available():
-        model, _ = ai._settings()
-        model = f"{ai.MODELS.get(model, model).split(' –')[0]} (Karten: {ai.MODELS.get(ai._settings('cards')[0], '').split(' –')[0]})"
+        model = ai.model_overview()
         st.caption(f"KI aktiv · {model}")
     else:
         st.caption("Kein API-Key – Offline-Modus")

@@ -305,3 +305,53 @@ def guess_chapter_from_plan(path: str, module_cfg: dict) -> str | None:
         if 1 <= number <= len(lectures):
             return lectures[number - 1].get("chapter_id")
     return None
+
+
+def figure_pages(content: bytes) -> list[int]:
+    """Seiten (ab 1) mit Abbildungen/Diagrammen, die der reine Textauszug nicht erfasst.
+
+    Erkennt eingebettete Bilder und viele Zeichenbefehle (Vektorgrafiken). Elemente, die auf fast jeder Folie
+    vorkommen (Logo, Kopfzeile der Vorlage), werden herausgerechnet.
+    """
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(content))
+    except Exception:  # noqa: BLE001
+        return []
+    per_page: list[tuple[list[tuple], int]] = []
+    for page in reader.pages:
+        images: list[tuple] = []
+        try:
+            res = page.get("/Resources")
+            res = res.get_object() if res is not None else {}
+            xobjects = res.get("/XObject")
+            for ref in (xobjects.get_object().values() if xobjects is not None else []):
+                obj = ref.get_object()
+                if obj.get("/Subtype") == "/Image" and int(obj.get("/Width", 0)) * int(obj.get("/Height", 0)) >= 40_000:
+                    images.append((int(obj.get("/Width", 0)), int(obj.get("/Height", 0))))
+                elif obj.get("/Subtype") == "/Form":
+                    images.append(("form", len(obj.get_data() or b"") // 500))
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            contents = page.get_contents()
+            data = contents.get_data() if contents is not None else b""
+            ops = len(re.findall(rb"\s(?:re|l|c|v|y)\s", data))
+        except Exception:  # noqa: BLE001
+            ops = 0
+        per_page.append((images, ops))
+    if not per_page:
+        return []
+    n = len(per_page)
+    counts: dict[tuple, int] = {}
+    for images, _ in per_page:
+        for sig in set(images):
+            counts[sig] = counts.get(sig, 0) + 1
+    template = {sig for sig, c in counts.items() if n >= 4 and c > 0.4 * n}
+    baseline = sorted(ops for _, ops in per_page)[n // 2]
+    result = []
+    for i, (images, ops) in enumerate(per_page, start=1):
+        if any(sig not in template for sig in images) or ops > baseline + 150:
+            result.append(i)
+    return result

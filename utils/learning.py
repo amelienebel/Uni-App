@@ -117,7 +117,7 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
             raise ai.AIError("Die Datei ist für die genaue Lesung zu groß (max. 30 MB). Bitte normal analysieren.")
         result = ai.complete_json([ai.pdf_block(content),
                                    {"type": "text", "text": VISUAL_PROMPT.format(module=module["name"], chapter=chapter)}],
-                                  ai.VISUAL_ANALYSIS_SCHEMA, max_tokens=64000)
+                                  ai.VISUAL_ANALYSIS_SCHEMA, max_tokens=64000, task="summary")
         slides = sorted(result.pop("slides", []), key=lambda s: s["page"])
         if slides:
             set_document_pages(doc, [s["text"] for s in slides], "ki-genau")
@@ -126,7 +126,7 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
     elif ai.is_available():
         result = ai.complete_json(ANALYSIS_PROMPT.format(module=module["name"], chapter=chapter,
                                                          text=get_document_text(doc, label="Folie")),
-                                  ai.ANALYSIS_SCHEMA)
+                                  ai.ANALYSIS_SCHEMA, task="summary")
         result["mode"] = "ki"
     else:
         result = heuristic_analysis(get_document_pages(doc))
@@ -136,10 +136,15 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
     added = suggest_formulas(module_id, result.get("formulas", []),
                              source=f"{doc['filename']} ({'KI' if result['mode'] == 'ki' else 'heuristisch'})",
                              chapter_id=doc.get("chapter_id"))
+    msg = "Zusammenfassung erstellt (nur Text gelesen)." if not result.get("visual") else "Zusammenfassung erstellt."
+    pending = [p for p in doc.get("figure_pages", []) if p not in doc.get("visual_pages", [])]
+    if pending and not result.get("visual"):
+        msg += (f" Auf {len(pending)} Seite(n) sind Abbildungen ({', '.join(map(str, pending))}) – unter "
+                "„Vorbereiten“ kannst du entscheiden, ob sie genau gelesen werden sollen.")
     if added:
-        return (f"Zusammenfassung erstellt. {added} Formel-Vorschlag/-Vorschläge – bitte unter "
-                "„Formeln & Notizen“ prüfen, welche übernommen werden sollen.")
-    return "Zusammenfassung erstellt."
+        msg += (f" {added} Formel-Vorschlag/-Vorschläge – bitte unter „Formeln & Notizen“ prüfen, welche "
+                "übernommen werden sollen.")
+    return msg
 
 
 def _notes_material(data: dict, unit: dict) -> str:
@@ -242,7 +247,8 @@ def extract_definitions(cfg: dict, module_id: str, unit: dict) -> int:
         existing = "; ".join(d["term"] for d in defs.definitions(data)) or "keine"
         title = unit.get("topic") or unit.get("title") or ""
         result = ai.complete_json(DEFINITIONS_PROMPT.format(title=title, module=module["name"], existing=existing,
-                                                            material=material), ai.DEFINITIONS_SCHEMA, max_tokens=32000)
+                                                            material=material), ai.DEFINITIONS_SCHEMA, max_tokens=32000,
+                                  task="cards")
         for d in result.get("definitions", []):
             added += defs.add_definition(data, d["term"], d["definition"], unit["id"], unit.get("chapter_id"))
     else:
@@ -253,3 +259,53 @@ def extract_definitions(cfg: dict, module_id: str, unit: dict) -> int:
     data.setdefault("definitions_done", {})[unit["id"]] = now_iso()
     save_module(module_id)
     return added
+
+
+PAGES_PROMPT = """Das angehängte PDF enthält {n} Folie(n) aus der Vorlesung „{module}“ (Original-Seiten: {pages}).
+Der reine Textauszug hat Abbildungen, Diagramme, Tabellen und Formeln nicht erfasst. Lies jede Folie vollständig
+und gib für jede (page = Position im angehängten PDF, beginnend bei 1) eine Textfassung zurück: aller Text,
+Formeln als LaTeX in $...$, Tabellen als Markdown, Diagramme/Abbildungen in [eckigen Klammern] mit allen Achsen,
+Werten und der Kernaussage beschrieben. Nichts weglassen, nichts erfinden."""
+
+PAGES_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["slides"], "properties": {
+    "slides": {"type": "array", "items": {"type": "object", "additionalProperties": False,
+                                           "required": ["page", "text"],
+                                           "properties": {"page": {"type": "integer"}, "text": {"type": "string"}}}}}}
+
+
+def page_cost_estimate(n_pages: int) -> float:
+    """Grobe Kosten fürs genaue Lesen: ca. 1.600 Eingabe- und 500 Ausgabe-Tokens pro Folie."""
+    return ai.estimate_cost("summary", 1600 * n_pages + 500, 500 * n_pages)
+
+
+def read_pages_visual(cfg: dict, module_id: str, doc: dict, pages: list[int]) -> str:
+    """Liest nur die ausgewählten Seiten als Bild (Abbildungen, Formeln) und ersetzt dort den Textauszug.
+    Danach wird die Zusammenfassung mit dem vollständigen Text neu erstellt."""
+    import io
+
+    from pypdf import PdfReader, PdfWriter
+
+    module = get_module(cfg, module_id)
+    reader = PdfReader(io.BytesIO(read_data_file(doc["path"])))
+    pages = sorted(p for p in set(pages) if 1 <= p <= len(reader.pages))
+    if not pages:
+        return "Keine Seiten ausgewählt."
+    writer = PdfWriter()
+    for p in pages:
+        writer.add_page(reader.pages[p - 1])
+    buf = io.BytesIO()
+    writer.write(buf)
+    result = ai.complete_json([ai.pdf_block(buf.getvalue()),
+                               {"type": "text", "text": PAGES_PROMPT.format(
+                                   n=len(pages), module=module["name"], pages=", ".join(map(str, pages)))}],
+                              PAGES_SCHEMA, max_tokens=32000, task="summary")
+    texts = get_document_pages(doc)
+    texts += [""] * (len(reader.pages) - len(texts))
+    for slide in result.get("slides", []):
+        if 1 <= slide["page"] <= len(pages):
+            texts[pages[slide["page"] - 1] - 1] = slide["text"]
+    set_document_pages(doc, texts, "teilweise-genau")
+    doc["visual_pages"] = sorted(set(doc.get("visual_pages", [])) | set(pages))
+    save_module(module_id)
+    run_analysis(cfg, module_id, doc, visual=False)  # Zusammenfassung mit den neuen Inhalten
+    return f"{len(pages)} Seite(n) genau gelesen und die Zusammenfassung aktualisiert."

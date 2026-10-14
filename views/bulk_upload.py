@@ -7,7 +7,7 @@ import zipfile
 
 import streamlit as st
 
-from utils import ai, units
+from utils import ai, textbook, units
 from utils.config import get_module
 from utils.learning import run_analysis
 from utils.pdf_parser import (extract_pdf, guess_chapter_from_plan, guess_chapter_index,
@@ -145,6 +145,9 @@ def _upload_tab(cfg: dict) -> None:
             doc = add_document(module_id, item["name"], content, doc_type,
                                unit.get("chapter_id") if unit else None, unit=unit["id"] if unit else None)
             doc["hash"] = item["hash"]
+            if doc_type == "lehrbuch":
+                doc.update({"unit": None, "chapter_id": None,
+                            "book_chapter": textbook.guess_chapter_from_filename(item["name"]) or 0})
             save_module(module_id)
             imported += 1
             if doc_type == "folien" and doc["n_chars"] >= 50:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from utils import ai, planner
+from utils import ai, planner, textbook
 from utils.config import WEEKDAYS, get_module, load_config
 from utils.learning import run_analysis, unit_material
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
@@ -89,6 +89,28 @@ def _files_tab(cfg: dict, module_id: str, lec: dict, exs: list[dict], all_units:
         ex_docs = unit_docs(data, ex)
         st.markdown(f"**{short_label(ex)} – {ex['title']}**")
         file_list(module_id, ex_docs, key=f"{lec['id']}_{ex['id']}", empty="Noch keine Dateien zur Übung.")
+    _book_chapters(module_id, data, lec)
+
+
+def _save_book(module_id: str, lec_id: str, widget_key: str) -> None:
+    data = load_module(module_id)
+    data.setdefault("lecture_book", {})[lec_id] = sorted(st.session_state[widget_key])
+    save_module(module_id)
+
+
+def _book_chapters(module_id: str, data: dict, lec: dict) -> None:
+    """Welche Lehrbuch-Kapitel ergänzen diese Vorlesung (Karteikarten & Tutor)?"""
+    docs = textbook.book_docs(data)
+    if not docs:
+        return
+    available = sorted({d["book_chapter"] for d in docs if d.get("book_chapter")})
+    chosen = [c for c in textbook.lecture_chapters(data, lec) if c in available]
+    wkey = f"book_sel_{lec['id']}"
+    st.session_state[wkey] = chosen
+    st.markdown("**:material/menu_book: Lehrbuch** – ergänzt Karteikarten und Tutor")
+    st.multiselect("Buchkapitel zu dieser Vorlesung", available, key=wkey, on_change=_save_book,
+                   args=(module_id, lec["id"], wkey), format_func=lambda n: f"Kapitel {n}",
+                   placeholder="Kein Buchkapitel zugeordnet")
 
 
 def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
@@ -306,8 +328,10 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
         exams.quiz_section(cfg, module_id, data, scope_key=lec["id"], scope_label=label,
                            context=context or "(noch keine Unterlagen)", chapter_ids=[lec.get("chapter_id")] if lec.get("chapter_id") else [])
     with st.expander("Fragen an den Tutor zu dieser Vorlesung"):
-        tutor.render(cfg, module_id, scope_key=lec["id"], context=context or "(noch keine Unterlagen)",
-                     scope_label=label)
+        book = textbook.material_for_lecture(data, lec)
+        tutor.render(cfg, module_id, scope_key=lec["id"],
+                     context="\n\n".join(x for x in (context, book) if x) or "(noch keine Unterlagen)",
+                     scope_label=label + (" · mit Lehrbuch" if book else ""))
 
 
 LEC_TABS = LECTURE_TABS

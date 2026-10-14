@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from utils import textbook
 from utils.learning import unit_material
 from utils.storage import load_module, today
 from utils.units import scope_cards, short_label, unit_cards
@@ -70,7 +71,10 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
         exams.quiz_section(cfg, module_id, data, scope_key="learn", scope_label=f"{label} (alle Themen)",
                            context=context, chapter_ids=chapters)
     with t_chat:
-        tutor.render(cfg, module_id, scope_key="learn", context=context, scope_label=label)
+        book_chapters = sorted({n for lec in chosen for n in textbook.lecture_chapters(data, lec)})
+        book = textbook.material_for_chapters(data, book_chapters, limit=textbook.MAX_BOOK_CHARS)
+        tutor.render(cfg, module_id, scope_key="learn", context="\n\n".join(x for x in (context, book) if x),
+                     scope_label=label + (" · mit Lehrbuch" if book else ""))
 
 
 def _weak_tab(cfg: dict, module_id: str, data: dict) -> None:

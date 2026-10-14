@@ -1,4 +1,4 @@
-"""Heute: Termine, fällige To-dos, Karteikarten, Tages-Podcast, Klausur-Lernplan und Schwachstellen auf einen Blick."""
+"""Heute: Termine, fällige To-dos, Karteikarten, Klausur-Lernplan und Schwachstellen auf einen Blick."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from utils import ai, exam_plan, notify, planner, podcast
+from utils import exam_plan, notify, planner
 from utils import spaced_repetition as sr
 from utils.config import WEEKDAYS, get_module
 from utils.storage import (days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
                            load_todos, semester_dates, today)
 from utils.weakness import weakest
-from views.common import MODULE_TABS, goto, micon, open_todo, open_unit, toggle_todo, tts_player
+from views.common import MODULE_TABS, goto, micon, open_todo, open_unit, toggle_todo
 from views.module_tabs.study import WEAK_TAB_STATE
 
 
@@ -46,60 +46,6 @@ def _todo_row(cfg: dict, t: dict, modules_data: dict, state: dict, now) -> None:
         c1.button(f"**{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary", icon=micon(module),
                   on_click=open_todo, args=(t,))
         c2.caption(planner.format_due(t["due"], now))
-
-
-def _podcast(cfg: dict, now) -> None:
-    lectures = podcast.lectures_on(cfg, now)
-    entry = podcast.get(now)
-    st.subheader(":material/podcasts: Podcast des Tages")
-    if not lectures and not entry:
-        older = sorted(podcast.store(), reverse=True)
-        st.caption("Heute ist keine Vorlesung. Podcasts gibt es an Vorlesungstagen (Mo: Mathe & ExRW, "
-                   "Di: I&F & VWL, Do: Statistik).")
-        if older:
-            _archive(older)
-        return
-    names = " & ".join(get_module(cfg, m["id"])["short"] for m, _ in lectures)
-    if entry is None:
-        if not ai.is_available():
-            st.caption("Für den Podcast wird ein API-Key benötigt.")
-            return
-        auto = load_settings().setdefault("podcast", {}).get("auto", True)
-        failed = st.session_state.get(f"podcast_failed_{now}")
-        st.markdown(f"Etwa 10 Minuten zu den heutigen Vorlesungen ({names}).")
-        if st.button("Podcast erstellen", key="podcast_make", type="primary", icon=":material/mic:") \
-                or (auto and not failed):
-            with st.spinner("Podcast wird geschrieben und eingesprochen … (1–3 Minuten)"):
-                try:
-                    entry = podcast.generate(cfg, now)
-                except ai.AIError as exc:
-                    st.session_state[f"podcast_failed_{now}"] = True
-                    st.error(str(exc))
-                    return
-    _player(entry)
-    older = sorted((d for d in podcast.store() if d != now.isoformat()), reverse=True)
-    if older:
-        _archive(older)
-
-
-def _player(entry: dict) -> None:
-    st.markdown(f"**{entry['title']}**")
-    audio = podcast.audio_bytes(entry)
-    if audio:
-        st.audio(audio, format="audio/mp3")
-    else:
-        st.caption("Die Audio-Datei konnte nicht erzeugt werden – du kannst das Skript im Browser vorlesen lassen.")
-        tts_player(podcast.plain_text(entry), key=f"pod_{entry['date']}")
-    with st.expander("Skript lesen"):
-        st.markdown(podcast.script_text(entry))
-
-
-def _archive(days: list[str]) -> None:
-    with st.expander(f"Frühere Podcasts ({len(days)})"):
-        choice = st.selectbox("Tag", days, key="podcast_archive",
-                              format_func=lambda d: f"{d[8:10]}.{d[5:7]}. – {podcast.store()[d]['title']}")
-        if choice:
-            _player(podcast.store()[choice])
 
 
 def render(cfg: dict) -> None:
@@ -186,8 +132,6 @@ def render(cfg: dict) -> None:
                       on_click=goto, args=("examplan",))
 
     with right:
-        _podcast(cfg, now)
-
         # --- Karteikarten ------------------------------------------------------------
         st.subheader(":material/style: Karteikarten")
         if not any(due_cards.values()):

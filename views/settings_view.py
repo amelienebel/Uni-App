@@ -138,13 +138,6 @@ def render(cfg: dict) -> None:
     st.caption("Die App plant beim Öffnen immer die nächsten 3 Tage ein. Öffnest du sie länger nicht, pausieren die "
                "Erinnerungen. Es wird nur erinnert, wenn Karteikarten fällig sind.")
 
-    podcast_conf = settings.setdefault("podcast", {"auto": True})
-    auto = st.toggle("Tages-Podcast automatisch erstellen, wenn ich „Heute“ öffne", value=podcast_conf.get("auto", True),
-                     help="An Vorlesungstagen: ca. 10 Minuten Audio zu den Vorlesungen des Tages.")
-    if auto != podcast_conf.get("auto", True):
-        podcast_conf["auto"] = auto
-        save_settings()
-
     # --- KI -----------------------------------------------------------------------
     st.subheader("KI-Einstellungen")
     if ai.is_available():

@@ -175,7 +175,7 @@ def module_context(module_id: str, include_fulltext: bool = False) -> tuple[str,
         parts += [f"- {f['name']}: ${f['latex']}$" for f in data["formulas"]]
 
     if include_fulltext:
-        docs = documents_of(data)
+        docs = [d for d in documents_of(data) if d["doc_type"] != "lehrbuch"]
         if docs:
             parts += ["", "## Volltexte der Unterlagen"]
             for doc in docs:

@@ -10,6 +10,7 @@ from utils.config import get_module
 from utils.pdf_parser import heuristic_analysis
 from utils.storage import (chapter_label, get_document_pages, get_document_text, load_module, now_iso, read_data_file,
                            save_module, set_document_pages, suggest_formulas)
+from utils.textbook import material_for_lecture
 from utils.units import lecture_notes, unit_docs
 
 ANALYSIS_PROMPT = """Bereite mich auf die Vorlesung vor. Unten stehen die Folien für das Modul „{module}“,
@@ -45,7 +46,7 @@ Ziel: Wer alle Karten beherrscht, kann den KOMPLETTEN Stoff – nicht nur die gr
 - Eine Karte = ein abfragbarer Gedanke. Vorderseite als konkrete Frage, Rückseite als präzise,
   klausurtaugliche Antwort. Formeln in LaTeX mit $...$.
 - Die Anzahl ergibt sich aus dem Stoffumfang – lieber vollständig als knapp.
-- Diese Karten gibt es schon (keine Duplikate, nur Fehlendes ergänzen): {existing}
+{book_rule}- Diese Karten gibt es schon (keine Duplikate, nur Fehlendes ergänzen): {existing}
 - chapter_hint: Titel des passenden Kapitels aus dieser Liste: {chapters}
 
 <unterlagen>
@@ -171,6 +172,14 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, existing_cards: l
     data = load_module(module_id)
     if ai.is_available():
         material = unit_material(data, unit)
+        book = material_for_lecture(data, unit) if unit["kind"] == "lecture" else ""
+        book_rule = ""
+        if book:
+            material += f"\n\n<lehrbuch_ergaenzend>\n{book}\n</lehrbuch_ergaenzend>"
+            book_rule = ("- Das Lehrbuch ergänzt die Folien: Nutze es für präzise Definitionen, ausführlichere Erklärungen, "
+                         "Beispiele und Zusammenhänge zu den Themen dieser Vorlesung. Inhalte des Buchkapitels, die zum "
+                         "Vorlesungsstoff gehören, aber auf den Folien fehlen, ebenfalls als Karten aufnehmen. Bei "
+                         "Abweichungen gelten Folien und Notizen.\n")
         if not material.strip():
             raise ai.AIError("Es gibt noch keine Unterlagen oder Notizen, aus denen Karten entstehen können.")
         title = unit.get("topic") or unit.get("title") or ""
@@ -179,6 +188,7 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, existing_cards: l
         chapters = {ch["title"]: ch["id"] for ch in data["chapters"]}
         existing = "; ".join(c["front"] for c in existing_cards) or "keine"
         result = ai.complete_json(CARDS_PROMPT.format(scope=scope, module=module["name"], existing=existing,
+                                                      book_rule=book_rule,
                                                       chapters=", ".join(chapters), material=material),
                                   ai.CARDS_SCHEMA, max_tokens=64000, task="cards")
         raw = [{"front": c["front"], "back": c["back"],

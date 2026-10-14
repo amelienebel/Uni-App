@@ -8,9 +8,10 @@ import streamlit as st
 
 from utils import ai
 from utils.learning import run_analysis
+from utils import textbook
 from utils.config import get_module, load_config
 from utils.storage import (IMAGE_TYPES, abs_data_path, add_file, data_file_exists, delete_document, load_module,
-                           read_data_file, update_document)
+                           read_data_file, save_module, update_document)
 from utils.units import short_label
 from views.common import doc_type_label
 
@@ -99,7 +100,7 @@ def file_list(module_id: str, docs: list[dict], key: str, all_units: list[dict] 
 def all_files(cfg: dict, module_id: str) -> None:
     """Reiter „Dateien“ im Modul: alle Unterlagen, nicht zugeordnete zuerst."""
     data = load_module(module_id)
-    docs = [d for d in data["documents"] if d["doc_type"] != "altklausur"]
+    docs = [d for d in data["documents"] if d["doc_type"] not in ("altklausur", textbook.DOC_TYPE)]
     options, units = unit_options(cfg, module_id)
     order = {uid: i for i, uid in enumerate(options[1:])}
     unassigned = [d for d in docs if d.get("unit") not in units]
@@ -111,6 +112,54 @@ def all_files(cfg: dict, module_id: str) -> None:
         file_list(module_id, unassigned, key="allun", cfg=cfg, show_unit=True)
     st.markdown(f"#### :material/folder_open: Zugeordnet ({len(assigned)})")
     file_list(module_id, assigned, key="allas", cfg=cfg, show_unit=True, empty="Noch keine zugeordneten Dateien.")
+    st.divider()
+    textbook_section(cfg, module_id)
+
+
+def _set_book_chapter(module_id: str, doc_id: str, widget_key: str) -> None:
+    data = load_module(module_id)
+    for doc in data["documents"]:
+        if doc["id"] == doc_id:
+            doc["book_chapter"] = int(st.session_state[widget_key])
+    save_module(module_id)
+
+
+def textbook_section(cfg: dict, module_id: str) -> None:
+    """Lehrbuch-Kapitel hochladen – sie ergänzen die Folien bei Karteikarten und im Tutor."""
+    module = get_module(cfg, module_id)
+    data = load_module(module_id)
+    st.markdown("#### :material/menu_book: Lehrbuch")
+    if module.get("literature"):
+        st.caption(f"Laut Kursplan: {module['literature']}")
+    st.caption("Lade die Buchkapitel einzeln als PDF hoch (z. B. aus der Pearson eLibrary der UB). Die Kapitelnummer "
+               "wird aus dem Dateinamen erkannt – prüfe sie unten. Das Buch ergänzt die Folien nur bei den "
+               "Karteikarten und im Tutor; welche Kapitel zu einer Vorlesung gehören, steht auf der Vorlesungsseite.")
+    round_key = f"book_round_{module_id}"
+    files = st.file_uploader("Buchkapitel (PDF)", type=["pdf"], accept_multiple_files=True,
+                             key=f"book_up_{module_id}_{st.session_state.get(round_key, 0)}")
+    if files and st.button("Hochladen", key=f"book_go_{module_id}", type="primary", icon=":material/upload:"):
+        for f in files:
+            with st.spinner(f"Lese {f.name} …"):
+                doc = add_file(module_id, f.name, f.getvalue(), textbook.DOC_TYPE, None, None)
+            doc["book_chapter"] = textbook.guess_chapter_from_filename(f.name) or 0
+        save_module(module_id)
+        st.session_state[round_key] = st.session_state.get(round_key, 0) + 1
+        st.rerun()
+    docs = textbook.book_docs(data)
+    if not docs:
+        st.caption("Noch keine Buchkapitel hochgeladen.")
+    for doc in docs:
+        c1, c2, c3 = st.columns([1.2, 6, 1], vertical_alignment="center")
+        wkey = f"bookch_{doc['id']}"
+        st.session_state[wkey] = int(doc.get("book_chapter") or 0)
+        c1.number_input("Kapitel", 0, 99, key=wkey, on_change=_set_book_chapter, args=(module_id, doc["id"], wkey),
+                        label_visibility="collapsed")
+        c2.markdown(f"**{doc['filename']}**  \n<span class='small-muted'>{doc.get('n_pages', 0)} Seiten"
+                    f"{' · Kapitelnummer bitte eintragen' if not doc.get('book_chapter') else ''}</span>",
+                    unsafe_allow_html=True)
+        if c3.button("Löschen", key=f"book_del_{doc['id']}"):
+            delete_document(module_id, doc["id"])
+            st.rerun()
 
 
 def uploader(cfg: dict, module_id: str, unit: dict, doc_type: str, label: str, key: str,

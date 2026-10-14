@@ -133,14 +133,21 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
                              placeholder="Erst selbst antworten, dann auflösen …")
                 with st.expander("Lösung anzeigen"):
                     st.markdown(q["answer"])
+        if doc.get("text_source") == "ki-genau":
+            st.caption("Genau gelesen: Formeln, Tabellen und Grafiken wurden mit erfasst.")
         with st.expander("Zusammenfassung neu erstellen"):
-            if st.button("Neu erstellen", key=f"rean_{doc['id']}"):
-                with st.spinner("Erstelle Zusammenfassung …"):
-                    try:
-                        st.session_state[f"upmsg_{module_id}"] = [("success", run_analysis(cfg, module_id, doc))]
-                    except ai.AIError as exc:
-                        st.session_state[f"upmsg_{module_id}"] = [("error", str(exc))]
-                st.rerun()
+            st.caption("„Genau lesen“ lässt die KI das PDF selbst ansehen – inklusive Formeln, Tabellen und Grafiken. "
+                       "Das verbessert auch Karteikarten, Tutor und Podcast, kostet aber etwa 2–3× so viel.")
+            b1, b2 = st.columns(2)
+            for col, visual, label in ((b1, False, "Neu erstellen"), (b2, True, "Genau lesen (mit Formeln & Grafiken)")):
+                if col.button(label, key=f"rean_{visual}_{doc['id']}", disabled=visual and not ai.is_available()):
+                    with st.spinner("Erstelle Zusammenfassung …"):
+                        try:
+                            msg = run_analysis(cfg, module_id, doc, visual=visual)
+                            st.session_state[f"upmsg_{module_id}"] = [("success", msg)]
+                        except ai.AIError as exc:
+                            st.session_state[f"upmsg_{module_id}"] = [("error", str(exc))]
+                    st.rerun()
 
 
 HANDWRITING_PROMPT = """Das sind Fotos meiner handschriftlichen Mitschrift aus der Vorlesung „{topic}“ im Modul

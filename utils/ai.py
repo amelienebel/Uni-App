@@ -17,11 +17,12 @@ import streamlit as st
 from utils.config import get_secret
 
 MODELS = {
-    "claude-opus-5-5": "Claude Opus 5.5 – beste Qualität (Standard)",
-    "claude-sonnet-5-5": "Claude Sonnet 5.5 – schnell & günstiger",
+    "claude-opus-5-5": "Claude Opus 5.5 – beste Qualität, doppelter Preis",
+    "claude-sonnet-5-5": "Claude Sonnet 5.5 – fast so gut, halber Preis (empfohlen)",
     "claude-haiku-5-5": "Claude Haiku 5.5 – sehr günstig, für einfache Aufgaben",
 }
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "claude-sonnet-5-5"       # Standard für Zusammenfassungen, Podcast, Chat, Quiz …
+DEFAULT_CARDS_MODEL = "claude-opus-5-5"   # Karteikarten: hier lohnt sich das stärkste Modell
 EFFORTS = {
     "low": "Niedrig – schnell, spart Tokens",
     "medium": "Mittel (Standard)",
@@ -57,18 +58,22 @@ def _client(key: str) -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=key, max_retries=3)
 
 
-def _settings() -> tuple[str, str]:
-    from utils.storage import load_settings
+def _settings(task: str | None = None) -> tuple[str, str]:
+    from utils.storage import load_settings, save_settings
 
-    ai_settings = load_settings().get("ai", {})
-    model = ai_settings.get("model") or DEFAULT_MODEL
+    ai_settings = load_settings().setdefault("ai", {})
+    if "model_cards" not in ai_settings:  # einmalige Umstellung auf die günstigere Modell-Mischung
+        ai_settings.update({"model": DEFAULT_MODEL, "model_cards": DEFAULT_CARDS_MODEL})
+        save_settings()
+    key = "model_cards" if task == "cards" else "model"
+    model = ai_settings.get(key) or (DEFAULT_CARDS_MODEL if task == "cards" else DEFAULT_MODEL)
     effort = ai_settings.get("effort") or "medium"
     return (model if model in MODELS else DEFAULT_MODEL), (effort if effort in EFFORTS else "medium")
 
 
 def _request(system: str, messages: list[dict], max_tokens: int, json_schema: dict | None = None,
-             effort: str | None = None) -> dict:
-    model, default_effort = _settings()
+             effort: str | None = None, task: str | None = None) -> dict:
+    model, default_effort = _settings(task)
     output_config: dict = {"effort": effort or default_effort}
     if json_schema is not None:
         output_config["format"] = {"type": "json_schema", "schema": json_schema}
@@ -142,13 +147,13 @@ def complete(prompt: str | list, system: str = BASE_SYSTEM, history: list[dict] 
 
 
 def complete_json(prompt: str | list, schema: dict, system: str = BASE_SYSTEM,
-                  max_tokens: int = 32000, effort: str | None = None) -> dict:
+                  max_tokens: int = 32000, effort: str | None = None, task: str | None = None) -> dict:
     """Strukturierte Ausgabe: Die Antwort ist garantiert valides JSON nach dem Schema."""
     client = _client_or_raise()
     messages = [{"role": "user", "content": prompt}]
     try:
         with client.beta.messages.stream(**_request(system, messages, max_tokens, json_schema=schema,
-                                                    effort=effort)) as stream:
+                                                    effort=effort, task=task)) as stream:
             message = stream.get_final_message()
     except anthropic.APIError as exc:
         raise _translate_error(exc) from exc
@@ -213,6 +218,11 @@ ANALYSIS_SCHEMA = _obj({
     "important_slides": {"type": "array", "items": _obj({"page": _INT, "reason": _STR})},
     "check_questions": {"type": "array", "items": _obj({"question": _STR, "answer": _STR})},
     "formulas": {"type": "array", "items": FORMULA_SCHEMA},
+})
+
+VISUAL_ANALYSIS_SCHEMA = _obj({
+    **ANALYSIS_SCHEMA["properties"],
+    "slides": {"type": "array", "items": _obj({"page": _INT, "text": _STR})},
 })
 
 CARDS_SCHEMA = _obj({

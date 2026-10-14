@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 import streamlit as st
 
 from utils import ai
 from utils.learning import run_analysis
 from utils.config import get_module, load_config
-from utils.storage import IMAGE_TYPES, abs_data_path, add_file, delete_document, load_module, update_document
+from utils.storage import (IMAGE_TYPES, abs_data_path, add_file, data_file_exists, delete_document, load_module,
+                           read_data_file, update_document)
 from utils.units import short_label
 from views.common import doc_type_label
 
@@ -69,11 +72,7 @@ def file_list(module_id: str, docs: list[dict], key: str, all_units: list[dict] 
     cfg = cfg or load_config()
     units = unit_options(cfg, module_id)[1] if show_unit else {}
     for doc in docs:
-        try:
-            path = abs_data_path(doc["path"])
-            path = path if path.exists() else None
-        except (ValueError, KeyError):
-            path = None
+        has_file = bool(doc.get("path")) and data_file_exists(doc["path"])
         c1, c2, c3 = st.columns([6, 1.3, 1], vertical_alignment="center")
         extra = ""
         if show_unit:
@@ -83,15 +82,16 @@ def file_list(module_id: str, docs: list[dict], key: str, all_units: list[dict] 
         c1.markdown(f"**{doc['filename']}**  \n<span class='small-muted'>{doc_type_label(doc['doc_type'])}"
                     f"{' · ' + str(doc['n_pages']) + ' Seiten' if doc.get('n_pages') else ''}{extra}</span>",
                     unsafe_allow_html=True)
-        if path is not None:
-            # Datei erst beim Antippen laden – sonst landen alle PDFs im Arbeitsspeicher
-            c2.download_button("Öffnen", path.read_bytes, file_name=doc["filename"], key=f"dl_{key}_{doc['id']}",
+        if has_file:
+            # Datei erst beim Antippen laden (und ggf. aus dem Cloud-Speicher holen) – spart Arbeitsspeicher
+            c2.download_button("Öffnen", partial(read_data_file, doc["path"]), file_name=doc["filename"],
+                               key=f"dl_{key}_{doc['id']}",
                                mime=doc.get("mime", "application/pdf"), icon=":material/download:")
         with c3.popover("⋯", help="Zuordnung ändern oder löschen"):
             doc_editor(cfg, module_id, doc, f"{key}_{doc['id']}")
-        if doc.get("kind") == "image" and path is not None:
+        if doc.get("kind") == "image" and has_file:
             try:
-                st.image(str(path), width=320)
+                st.image(str(abs_data_path(doc["path"])), width=320)
             except Exception:  # noqa: BLE001 - beschädigtes/unbekanntes Bildformat
                 st.caption("(Vorschau nicht möglich – Datei über Öffnen herunterladen)")
 

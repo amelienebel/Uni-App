@@ -153,17 +153,27 @@ def render(cfg: dict) -> None:
         st.warning("Kein API-Key gefunden. Lege im Projektordner eine Datei `.env` an:\n\n"
                    "```\nANTHROPIC_API_KEY=sk-ant-...\n```\n\nund starte die App neu. Ohne Key laufen "
                    "alle Funktionen im Offline-Modus (heuristische Analyse, keine Chats).")
+    ai._settings()  # stellt ggf. auf die Modell-Mischung um
     with st.form("ai_form"):
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         models = list(ai.MODELS)
-        model = c1.selectbox("Modell", models, index=models.index(settings["ai"].get("model", ai.DEFAULT_MODEL))
-                             if settings["ai"].get("model") in models else 0, format_func=ai.MODELS.get)
+        model = c1.selectbox("Modell für alles (Zusammenfassungen, Podcast, Chat …)", models,
+                             index=models.index(settings["ai"].get("model", ai.DEFAULT_MODEL))
+                             if settings["ai"].get("model") in models else 1, format_func=ai.MODELS.get)
+        model_cards = c3.selectbox("Modell für Karteikarten", models,
+                                   index=models.index(settings["ai"].get("model_cards", ai.DEFAULT_CARDS_MODEL))
+                                   if settings["ai"].get("model_cards") in models else 0, format_func=ai.MODELS.get)
         efforts = list(ai.EFFORTS)
         effort = c2.selectbox("Gründlichkeit (Effort)", efforts,
                               index=efforts.index(settings["ai"].get("effort", "medium"))
                               if settings["ai"].get("effort") in efforts else 1, format_func=ai.EFFORTS.get)
+        visual = st.toggle("Folien immer genau lesen (Formeln, Tabellen & Grafiken; ca. 2–3× teurer pro Foliensatz)",
+                           value=bool(settings["ai"].get("visual_pdf")),
+                           help="Aus: schneller Textauszug. Einzelne Foliensätze kannst du auf der Vorlesungsseite "
+                                "unter Vorbereiten → „Genau lesen“ trotzdem genau lesen lassen.")
         if st.form_submit_button("Speichern"):
-            settings["ai"] = {"model": model, "effort": effort}
+            settings["ai"].update({"model": model, "model_cards": model_cards, "effort": effort,
+                                   "visual_pdf": visual})
             save_settings()
             st.success("Gespeichert.")
 

@@ -8,7 +8,9 @@ Aktiv nur, wenn GITHUB_TOKEN und GITHUB_DATA_REPO (z. B. "name/uni-app-daten")
 in den Secrets bzw. der .env stehen. Ohne diese Angaben bleibt alles rein lokal.
 
 Ablauf:
-- Beim Start der App werden alle Dateien aus dem Repository nach data/ geladen.
+- Beim Start der App werden die Lerndaten (JSON) aus dem Repository nach data/ geladen. Große Dateien
+  (PDFs, Fotos, Podcasts unter uploads/) werden erst geholt, wenn sie wirklich gebraucht werden –
+  so bleibt der Start auch mit vielen Unterlagen schnell.
 - Jede Änderung wird vorgemerkt und gebündelt hochgeladen: sobald 15 Sekunden lang nichts
   mehr an der Datei geändert wurde, spätestens aber nach 60 Sekunden. Das schont die
   Commit-Limits von GitHub bei schnellen Folgeänderungen (z. B. beim Kartenlernen).
@@ -31,6 +33,7 @@ API = "https://api.github.com"
 DEBOUNCE_SECONDS = 15
 MAX_WAIT_SECONDS = 60
 MAX_FAILURES = 5
+LAZY_PREFIXES = ("uploads/",)  # erst bei Bedarf herunterladen
 
 
 class CloudSyncError(Exception):
@@ -134,6 +137,8 @@ class CloudSync:
             if rel.startswith(".") or rel.lower() == "readme.md" or ".." in Path(rel).parts:
                 continue
             local = self.data_dir / rel
+            if rel.startswith(LAZY_PREFIXES):
+                continue  # wird bei Bedarf über fetch() geholt
             if local.exists() and git_blob_sha(local.read_bytes()) == sha:
                 continue
             local.parent.mkdir(parents=True, exist_ok=True)
@@ -142,6 +147,23 @@ class CloudSync:
         self.shas = remote
         self.last_sync = time.time()
         return downloaded
+
+    def fetch(self, rel: str) -> bool:
+        """Lädt eine einzelne Datei aus dem Repository, falls sie lokal fehlt."""
+        sha = self.shas.get(rel)
+        local = self.data_dir / rel
+        if local.exists() or not sha:
+            return local.exists()
+        local.parent.mkdir(parents=True, exist_ok=True)
+        tmp = local.with_name(f".dl-{local.name}")
+        tmp.write_bytes(self.store.download(sha))
+        tmp.replace(local)
+        return True
+
+    def fetch_all(self) -> None:
+        for rel in list(self.shas):
+            if rel.startswith(LAZY_PREFIXES):
+                self.fetch(rel)
 
     # -- Änderungen ---------------------------------------------------------------
     def mark_changed(self, path: Path) -> None:
@@ -252,6 +274,42 @@ def ensure_started(data_dir: Path) -> None:
             _sync = sync
         except CloudSyncError as exc:
             _init_error = str(exc)
+
+
+def _rel(path: Path) -> str | None:
+    if _sync is None:
+        return None
+    try:
+        return Path(path).resolve().relative_to(_sync.data_dir.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def ensure_local(path: Path) -> None:
+    """Holt eine Datei aus dem Cloud-Speicher, wenn sie lokal (noch) fehlt."""
+    rel = _rel(path)
+    if rel and not Path(path).exists():
+        try:
+            _sync.fetch(rel)
+        except CloudSyncError:
+            pass
+
+
+def available(path: Path) -> bool:
+    """Gibt es die Datei – lokal oder im Cloud-Speicher?"""
+    if Path(path).exists():
+        return True
+    rel = _rel(path)
+    return bool(rel and rel in _sync.shas)
+
+
+def fetch_all() -> None:
+    """Alle Dateien lokal verfügbar machen (z. B. vor einem vollständigen Backup)."""
+    if _sync is not None:
+        try:
+            _sync.fetch_all()
+        except CloudSyncError:
+            pass
 
 
 def notify_changed(path: Path) -> None:

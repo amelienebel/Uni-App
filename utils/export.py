@@ -213,6 +213,7 @@ def to_pdf(blocks: list[Block]) -> bytes:
 # ---------------------------------------------------------------------------
 
 def backup_zip() -> bytes:
+    cloud_sync.fetch_all()  # Unterlagen, die bisher nur im Cloud-Speicher liegen, mit sichern
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for path in DATA_DIR.rglob("*"):

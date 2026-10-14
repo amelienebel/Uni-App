@@ -45,7 +45,7 @@ DEFAULT_SETTINGS = {
     "semester_end": None,
     "exam_dates": {},  # modul_id -> {"date": "YYYY-MM-DD", "time": "", "room": ""}
     "schedule": None,  # None = Stundenplan aus config.json
-    "ai": {"model": "claude-opus-5-5", "effort": "medium"},
+    "ai": {"model": "claude-sonnet-5-5", "model_cards": "claude-opus-5-5", "effort": "medium"},
     "learning": {"daily_review_limit": 60, "prep_days_before": 1, "review_days_after": 2},
 }
 
@@ -321,18 +321,33 @@ def save_upload(module_id: str, filename: str, content: bytes, subdir: str = "pd
     return str(path.relative_to(DATA_DIR))
 
 
-def abs_data_path(rel_path: str) -> Path:
+def abs_data_path(rel_path: str, fetch: bool = True) -> Path:
+    """Absoluter Pfad einer Datei in data/. Fehlt sie lokal, wird sie aus dem Cloud-Speicher geholt."""
     path = (DATA_DIR / rel_path).resolve()
     if DATA_DIR.resolve() not in path.parents:
         raise ValueError("Ungültiger Pfad")
+    if fetch and not path.exists():
+        cloud_sync.ensure_local(path)
     return path
+
+
+def data_file_exists(rel_path: str) -> bool:
+    """Existiert die Datei lokal oder im Cloud-Speicher (ohne sie herunterzuladen)?"""
+    try:
+        return cloud_sync.available(abs_data_path(rel_path, fetch=False))
+    except ValueError:
+        return False
+
+
+def read_data_file(rel_path: str) -> bytes:
+    return abs_data_path(rel_path).read_bytes()
 
 
 def delete_data_file(rel_path: str | None) -> None:
     if not rel_path:
         return
     try:
-        path = abs_data_path(rel_path)
+        path = abs_data_path(rel_path, fetch=False)
         path.unlink(missing_ok=True)
         cloud_sync.notify_changed(path)
     except (ValueError, OSError):
@@ -383,6 +398,13 @@ def add_file(module_id: str, filename: str, content: bytes, doc_type: str, chapt
     data["documents"].append(doc)
     save_module(module_id)
     return doc
+
+
+def set_document_pages(doc: dict, pages: list[str], method: str) -> None:
+    """Ersetzt den gespeicherten Text eines Dokuments (z. B. durch die genaue KI-Lesung mit Formeln)."""
+    _write_json(TEXT_DIR / f"{doc['id']}.json", {"pages": pages, "method": method})
+    doc["n_chars"] = sum(len(p) for p in pages)
+    doc["text_source"] = method
 
 
 def get_document_pages(doc: dict) -> list[str]:

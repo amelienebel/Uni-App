@@ -11,7 +11,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (chapter_label, days_until_exam, get_exam_date, get_schedule, load_module, load_todos,
                            semester_dates, today)
 from views.common import LECTURE_TABS, MODULE_TABS, micon, open_unit
-from views.module_tabs import ablauf, files, exercise_page, formulas_tab, learn, lecture_page, notes
+from views.module_tabs import ablauf, definitions_tab, files, exercise_page, formulas_tab, learn, lecture_page, notes
 
 TABS = MODULE_TABS
 
@@ -118,8 +118,10 @@ def render(cfg: dict, module_id: str) -> None:
     with tabs[1]:
         learn.render(cfg, module, lecs, exs)
     with tabs[2]:
-        files.all_files(cfg, module_id)
+        definitions_tab.render(cfg, module, lecs, exs)
     with tabs[3]:
+        files.all_files(cfg, module_id)
+    with tabs[4]:
         formulas_tab.render(cfg, module_id)
         st.divider()
         notes.render(cfg, module_id)

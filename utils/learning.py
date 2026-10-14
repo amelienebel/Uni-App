@@ -5,12 +5,12 @@ from __future__ import annotations
 import re
 
 from utils import ai
+from utils import definitions as defs
 from utils import spaced_repetition as sr
 from utils.config import get_module
 from utils.pdf_parser import heuristic_analysis
 from utils.storage import (chapter_label, get_document_pages, get_document_text, load_module, now_iso, read_data_file,
                            save_module, set_document_pages, suggest_formulas)
-from utils.textbook import material_for_lecture
 from utils.units import lecture_notes, unit_docs
 
 ANALYSIS_PROMPT = """Bereite mich auf die Vorlesung vor. Unten stehen die Folien für das Modul „{module}“,
@@ -33,21 +33,43 @@ Erstelle:
 
 CARDS_PROMPT = """Erstelle Lernkarten (Karteikarten) für {scope} im Modul „{module}“.
 
-Ziel: Wer alle Karten beherrscht, kann den KOMPLETTEN Stoff – nicht nur die groben Hauptpunkte.
+Ziel: Wer alle Karten beherrscht, kann den KOMPLETTEN Prüfungsstoff dieser Einheit.
+
+Quellen und Gewichtung:
+- Grundlage sind ausschließlich die Unterlagen unten: Folien bzw. Skript und meine Nachbereitung.
+  Kein zusätzliches Wissen aus Lehrbüchern oder dem Internet in die Karten mischen.
+- Meine Nachbereitung steuert die Gewichtung:
+  • „Vom Dozenten betont“ → besonders gründlich: mehrere Karten, auch Verständnis- und Anwendungsfragen.
+  • „Nur kurz angerissen“ → nur die Kernaussage, höchstens eine knappe Karte je Punkt.
+  • Inhalte aus meinen Notizen oder Tafelbildern, die nicht auf den Folien stehen, unbedingt aufnehmen.
+- Beispiele (Unternehmen, Zahlenbeispiele, Anekdoten) muss ich NICHT auswendig können: keine Karten, die
+  Beispiele abfragen. Beispiele dürfen in einer Antwort kurz zur Veranschaulichung vorkommen.
+
+Inhalt:
 - Gehe die Unterlagen vollständig und der Reihe nach durch (Folie für Folie bzw. Aufgabe für Aufgabe).
-- Decke wirklich alles ab: jede Definition, jedes Konzept, jede Annahme, jede Formel (wie lautet sie,
-  was bedeuten die Variablen, wann wendet man sie an), jeden Zusammenhang, jede Abgrenzung, Vor- und
-  Nachteile, Beispiele, Rechenschemata und typische Fehler.
-- Meine Nachbereitungs-Notizen sind besonders wichtig: Was der Dozent betont hat, bekommt zusätzliche
-  Karten (auch Anwendungs- und Transferfragen). Inhalte aus Notizen oder Tafelbildern, die nicht auf den
-  Folien stehen, unbedingt aufnehmen. „Nur kurz Angerissenes“ trotzdem abdecken, aber knapper.
+- Decke alles Prüfungsrelevante ab: Konzepte, Annahmen, Formeln (wie lautet sie, was bedeuten die
+  Variablen, wann wendet man sie an), Zusammenhänge, Abgrenzungen, Vor- und Nachteile, Rechenschemata,
+  typische Fehler.
+- DEFINITIONEN: Jeden Fachbegriff, der in den Unterlagen definiert oder erklärt wird, zusätzlich in
+  „definitions“ aufnehmen (term + präzise Definition, möglichst im Wortlaut der Folien/des Skripts).
+  Für Definitionen KEINE eigene Karte schreiben – daraus entstehen automatisch Karten.
 - Bei Übungen: Lösungswege als Karten (Ansatz, Rechenschritte, Ergebnisinterpretation), ohne nur
   Zahlen auswendig lernen zu lassen.
 - Eine Karte = ein abfragbarer Gedanke. Vorderseite als konkrete Frage, Rückseite als präzise,
   klausurtaugliche Antwort. Formeln in LaTeX mit $...$.
 - Die Anzahl ergibt sich aus dem Stoffumfang – lieber vollständig als knapp.
-{book_rule}- Diese Karten gibt es schon (keine Duplikate, nur Fehlendes ergänzen): {existing}
+- Diese Karten gibt es schon (keine Duplikate, nur Fehlendes ergänzen): {existing}
+- Diese Definitionen gibt es schon: {existing_defs}
 - chapter_hint: Titel des passenden Kapitels aus dieser Liste: {chapters}
+
+<unterlagen>
+{material}
+</unterlagen>"""
+
+DEFINITIONS_PROMPT = """Sammle alle Definitionen aus den Unterlagen der Einheit „{title}“ im Modul „{module}“.
+Jeder Fachbegriff, der in Folien, Skript oder meinen Notizen definiert oder erklärt wird: term + präzise
+Definition, möglichst im Wortlaut der Unterlagen (keine Beispiele, kein Wissen von außerhalb).
+Diese Begriffe gibt es schon (nicht wiederholen): {existing}
 
 <unterlagen>
 {material}
@@ -154,9 +176,6 @@ def _offline_cards(data: dict, unit: dict) -> list[dict]:
         analysis = doc.get("analysis") or {}
         for q in analysis.get("check_questions", []):
             cards.append({"front": q["question"], "back": q["answer"]})
-        for c in analysis.get("key_concepts", []):
-            if not c["term"].startswith("Folie"):
-                cards.append({"front": f"Was versteht man unter „{c['term']}“?", "back": c["explanation"]})
     if unit["kind"] == "lecture":
         notes = lecture_notes(data, unit["id"])
         for line in (notes["text"] + "\n" + notes["emphasized"]).splitlines():
@@ -172,14 +191,6 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, existing_cards: l
     data = load_module(module_id)
     if ai.is_available():
         material = unit_material(data, unit)
-        book = material_for_lecture(data, unit) if unit["kind"] == "lecture" else ""
-        book_rule = ""
-        if book:
-            material += f"\n\n<lehrbuch_ergaenzend>\n{book}\n</lehrbuch_ergaenzend>"
-            book_rule = ("- Das Lehrbuch ergänzt die Folien: Nutze es für präzise Definitionen, ausführlichere Erklärungen, "
-                         "Beispiele und Zusammenhänge zu den Themen dieser Vorlesung. Inhalte des Buchkapitels, die zum "
-                         "Vorlesungsstoff gehören, aber auf den Folien fehlen, ebenfalls als Karten aufnehmen. Bei "
-                         "Abweichungen gelten Folien und Notizen.\n")
         if not material.strip():
             raise ai.AIError("Es gibt noch keine Unterlagen oder Notizen, aus denen Karten entstehen können.")
         title = unit.get("topic") or unit.get("title") or ""
@@ -187,10 +198,13 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, existing_cards: l
                  else f"die Übung „{title}“")
         chapters = {ch["title"]: ch["id"] for ch in data["chapters"]}
         existing = "; ".join(c["front"] for c in existing_cards) or "keine"
+        existing_defs = "; ".join(d["term"] for d in defs.definitions(data)) or "keine"
         result = ai.complete_json(CARDS_PROMPT.format(scope=scope, module=module["name"], existing=existing,
-                                                      book_rule=book_rule,
+                                                      existing_defs=existing_defs,
                                                       chapters=", ".join(chapters), material=material),
                                   ai.CARDS_SCHEMA, max_tokens=64000, task="cards")
+        for d in result.get("definitions", []):
+            defs.add_definition(data, d["term"], d["definition"], unit["id"], unit.get("chapter_id"))
         raw = [{"front": c["front"], "back": c["back"],
                 "chapter_id": chapters.get(c.get("chapter_hint")) or unit.get("chapter_id")}
                for c in result.get("cards", [])]
@@ -198,6 +212,10 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, existing_cards: l
     else:
         raw = _offline_cards(data, unit)
         source = "auto"
+        for doc in unit_docs(data, unit):
+            for c in (doc.get("analysis") or {}).get("key_concepts", []):
+                if not c["term"].startswith("Folie"):
+                    defs.add_definition(data, c["term"], c["explanation"], unit["id"], unit.get("chapter_id"), "auto")
     known = {c["front"].strip().lower() for c in data["cards"]}
     added = 0
     for item in raw:
@@ -210,5 +228,28 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, existing_cards: l
         known.add(item["front"].strip().lower())
         added += 1
     data.setdefault("cards_generated", {})[unit["id"]] = now_iso()
+    save_module(module_id)
+    return added
+
+
+def extract_definitions(cfg: dict, module_id: str, unit: dict) -> int:
+    """Nur Definitionen einer Einheit sammeln (günstiger als Karten) – jede wird auch zur Karteikarte."""
+    module = get_module(cfg, module_id)
+    data = load_module(module_id)
+    material = unit_material(data, unit)
+    added = 0
+    if material.strip() and ai.is_available():
+        existing = "; ".join(d["term"] for d in defs.definitions(data)) or "keine"
+        title = unit.get("topic") or unit.get("title") or ""
+        result = ai.complete_json(DEFINITIONS_PROMPT.format(title=title, module=module["name"], existing=existing,
+                                                            material=material), ai.DEFINITIONS_SCHEMA, max_tokens=32000)
+        for d in result.get("definitions", []):
+            added += defs.add_definition(data, d["term"], d["definition"], unit["id"], unit.get("chapter_id"))
+    else:
+        for doc in unit_docs(data, unit):
+            for c in (doc.get("analysis") or {}).get("key_concepts", []):
+                added += defs.add_definition(data, c["term"], c["explanation"], unit["id"], unit.get("chapter_id"),
+                                             "auto")
+    data.setdefault("definitions_done", {})[unit["id"]] = now_iso()
     save_module(module_id)
     return added

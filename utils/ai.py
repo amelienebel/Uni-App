@@ -225,8 +225,11 @@ VISUAL_ANALYSIS_SCHEMA = _obj({
     "slides": {"type": "array", "items": _obj({"page": _INT, "text": _STR})},
 })
 
+DEFINITIONS_SCHEMA = _obj({"definitions": {"type": "array", "items": _obj({"term": _STR, "definition": _STR})}})
+
 CARDS_SCHEMA = _obj({
     "cards": {"type": "array", "items": _obj({"front": _STR, "back": _STR, "chapter_hint": _STR})},
+    "definitions": {"type": "array", "items": _obj({"term": _STR, "definition": _STR})},
 })
 
 FORMULAS_SCHEMA = _obj({"formulas": {"type": "array", "items": FORMULA_SCHEMA}})

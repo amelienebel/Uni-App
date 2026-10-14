@@ -25,7 +25,8 @@ PAGES = {
 NAV_PAGES = list(PAGES.values())
 
 MODULE_TABS = [":material/view_timeline: Ablauf", ":material/school: Lernen & Klausur",
-               ":material/folder_open: Dateien", ":material/functions: Formeln & Notizen"]
+               ":material/library_books: Definitionen", ":material/folder_open: Dateien",
+               ":material/functions: Formeln & Notizen"]
 LECTURE_TABS = [":material/folder_open: Dateien", ":material/menu_book: Vorbereiten",
                 ":material/edit_note: Nachbereiten", ":material/style: Lernen"]
 

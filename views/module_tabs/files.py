@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import partial
 
+import pandas as pd
 import streamlit as st
 
 from utils import ai
@@ -124,6 +125,50 @@ def _set_book_chapter(module_id: str, doc_id: str, widget_key: str) -> None:
     save_module(module_id)
 
 
+def _whole_book(module_id: str) -> None:
+    """Ganzes Buch als ein PDF: Kapitel automatisch erkennen, prüfen und aufteilen."""
+    with st.expander("Nur das ganze Buch als eine PDF? Hier hochladen – die App teilt es in Kapitel auf",
+                     icon=":material/auto_stories:"):
+        round_key = f"wb_round_{module_id}"
+        book = st.file_uploader("Ganzes Buch (PDF, max. 200 MB)", type=["pdf"],
+                                key=f"wb_up_{module_id}_{st.session_state.get(round_key, 0)}")
+        if not book:
+            return
+        state_key = f"wb_detect_{module_id}"
+        if st.session_state.get(state_key, {}).get("name") != (book.name, book.size):
+            with st.spinner("Suche die Kapitelanfänge im Buch … (bei dicken Büchern bis zu 1–2 Minuten)"):
+                try:
+                    chapters, total = textbook.detect_chapters(book.getvalue())
+                except Exception as exc:  # noqa: BLE001 - beschädigtes PDF
+                    st.error(f"Das PDF konnte nicht gelesen werden: {exc}")
+                    return
+            st.session_state[state_key] = {"name": (book.name, book.size), "chapters": chapters, "total": total}
+        found = st.session_state[state_key]
+        if found["chapters"]:
+            st.success(f"{len(found['chapters'])} Kapitel gefunden ({found['total']} Seiten). Bitte kurz prüfen: "
+                       "Kapitelnummer und Seite, auf der das Kapitel beginnt (Seitenzahl im PDF, nicht im Buch).")
+        else:
+            st.warning("Die Kapitel konnten nicht automatisch erkannt werden. Trag unten für jedes Kapitel die "
+                       "Seite ein, auf der es beginnt (Seitenzahl im PDF-Viewer).")
+        rows = found["chapters"] or [{"nr": 1, "title": "", "start": 1}]
+        edited = st.data_editor(
+            pd.DataFrame([{"Kapitel": c["nr"], "Titel": c.get("title", ""), "Startseite": c["start"]} for c in rows]),
+            num_rows="dynamic", hide_index=True, width="stretch", key=f"wb_edit_{module_id}",
+            column_config={"Kapitel": st.column_config.NumberColumn(min_value=1, max_value=99, step=1, required=True),
+                           "Startseite": st.column_config.NumberColumn(min_value=1, max_value=found["total"], step=1,
+                                                                       required=True)})
+        if st.button("In Kapitel aufteilen & speichern", key=f"wb_go_{module_id}", type="primary",
+                     icon=":material/content_cut:"):
+            chapters = [{"nr": int(r["Kapitel"]), "title": str(r["Titel"] or "").strip(), "start": int(r["Startseite"])}
+                        for _, r in edited.iterrows() if pd.notna(r["Kapitel"]) and pd.notna(r["Startseite"])]
+            with st.spinner(f"Teile das Buch in {len(chapters)} Kapitel auf und lese den Text …"):
+                created = textbook.split_book(module_id, book.name, book.getvalue(), chapters)
+            st.session_state.pop(state_key, None)
+            st.session_state[round_key] = st.session_state.get(round_key, 0) + 1
+            st.session_state["files_msg"] = f"{created} Buchkapitel gespeichert."
+            st.rerun()
+
+
 def textbook_section(cfg: dict, module_id: str) -> None:
     """Lehrbuch-Kapitel hochladen – sie ergänzen die Folien bei Karteikarten und im Tutor."""
     module = get_module(cfg, module_id)
@@ -145,6 +190,7 @@ def textbook_section(cfg: dict, module_id: str) -> None:
         save_module(module_id)
         st.session_state[round_key] = st.session_state.get(round_key, 0) + 1
         st.rerun()
+    _whole_book(module_id)
     docs = textbook.book_docs(data)
     if not docs:
         st.caption("Noch keine Buchkapitel hochgeladen.")

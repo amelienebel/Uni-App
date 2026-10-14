@@ -67,3 +67,104 @@ def material_for_chapters(data: dict, chapters: list[int], limit: int | None = N
 
 def material_for_lecture(data: dict, lec: dict) -> str:
     return material_for_chapters(data, lecture_chapters(data, lec))
+
+
+# ---------------------------------------------------------------------------
+# Ganzes Buch hochladen → automatisch in Kapitel aufteilen
+# ---------------------------------------------------------------------------
+
+_OUTLINE_NR = re.compile(r"^\s*(?:Kapitel|Chapter|Kap\.)?\s*(\d{1,2})(?:[.:\s]|$)\s*(.*)", re.IGNORECASE)
+_PAGE_HEAD = re.compile(r"^\s*Kapitel\s+(\d{1,2})\b[\s:.\-–]*(.{0,80})", re.IGNORECASE | re.MULTILINE)
+
+
+def _outline_chapters(reader) -> list[dict]:
+    found = []
+
+    def walk(items, depth):
+        for item in items:
+            if isinstance(item, list):
+                if depth < 1:  # Unterkapitel ignorieren, nur oberste Ebene (+ Teile/Parts eine Ebene tiefer)
+                    walk(item, depth + 1)
+                continue
+            match = _OUTLINE_NR.match(getattr(item, "title", "") or "")
+            if match:
+                try:
+                    page = reader.get_destination_page_number(item)
+                except Exception:  # noqa: BLE001
+                    continue
+                found.append({"nr": int(match.group(1)), "title": match.group(2).strip()[:80], "start": page + 1})
+
+    try:
+        walk(reader.outline, 0)
+    except Exception:  # noqa: BLE001 - kaputtes Inhaltsverzeichnis
+        return []
+    return found
+
+
+def _text_chapters(reader) -> list[dict]:
+    """Fallback ohne Lesezeichen: Seiten, die oben mit „Kapitel N“ beginnen."""
+    found, seen = [], set()
+    for i, page in enumerate(reader.pages):
+        try:
+            head = (page.extract_text() or "")[:300]
+        except Exception:  # noqa: BLE001
+            continue
+        match = _PAGE_HEAD.search(head)
+        if match and int(match.group(1)) not in seen:
+            seen.add(int(match.group(1)))
+            found.append({"nr": int(match.group(1)), "title": match.group(2).strip().split("\n")[0][:80],
+                          "start": i + 1})
+    return found
+
+
+def detect_chapters(content: bytes) -> tuple[list[dict], int]:
+    """Kapitelanfänge (Seitenzahl ab 1) aus Lesezeichen oder Seitenköpfen; dazu die Gesamtseitenzahl."""
+    import io
+
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(content))
+    total = len(reader.pages)
+    chapters = _outline_chapters(reader) or _text_chapters(reader)
+    # aufsteigend nach Seite, je Kapitelnummer nur der erste Treffer
+    result, seen = [], set()
+    for ch in sorted(chapters, key=lambda c: c["start"]):
+        if ch["nr"] not in seen:
+            seen.add(ch["nr"])
+            result.append(ch)
+    return result, total
+
+
+def split_book(module_id: str, filename: str, content: bytes, chapters: list[dict]) -> int:
+    """Speichert jedes Kapitel als eigenes Lehrbuch-PDF. chapters: [{nr, title, start}] (Seiten ab 1)."""
+    import gc
+    import io
+
+    from pypdf import PdfReader, PdfWriter
+
+    from utils.storage import add_document, load_module, save_module
+
+    reader = PdfReader(io.BytesIO(content))
+    total = len(reader.pages)
+    chapters = sorted((c for c in chapters if c.get("nr") and c.get("start")), key=lambda c: int(c["start"]))
+    stem = PurePosixPath(filename).stem
+    created = 0
+    for i, ch in enumerate(chapters):
+        start = max(1, int(ch["start"]))
+        end = int(chapters[i + 1]["start"]) - 1 if i + 1 < len(chapters) else total
+        if end < start:
+            continue
+        writer = PdfWriter()
+        for p in range(start - 1, min(end, total)):
+            writer.add_page(reader.pages[p])
+        buf = io.BytesIO()
+        writer.write(buf)
+        title = f" – {ch['title']}" if ch.get("title") else ""
+        doc = add_document(module_id, f"{stem} – Kapitel {ch['nr']}{title}.pdf", buf.getvalue(), DOC_TYPE, None)
+        doc.update({"book_chapter": int(ch["nr"]), "book_pages": f"{start}–{end}"})
+        created += 1
+        del writer, buf
+        gc.collect()
+    save_module(module_id)
+    load_module(module_id)
+    return created

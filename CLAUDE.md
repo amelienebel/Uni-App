@@ -17,9 +17,10 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; „betont“ gründlicher, „kurz angerissen“ knapp; keine Beispiel-Karten;
   jede Definition → Reiter Definitionen + eigene Karte. Lehrbuch nur im Tutor.
-- Modelle: Zusammenfassung Haiku 5.5, Karten Sonnet 5.5, Tutor Opus 5.5 (änderbar in den Einstellungen).
+- Modelle: Zusammenfassung Haiku 5.5, Karten Sonnet 5.5, Tutor Sonnet 5.5 (änderbar in den Einstellungen).
 - PDFs zuerst nur als Text lesen; Seiten mit Abbildungen vorschlagen, genau lesen nur nach Auswahl.
 
 ## Testen
-`ruff check --select F,E9 --line-length 120 .` und Streamlit-AppTest (`streamlit.testing.v1.AppTest`) gegen `app.py`;
-danach `data/` und `__pycache__` aufräumen.
+- `ruff check --select F,E9 --line-length 120 .`
+- `python -m pytest tests -q` (Schnelltest: alle Seiten und Module öffnen; räumt `data/` selbst auf)
+- Abhängigkeiten installiert der SessionStart-Hook (`.claude/hooks/session-start.sh`) in Cloud-Sitzungen automatisch.

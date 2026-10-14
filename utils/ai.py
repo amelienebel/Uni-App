@@ -71,7 +71,7 @@ def estimate_cost(task: str, input_tokens: int, output_tokens: int) -> float:
 TASKS = {
     "summary": ("Zusammenfassungen der Folien", "claude-haiku-5-5"),
     "cards": ("Karteikarten & Definitionen", "claude-sonnet-5-5"),
-    "tutor": ("Tutor-Chat", "claude-opus-5-5"),
+    "tutor": ("Tutor-Chat", "claude-sonnet-5-5"),
     "default": ("Alles andere (Quiz, Lösungsvergleich, Abtippen, Karten-Nachfragen …)", "claude-sonnet-5-5"),
 }
 
@@ -84,6 +84,11 @@ def _settings(task: str | None = None) -> tuple[str, str]:
         ai_settings["models"] = {key: default for key, (_, default) in TASKS.items()}
         ai_settings.pop("model", None)
         ai_settings.pop("model_cards", None)
+        save_settings()
+    if ai_settings.get("models_version", 1) < 2:  # Tutor von Opus auf Sonnet (spart etwa die Hälfte)
+        if ai_settings["models"].get("tutor") == "claude-opus-5-5":
+            ai_settings["models"]["tutor"] = "claude-sonnet-5-5"
+        ai_settings["models_version"] = 2
         save_settings()
     models = ai_settings["models"]
     task = task if task in TASKS else "default"

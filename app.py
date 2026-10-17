@@ -18,6 +18,9 @@ from utils.config import WEEKDAYS, get_module, get_secret, load_config, module_i
 from views import (bulk_upload, dashboard, exam_plan_view, export_view, formulas, module_view,  # noqa: E402
                    settings_view, today_view)
 from views.common import NAV_PAGES, PAGES, goto, micon, open_unit  # noqa: E402
+from utils import upload_debug  # noqa: E402
+
+upload_debug.install()
 
 
 

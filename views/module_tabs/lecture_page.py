@@ -16,7 +16,7 @@ from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_dat
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
 from views.common import LECTURE_TABS, ai_hint, open_unit, render_formula, toggle_todo
 from views.module_tabs import exams, study, tutor
-from views.module_tabs.files import file_list, show_messages, uploader
+from views.module_tabs.files import PHOTO_HINT, file_list, show_messages, uploader
 
 
 def _status_toggle(module_id: str, lec: dict, field: str, widget_key: str) -> None:
@@ -227,6 +227,7 @@ def _handwriting(module: dict, module_id: str, lec: dict, notes: dict) -> None:
         round_key = f"hw_round_{lec['id']}"
         photos = st.file_uploader("Fotos der Mitschrift (am Handy direkt mit der Kamera)", type=list(IMAGE_TYPES),
                                   accept_multiple_files=True, key=f"hw_{lec['id']}_{st.session_state.get(round_key, 0)}")
+        st.caption(PHOTO_HINT)
         if photos and st.button("Abtippen & in meine Notizen übernehmen", key=f"hw_go_{lec['id']}", type="primary",
                                 icon=":material/edit_note:"):
             content = []
@@ -286,6 +287,7 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     st.markdown("#### Tafelbilder & Screenshots")
     images = st.file_uploader("Bilder hochladen", type=list(IMAGE_TYPES), accept_multiple_files=True,
                               key=f"img_up_{lec['id']}_{len(notes['images'])}")
+    st.caption(PHOTO_HINT)
     if images and st.button("Bilder speichern", key=f"img_save_{lec['id']}"):
         for img in images:
             notes["images"].append({"path": save_upload(module_id, img.name, img.getvalue(), "images"),

@@ -208,6 +208,10 @@ def textbook_section(cfg: dict, module_id: str) -> None:
             st.rerun()
 
 
+PHOTO_HINT = ("Fotos vom Mac: auf „Browse files“ klicken und links unter „Fotos“ auswählen (oder erst auf den "
+              "Schreibtisch ziehen). Direkt aus der Fotos-App hineinziehen klappt im Browser nicht.")
+
+
 def uploader(cfg: dict, module_id: str, unit: dict, doc_type: str, label: str, key: str,
              allow_images: bool = False, analyse: bool = False) -> None:
     """Upload-Feld für einen Dateityp. Folien werden direkt nach dem Hochladen zusammengefasst."""
@@ -215,6 +219,8 @@ def uploader(cfg: dict, module_id: str, unit: dict, doc_type: str, label: str, k
     types = ["pdf"] + (list(IMAGE_TYPES) if allow_images else [])
     files = st.file_uploader(label, type=types, accept_multiple_files=True,
                              key=f"up_{key}_{st.session_state.get(counter_key, 0)}")
+    if allow_images:
+        st.caption(PHOTO_HINT)
     if not files:
         return
     messages = []

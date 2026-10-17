@@ -6,7 +6,7 @@ FSRS merkt sich pro Karte
 Daraus folgt, wie wahrscheinlich ich sie heute noch weiß (retrievability). Die nächste Wiederholung kommt,
 wenn diese Wahrscheinlichkeit auf die Zielquote fällt.
 
-Vier Bewertungen: 0 = Nochmal (kommt in derselben Runde wieder), 1 = Schwer, 2 = Gut, 3 = Einfach.
+Vier Bewertungen: 0 = Gar nicht (kommt in derselben Runde wieder), 1 = Etwas, 2 = Gut, 3 = Perfekt.
 
 Klausurtermin:
 - Zielquote steigt, je näher die Klausur ist (88 % → 92 % → 95 %); wichtige Karten etwas höher, Randthemen niedriger.
@@ -26,10 +26,10 @@ from datetime import date, timedelta
 from utils.storage import new_id, now_iso
 
 GRADES = [
-    {"value": 0, "label": "Nochmal"},
-    {"value": 1, "label": "Schwer"},
+    {"value": 0, "label": "Gar nicht"},
+    {"value": 1, "label": "Etwas"},
     {"value": 2, "label": "Gut"},
-    {"value": 3, "label": "Einfach"},
+    {"value": 3, "label": "Perfekt"},
 ]
 PRIORITIES = {"high": "wichtig", "normal": "normal", "low": "Randthema"}
 _PRIORITY_RANK = {"high": 0, "normal": 1, "low": 2}

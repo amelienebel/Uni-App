@@ -102,8 +102,6 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
         next_id = min(candidates, key=lambda u: u["date"] if u["kind"] == "lecture" else u["session"])["id"]
 
     schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
-    st.caption("Tippe auf eine Vorlesung oder Übung, um Dateien hochzuladen, vor- und nachzubereiten und zu lernen. "
-               "Erledigtes kannst du direkt hier abhaken.")
     groups = [(ch["id"], chapter_label(data, ch["id"])) for ch in data["chapters"]] + [(None, "Weitere Termine")]
     for gi, (chapter_id, label) in enumerate(groups):
         ch_lecs = [lec for lec in lecs if lec.get("chapter_id") == chapter_id]

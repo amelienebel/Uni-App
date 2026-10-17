@@ -62,3 +62,19 @@ def get_module(cfg: dict, module_id: str) -> dict:
 def module_label(cfg: dict, module_id: str, short: bool = False) -> str:
     module = get_module(cfg, module_id)
     return f"{module['short'] if short else module['name']}"
+
+
+# Klausurformate (config.json → modules[].exam_format.type)
+EXAM_FORMATS = {
+    "mc_multi": "Multiple Choice mit 5 Antwortmöglichkeiten (eine oder mehrere richtig)",
+    "sc4": "Single Choice mit 4 Antwortmöglichkeiten (genau eine richtig)",
+    "open": "Offene Fragen (Freitext- und Rechenaufgaben mit Detaillösung)",
+    "mixed": "Noch unbekannt – Mix aus offenen Fragen und Multiple/Single Choice",
+}
+
+
+def exam_format(module: dict) -> dict:
+    """Klausurformat des Moduls: {"type": mc_multi | sc4 | open | mixed, "label": Beschreibung}."""
+    fmt = module.get("exam_format") or {}
+    kind = fmt.get("type") if fmt.get("type") in EXAM_FORMATS else "mixed"
+    return {"type": kind, "label": fmt.get("label") or EXAM_FORMATS[kind]}

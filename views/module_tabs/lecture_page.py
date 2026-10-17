@@ -16,7 +16,7 @@ from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_dat
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
 from views.common import LECTURE_TABS, ai_hint, open_unit, render_formula, toggle_todo
 from views.module_tabs import exams, study, tutor
-from views.module_tabs.files import PHOTO_HINT, file_list, show_messages, uploader
+from views.module_tabs.files import file_list, show_messages, uploader
 
 
 def _status_toggle(module_id: str, lec: dict, field: str, widget_key: str) -> None:
@@ -38,7 +38,7 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
     module = get_module(cfg, module_id)
     data = load_module(module_id)
     nav = st.columns([2, 1, 1])
-    nav[0].button("← Zurück zum Ablauf", key=f"back_{lec['id']}", on_click=open_unit, args=(module_id, None))
+    nav[0].button("Zum Ablauf", key=f"back_{lec['id']}", on_click=open_unit, args=(module_id, None))
     idx = lecs.index(lec)
     if idx > 0:
         nav[1].button("◀ vorige VL", key=f"prev_{lec['id']}", on_click=open_unit, args=(module_id, lecs[idx - 1]["id"]),
@@ -151,6 +151,66 @@ def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
             st.rerun()
 
 
+def _cell(text: str) -> str:
+    return (text or "").replace("|", "\\|").replace("\n", " ").strip() or "–"
+
+
+def _check_questions(doc: dict, questions: list[dict]) -> None:
+    st.markdown("#### :material/quiz: Pre-Check: 3 Verständnisfragen")
+    for i, q in enumerate(questions[:3], start=1):
+        st.markdown(f"**{i}. {q['question']}**")
+        st.text_area("Deine Antwort", key=f"cq_{doc['id']}_{i}", height=70, label_visibility="collapsed",
+                     placeholder="Erst selbst antworten, dann auflösen …")
+        with st.expander("Lösung anzeigen"):
+            st.markdown(q["answer"])
+
+
+def _prep_view(doc: dict, analysis: dict) -> None:
+    """Scannbare Vorbereitung: Must-Watch, Kernkonzepte als Tabelle mit Folien, Pre-Check-Fragen."""
+    if analysis.get("must_watch"):
+        with st.container(border=True, key=f"nextbox_mw_{doc['id']}"):
+            st.markdown("#### :material/star: Must-Watch: vor der Vorlesung ansehen")
+            st.markdown("\n".join(f"- **Folie {m['slides']}** · {m['topic']} – {m['why']}"
+                                   for m in analysis["must_watch"]))
+    rows = analysis.get("concept_table", [])
+    if rows:
+        st.markdown("#### :material/table: Kernkonzepte")
+        st.markdown("| Folie | Kernbegriff / Formel | Kurzerklärung | Worauf achten? |\n|---|---|---|---|\n" + "\n".join(
+            f"| {_cell(r['slides'])} | **{_cell(r['term'])}** | {_cell(r['short'])} | {_cell(r['watch_out'])} |"
+            for r in rows))
+    if analysis.get("summary"):
+        with st.expander("Ablauf entlang der Folien"):
+            st.markdown(analysis["summary"])
+    if analysis.get("formulas"):
+        with st.expander(f"Formeln auf den Folien ({len(analysis['formulas'])})"):
+            st.caption("In die Formelsammlung kommen sie erst, wenn du sie unter „Formeln & Notizen“ bestätigst.")
+            for f in analysis["formulas"]:
+                render_formula(f)
+    if analysis.get("check_questions"):
+        _check_questions(doc, analysis["check_questions"])
+
+
+def _old_prep_view(doc: dict, analysis: dict) -> None:
+    """Zusammenfassungen im alten Format (vor der Tabellen-Vorbereitung)."""
+    st.caption("Älteres Format – unten unter „Zusammenfassung neu erstellen“ gibt es die Tabellen-Fassung.")
+    st.markdown(analysis.get("summary", ""))
+    if analysis.get("key_concepts"):
+        with st.expander(f"Fachbegriffe ({len(analysis['key_concepts'])})"):
+            for concept in analysis["key_concepts"]:
+                st.markdown(f"- **{concept['term']}** – {concept['explanation']}")
+    if analysis.get("important_slides"):
+        with st.expander("Diese Folien genau ansehen"):
+            for s in analysis["important_slides"]:
+                st.markdown(f"- **Folie {s['page']}**: {s['reason']}")
+    if analysis.get("formulas"):
+        with st.expander(f"Formeln auf den Folien ({len(analysis['formulas'])})"):
+            st.caption("In die Formelsammlung kommen sie erst, wenn du sie unter „Formeln & Notizen“ bestätigst.")
+            for f in analysis["formulas"]:
+                render_formula(f)
+    if analysis.get("check_questions"):
+        _check_questions(doc, analysis["check_questions"])
+
+
 def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
     slides = [d for d in unit_docs(data, lec) if d.get("kind") != "image"]
@@ -162,37 +222,18 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
         if len(slides) > 1:
             st.markdown(f"### {doc['filename']}")
         if not analysis:
-            if st.button("Zusammenfassung erstellen", key=f"an_{doc['id']}", type="primary"):
-                with st.spinner("Erstelle Zusammenfassung …"):
+            if st.button("Vorbereitung erstellen", key=f"an_{doc['id']}", type="primary"):
+                with st.spinner("Erstelle Vorbereitung …"):
                     try:
                         st.session_state[f"upmsg_{module_id}"] = [("success", run_analysis(cfg, module_id, doc))]
                     except ai.AIError as exc:
                         st.session_state[f"upmsg_{module_id}"] = [("error", str(exc))]
                 st.rerun()
             continue
-        st.markdown(analysis.get("summary", ""))
-        if analysis.get("key_concepts"):
-            with st.expander(f"Fachbegriffe ({len(analysis['key_concepts'])})"):
-                for concept in analysis["key_concepts"]:
-                    st.markdown(f"- **{concept['term']}** – {concept['explanation']}")
-        if analysis.get("important_slides"):
-            with st.expander("Diese Folien genau ansehen"):
-                for s in analysis["important_slides"]:
-                    st.markdown(f"- **Folie {s['page']}**: {s['reason']}")
-        if analysis.get("formulas"):
-            with st.expander(f"Formeln auf den Folien ({len(analysis['formulas'])})"):
-                st.caption("In die Formelsammlung kommen sie erst, wenn du sie unter „Formeln & Notizen“ bestätigst.")
-                for f in analysis["formulas"]:
-                    render_formula(f)
-        questions = analysis.get("check_questions", [])[:3]
-        if questions:
-            st.markdown("#### 3 schnelle Verständnisfragen")
-            for i, q in enumerate(questions, start=1):
-                st.markdown(f"**{i}. {q['question']}**")
-                st.text_area("Deine Antwort", key=f"cq_{doc['id']}_{i}", height=70, label_visibility="collapsed",
-                             placeholder="Erst selbst antworten, dann auflösen …")
-                with st.expander("Lösung anzeigen"):
-                    st.markdown(q["answer"])
+        if "concept_table" in analysis:
+            _prep_view(doc, analysis)
+        else:
+            _old_prep_view(doc, analysis)
         if doc.get("text_source") == "ki-genau":
             st.caption("Genau gelesen: Formeln, Tabellen und Grafiken wurden mit erfasst.")
         else:
@@ -203,7 +244,7 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
             b1, b2 = st.columns(2)
             for col, visual, label in ((b1, False, "Neu erstellen"), (b2, True, "Genau lesen (mit Formeln & Grafiken)")):
                 if col.button(label, key=f"rean_{visual}_{doc['id']}", disabled=visual and not ai.is_available()):
-                    with st.spinner("Erstelle Zusammenfassung …"):
+                    with st.spinner("Erstelle Vorbereitung …"):
                         try:
                             msg = run_analysis(cfg, module_id, doc, visual=visual)
                             st.session_state[f"upmsg_{module_id}"] = [("success", msg)]
@@ -227,7 +268,6 @@ def _handwriting(module: dict, module_id: str, lec: dict, notes: dict) -> None:
         round_key = f"hw_round_{lec['id']}"
         photos = st.file_uploader("Fotos der Mitschrift (am Handy direkt mit der Kamera)", type=list(IMAGE_TYPES),
                                   accept_multiple_files=True, key=f"hw_{lec['id']}_{st.session_state.get(round_key, 0)}")
-        st.caption(PHOTO_HINT)
         if photos and st.button("Abtippen & in meine Notizen übernehmen", key=f"hw_go_{lec['id']}", type="primary",
                                 icon=":material/edit_note:"):
             content = []
@@ -287,7 +327,6 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     st.markdown("#### Tafelbilder & Screenshots")
     images = st.file_uploader("Bilder hochladen", type=list(IMAGE_TYPES), accept_multiple_files=True,
                               key=f"img_up_{lec['id']}_{len(notes['images'])}")
-    st.caption(PHOTO_HINT)
     if images and st.button("Bilder speichern", key=f"img_save_{lec['id']}"):
         for img in images:
             notes["images"].append({"path": save_upload(module_id, img.name, img.getvalue(), "images"),
@@ -389,7 +428,7 @@ def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[dic
         st.session_state[f"ltab_{lec['id']}"] = nxt
     if st.session_state.get(f"ltab_{lec['id']}") not in LEC_TABS:
         st.session_state.pop(f"ltab_{lec['id']}", None)
-    tabs = st.tabs(LEC_TABS, key=f"ltab_{lec['id']}")
+    tabs = st.tabs(LEC_TABS, key=f"ltab_{lec['id']}", on_change="rerun")
     with tabs[0]:
         _files_tab(cfg, module_id, lec, exs, lecs + exs)
     with tabs[1]:

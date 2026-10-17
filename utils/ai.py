@@ -247,10 +247,12 @@ _INT = {"type": "integer"}
 
 FORMULA_SCHEMA = _obj({"name": _STR, "latex": _STR, "explanation": _STR, "page": _INT})
 
+# Vorlesungsvorbereitung: scannbar (Must-Watch, Tabelle mit Foliennummern, 3 Pre-Check-Fragen)
 ANALYSIS_SCHEMA = _obj({
+    "must_watch": {"type": "array", "items": _obj({"slides": _STR, "topic": _STR, "why": _STR})},
+    "concept_table": {"type": "array", "items": _obj({"slides": _STR, "term": _STR, "short": _STR,
+                                                      "watch_out": _STR})},
     "summary": _STR,
-    "key_concepts": {"type": "array", "items": _obj({"term": _STR, "explanation": _STR})},
-    "important_slides": {"type": "array", "items": _obj({"page": _INT, "reason": _STR})},
     "check_questions": {"type": "array", "items": _obj({"question": _STR, "answer": _STR})},
     "formulas": {"type": "array", "items": FORMULA_SCHEMA},
 })
@@ -292,11 +294,11 @@ FORMULAS_SCHEMA = _obj({"formulas": {"type": "array", "items": FORMULA_SCHEMA}})
 
 QUIZ_SCHEMA = _obj({
     "questions": {"type": "array", "items": _obj({
-        "type": {"type": "string", "enum": ["mc", "freitext"]},
+        "type": {"type": "string", "enum": ["mc", "mc_multi", "freitext"]},
         "operator": _STR,
         "question": _STR,
         "options": {"type": "array", "items": _STR},
-        "correct_index": _INT,
+        "correct_indices": {"type": "array", "items": _INT},
         "explanation": _STR,
         "sample_answer": _STR,
         "points": _INT,

@@ -31,6 +31,10 @@
       "icon": "🧮",
       "color": "#3B6FD8",
       "ects": 6,
+      "exam_format": {
+        "type": "mc_multi",
+        "label": "Multiple Choice mit 5 Antwortmöglichkeiten (eine oder mehrere richtig)"
+      },
       "exam_date": "2027-02-12",
       "keywords": [
         "mathe",
@@ -275,6 +279,10 @@
       "icon": "📒",
       "color": "#1E9C75",
       "ects": 6,
+      "exam_format": {
+        "type": "sc4",
+        "label": "Single Choice mit 4 Antwortmöglichkeiten (genau eine richtig)"
+      },
       "exam_date": "2027-02-15",
       "keywords": [
         "rewe",
@@ -559,6 +567,10 @@
       "icon": "💶",
       "color": "#D9822B",
       "ects": 6,
+      "exam_format": {
+        "type": "mixed",
+        "label": "Noch unbekannt – Mix aus offenen Fragen und Multiple/Single Choice"
+      },
       "exam_date": "2027-02-08",
       "keywords": [
         "invest",
@@ -784,6 +796,10 @@
       "icon": "🌍",
       "color": "#8B5CF6",
       "ects": 6,
+      "exam_format": {
+        "type": "mixed",
+        "label": "Noch unbekannt – Mix aus offenen Fragen und Multiple/Single Choice"
+      },
       "exam_date": "2027-02-09",
       "keywords": [
         "vwl",
@@ -1069,6 +1085,10 @@
       "icon": "📊",
       "color": "#D6455D",
       "ects": 6,
+      "exam_format": {
+        "type": "open",
+        "label": "Offene Fragen (Freitext- und Rechenaufgaben mit Detaillösung)"
+      },
       "exam_date": "2027-02-17",
       "keywords": [
         "statistik",

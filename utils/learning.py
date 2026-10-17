@@ -7,25 +7,32 @@ import re
 from utils import ai
 from utils import definitions as defs
 from utils import spaced_repetition as sr
-from utils.config import get_module
+from utils.config import exam_format, get_module
 from utils.pdf_parser import heuristic_analysis
 from utils.storage import (chapter_label, get_document_pages, get_document_text, load_module, now_iso, read_data_file,
                            save_module, set_document_pages, suggest_formulas)
 from utils.units import lecture_notes, unit_cards, unit_docs
 
+_PREP_TASKS = """Ich lese deine Vorbereitung auf dem Mac mit, während ich auf dem iPad durch die Folien scrolle.
+Darum: KEIN Fließtext, nur knappe Stichpunkte und Tabellenzellen (Telegrammstil, je max. ~15 Wörter).
+Jede Angabe MUSS mit Foliennummer(n) verknüpft sein – "slides" immer als Nummer oder Bereich, z. B. "12" oder "12–15".
+
+Erstelle:
+1. must_watch: genau 2–3 Folien/Konzepte, die ich mir unbedingt VOR der Vorlesung ansehen sollte (komplexe Grafiken,
+   Formeln, schwierige Definitionen): slides, topic (Begriff/Folientitel), why (ein kurzer Grund).
+2. concept_table: alle Kernbegriffe und Formeln in Folienreihenfolge: slides, term (Kernbegriff oder Formel, Formeln
+   in $...$), short (Kurzerklärung, max. ~15 Wörter), watch_out (worauf achten: Falle, Verwechslung, Bedingung –
+   max. ~12 Wörter).
+3. summary: Ablauf der Vorlesung als Markdown-Stichpunktliste entlang der Folien; jeder Abschnitt beginnt mit
+   „**Folie N–M** · Thema“, darunter 1–3 kurze Unterpunkte. Keine Absätze, keine Überschriften.
+4. check_questions: genau 3 kurze Verständnisfragen zum Selbst-Beantworten, jeweils mit knapper Musterantwort.
+5. formulas: alle mathematischen und betriebswirtschaftlichen Formeln als sauberes LaTeX (ohne $-Zeichen) mit Name,
+   kurzer Erklärung der Variablen und Foliennummer (page). Übernimm sie exakt wie auf den Folien."""
+
 ANALYSIS_PROMPT = """Bereite mich auf die Vorlesung vor. Unten stehen die Folien für das Modul „{module}“,
 {chapter}. Jede Folie ist mit „--- Folie N ---“ markiert.
 
-Erstelle:
-1. summary: eine Zusammenfassung in Markdown (Überschriften und Stichpunkte, Formeln in $...$), die ALLE
-   Themen der Folien in der Reihenfolge der Vorlesung abdeckt – so, dass ich danach weiß, worum es geht
-   und wie die Themen zusammenhängen.
-2. key_concepts: alle wichtigen Fachbegriffe mit prägnanter Erklärung.
-3. important_slides: Folien, die ich mir unbedingt genau ansehen muss (wichtige Abbildungen, Diagramme,
-   Herleitungen, Beispiele) – mit Foliennummer (page) und Begründung.
-4. check_questions: genau 3 schnelle Verständnisfragen zum ersten Check, jeweils mit kurzer Musterantwort.
-5. formulas: alle mathematischen und betriebswirtschaftlichen Formeln als sauberes LaTeX (ohne $-Zeichen)
-   mit Name, kurzer Erklärung der Variablen und Foliennummer. Übernimm sie exakt wie auf den Folien.
+""" + _PREP_TASKS + """
 
 <folien>
 {text}
@@ -34,7 +41,7 @@ Erstelle:
 # Bleibt immer gleich ⇒ wird als Systemprompt gecacht (siehe ai._request)
 CARDS_SYSTEM = """Du erstellst Karteikarten für eine Lern-App mit Spaced Repetition (BWL-Bachelor, LMU München,
 1. Semester). Die Nutzerin tippt ihre Antwort, sieht danach die Musterantwort und bewertet sich selbst in 4 Stufen
-(Nochmal / Schwer / Gut / Einfach). Daraus folgt: Jede Antwort muss aus dem Kopf reproduzierbar und mit dem eigenen
+(Gar nicht / Etwas / Gut / Perfekt). Daraus folgt: Jede Antwort muss aus dem Kopf reproduzierbar und mit dem eigenen
 Getippten vergleichbar sein.
 
 # Ziel
@@ -71,6 +78,15 @@ Leitfrage für jede Karte: Könnte das sinnvoll in der Prüfung abgefragt werden
 - Richtwert: 0,5–1 Karte pro Inhaltsfolie, dichte Folien auch 2–3. Deutlich mehr Karten als Folien ⇒ Bündelung prüfen.
 - Prüfungsform beachten (PRÜFUNG im Input): Rechenklausur ⇒ mehr Schema- und Rechenkarten; Open Book ⇒ keine Karten
   zu reinem Nachschlagewissen, sondern Anwendung.
+- Klausurformat beachten (KLAUSURFORMAT im Input) – als Gewichtung, nicht als Ersatz für die Regeln oben:
+  - Multiple Choice (mehrere richtig) ⇒ etwas mehr Karten zu genauen Bedingungen, Ausnahmen, Abgrenzungen und
+    typischen Fehlvorstellungen (Aussagen, die man sicher als richtig/falsch erkennen muss); Rechenkarten so, dass
+    das Ergebnis sicher und schnell berechnet werden kann.
+  - Single Choice (genau eine richtig) ⇒ etwas mehr Karten, die ähnliche Begriffe, Fälle oder Buchungen präzise
+    unterscheiden; in "explanation" die typische Verwechslung nennen.
+  - Offene Fragen ⇒ etwas mehr Rechenschema- und Erläuterungskarten; Antwort mit vollständigem Lösungsweg in
+    Schritten.
+  - Unbekannt/gemischt ⇒ ausgewogen.
 - Übungen: Lösungswege (Ansatz, Rechenschritte, Interpretation des Ergebnisses) als Karten, keine Zahlen auswendig.
 
 # Vollständigkeit (sehr wichtig)
@@ -143,6 +159,7 @@ CARDS_USER = """<meta>
 MODUL: {module}
 EINHEIT: {scope}
 PRÜFUNG: {exam}
+KLAUSURFORMAT: {exam_format}
 KAPITEL: {chapters}
 </meta>
 {focus}
@@ -197,18 +214,25 @@ Diese Begriffe gibt es schon (nicht wiederholen): {existing}
 VISUAL_PROMPT = """Bereite mich auf die Vorlesung vor. Das angehängte PDF sind die Folien für das Modul „{module}“,
 {chapter}. Lies jede Folie vollständig – auch Formeln, Tabellen, Diagramme und Abbildungen.
 
-Erstelle:
-1. slides: für JEDE Folie (page = Foliennummer) eine vollständige Textfassung: aller Text, Formeln exakt als
-   LaTeX in $...$, Tabellen als Markdown, Diagramme/Abbildungen in [eckigen Klammern] kurz, aber mit allen
-   Achsen, Werten und Aussagen beschrieben. Nichts zusammenfassen, nichts weglassen.
-2. summary: eine Zusammenfassung in Markdown (Überschriften, Stichpunkte, Formeln in $...$), die ALLE Themen der
-   Folien in der Reihenfolge der Vorlesung abdeckt.
-3. key_concepts: alle wichtigen Fachbegriffe mit prägnanter Erklärung.
-4. important_slides: Folien, die ich mir unbedingt genau ansehen muss (wichtige Abbildungen, Diagramme,
-   Herleitungen, Beispiele) – mit Foliennummer (page) und Begründung.
-5. check_questions: genau 3 schnelle Verständnisfragen zum ersten Check, jeweils mit kurzer Musterantwort.
-6. formulas: alle Formeln als sauberes LaTeX (ohne $-Zeichen) mit Name, Erklärung der Variablen und Foliennummer.
-   Übernimm sie exakt wie auf den Folien."""
+Zusätzlich zu den Punkten unten: slides – für JEDE Folie (page = Foliennummer) eine vollständige Textfassung: aller
+Text, Formeln exakt als LaTeX in $...$, Tabellen als Markdown, Diagramme/Abbildungen in [eckigen Klammern] kurz, aber
+mit allen Achsen, Werten und Aussagen beschrieben. Nichts zusammenfassen, nichts weglassen.
+
+""" + _PREP_TASKS
+
+
+def _first_page(slides: str) -> int:
+    match = re.search(r"\d+", slides or "")
+    return int(match.group()) if match else 0
+
+
+def _compat_fields(result: dict) -> None:
+    """Felder, die Export, Tutor-Kontext und Offline-Karten weiter nutzen (Fachbegriffe, wichtige Folien)."""
+    result["key_concepts"] = [{"term": row["term"], "explanation": row["short"]}
+                              for row in result.get("concept_table", [])]
+    result["important_slides"] = [{"page": _first_page(m["slides"]), "reason": f"{m['topic']}: {m['why']}"}
+                                  for m in result.get("must_watch", [])]
+
 
 MAX_VISUAL_BYTES = 30 * 1024 * 1024
 
@@ -244,10 +268,12 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
     elif ai.is_available():
         result = ai.complete_json(ANALYSIS_PROMPT.format(module=module["name"], chapter=chapter,
                                                          text=get_document_text(doc, label="Folie")),
-                                  ai.ANALYSIS_SCHEMA, task="summary")
+                                  ai.ANALYSIS_SCHEMA, effort="low", task="summary")
         result["mode"] = "ki"
     else:
         result = heuristic_analysis(get_document_pages(doc))
+    if "concept_table" in result:
+        _compat_fields(result)
     result["created_at"] = now_iso()
     doc["analysis"] = result
     save_module(module_id)
@@ -404,7 +430,8 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, only: dict[str, s
              else f"Übung – {title}")
     chapters = {ch["title"]: ch["id"] for ch in data["chapters"]}
     prompt = CARDS_USER.format(
-        module=module["name"], scope=scope, exam=_exam_info(module), chapters="; ".join(chapters) or "keine",
+        module=module["name"], scope=scope, exam=_exam_info(module), exam_format=exam_format(module)["label"],
+        chapters="; ".join(chapters) or "keine",
         focus=FOCUS_NOTE if only is not None else "",
         existing="\n".join(c["front"] for c in data["cards"]) or "keine",
         existing_defs="\n".join(d["term"] for d in defs.definitions(data)) or "keine",

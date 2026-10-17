@@ -1,4 +1,4 @@
-"""Einstellungen & Klausurtermine."""
+"""Einstellungen & Klausurtermine, darunter Export und Backup."""
 
 from __future__ import annotations
 
@@ -12,11 +12,26 @@ from utils import ai, notify
 from utils.config import WEEKDAYS, module_label
 from utils.storage import (get_exam_date, get_schedule, load_settings, save_settings,
                            semester_dates)
+from views import export_view
+
+SETTINGS_TABS = [":material/tune: Allgemein", ":material/download: Export", ":material/backup: Backup"]
 
 
 def render(cfg: dict) -> None:
+    st.title(":material/settings: Einstellungen")
+    if st.session_state.get("settings_tabs") not in SETTINGS_TABS:
+        st.session_state.pop("settings_tabs", None)
+    general, export, backup = st.tabs(SETTINGS_TABS, key="settings_tabs", on_change="rerun")
+    with general:
+        _general(cfg)
+    with export:
+        export_view.export_section(cfg)
+    with backup:
+        export_view.backup_section()
+
+
+def _general(cfg: dict) -> None:
     settings = load_settings()
-    st.title(":material/settings: Einstellungen & Klausurtermine")
     ids = [m["id"] for m in cfg["modules"]]
 
     # --- Klausurtermine -----------------------------------------------------

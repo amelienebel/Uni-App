@@ -144,7 +144,7 @@ def _queue(cards: list[dict], module_cards: list[dict], days: int | None, key: s
     new_left = max(0, quota - sr.introduced_on(module_cards, date.today())) + st.session_state.get(
         f"extra_new_{module_id}", 0)
     queue = sr.due_queue(cards, days, limit=int(prefs.get("daily_review_limit", 60)), new_limit=new_left)
-    # „Nochmal“-Karten erst nach ein paar anderen Karten wieder zeigen
+    # „Gar nicht“-Karten erst nach ein paar anderen Karten wieder zeigen
     wait, step = st.session_state.get(f"wait_{key}", {}), st.session_state.get(f"step_{key}", 0)
     return [c for c in queue if wait.get(c["id"], 0) <= step] + [c for c in queue if wait.get(c["id"], 0) > step]
 
@@ -236,7 +236,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str, defau
                                 f"Lernkarte – Frage: {card['front']}\nMusterantwort:\n{card['back']}\n\n"
                                 f"Antwort des Studierenden: {answer}\n\nBewerte knapp (max. 80 Wörter): Was ist "
                                 "richtig, was fehlt oder ist falsch? Schlage eine Selbstbewertung vor "
-                                "(Nochmal / Schwer / Gut / Einfach).", max_tokens=2000, effort="low", task="check")
+                                "(Gar nicht / Etwas / Gut / Perfekt).", max_tokens=2000, effort="low", task="check")
                         except ai.AIError as exc:
                             st.error(str(exc))
                 if fb := st.session_state.get(f"fb_{card['id']}"):

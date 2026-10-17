@@ -18,7 +18,7 @@ def _card(**extra) -> dict:
 def test_grades_order_intervals():
     card = _card()
     nxt = sr.preview(card, None, TODAY)
-    assert nxt[0] == 0 and nxt[1] == 0  # neue Karte: Nochmal/Schwer ⇒ gleich nochmal
+    assert nxt[0] == 0 and nxt[1] == 0  # neue Karte: Gar nicht/Etwas ⇒ gleich nochmal
     assert 1 <= nxt[2] < nxt[3]
 
 

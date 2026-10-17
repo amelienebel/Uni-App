@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from utils import ai
-from utils.config import get_module
+from utils.config import exam_format, get_module
 from utils.exam_analysis import OPERATORS, analyze_operators, analyze_structure
 from utils.storage import (add_document, chapter_label, delete_document, documents_of, get_document_text, load_module,
                            new_id, now_iso, save_module)
@@ -16,20 +16,42 @@ from views.common import ai_hint, module_context
 
 QUIZ_PROMPT = """Erstelle ein Übungsquiz für das Modul „{module}“ zu folgenden Kapiteln: {chapters}.
 Anzahl Fragen: {n}. Fragetypen: {types}. Schwierigkeit: {difficulty}.
+KLAUSURFORMAT des Moduls: {exam_format}
 
 Anforderungen:
 - Orientiere dich am Stil deutscher Universitätsklausuren (LMU, 1. Semester BWL) und verwende typische
   Operatoren („Nennen Sie“, „Erläutern Sie“, „Berechnen Sie“, „Zeigen Sie rechnerisch“ …) – Feld operator.
-- Multiple Choice (type "mc"): genau 4 Antwortoptionen, genau eine richtig (correct_index 0–3), plausible Distraktoren
-  (typische Denkfehler). sample_answer leer lassen.
+- Single Choice (type "mc"): genau 4 Antwortoptionen, genau eine richtig (correct_indices = [Index 0–3]),
+  plausible Distraktoren (typische Denkfehler). sample_answer leer lassen.
+- Multiple Choice (type "mc_multi"): genau 5 Antwortoptionen, eine oder mehrere richtig (correct_indices = alle
+  richtigen Indizes 0–4; die Anzahl richtiger Antworten variiert zwischen den Fragen). Aussagen präzise formulieren,
+  Distraktoren mit typischen Denkfehlern (falsches Vorzeichen, vertauschte Bedingung, Ausnahme übersehen).
+  explanation begründet jede Option kurz. sample_answer leer lassen.
 - Freitext (type "freitext"): Rechen- oder Erklärungsaufgabe mit konkreten Zahlen, wo sinnvoll; sample_answer
-  enthält eine vollständige Musterlösung mit Rechenweg. options leer, correct_index -1.
+  enthält eine vollständige Detaillösung mit allen Rechenschritten. options und correct_indices leer.
 - explanation: warum die Lösung richtig ist. points: realistische Punktzahl.
 - Formeln in LaTeX mit $...$.
 {exam_hint}
 <kontext>
 {context}
 </kontext>"""
+
+# Fragetypen je Klausurformat (utils.config.EXAM_FORMATS)
+EXAM_TYPE_TEXT = {
+    "mc_multi": "nur mc_multi (wie in der Klausur: 5 Optionen, eine oder mehrere richtig)",
+    "sc4": "nur mc (wie in der Klausur: 4 Optionen, genau eine richtig)",
+    "open": "nur freitext (wie in der Klausur: offene Fragen und Rechenaufgaben mit Detaillösung)",
+    "mixed": "gemischt: etwa ein Drittel freitext, ein Drittel mc, ein Drittel mc_multi",
+}
+QUIZ_TYPES = ["Wie in der Klausur", "Gemischt", "Multiple/Single Choice", "Freitext"]
+
+
+def correct_indices(q: dict) -> list[int]:
+    """Richtige Optionen (ältere Quizze speichern nur correct_index)."""
+    if q.get("correct_indices"):
+        return sorted(q["correct_indices"])
+    return [q["correct_index"]] if q.get("correct_index", -1) >= 0 else []
+
 
 GRADING_PROMPT = """Bewerte die Antwort eines Studierenden wie ein Klausurkorrektor.
 Aufgabe ({points} Punkte, Operator: {operator}): {question}
@@ -64,12 +86,12 @@ def _offline_quiz(data: dict, chapter_ids: list[str], n: int) -> list[dict]:
         options = distractors + [f["name"]]
         rng.shuffle(options)
         questions.append({"type": "mc", "operator": "Ordnen Sie zu", "question": f"Welche Formel ist das? $${f['latex']}$$",
-                          "options": options, "correct_index": options.index(f["name"]),
+                          "options": options, "correct_indices": [options.index(f["name"])],
                           "explanation": f.get("explanation", ""), "sample_answer": "", "points": 1})
     cards = [c for c in data["cards"] if not chapter_ids or c.get("chapter_id") in chapter_ids]
     for c in rng.sample(cards, min(len(cards), n - len(questions))):
         questions.append({"type": "freitext", "operator": "Erläutern Sie", "question": c["front"], "options": [],
-                          "correct_index": -1, "explanation": "", "sample_answer": c["back"], "points": 4})
+                          "correct_indices": [], "explanation": "", "sample_answer": c["back"], "points": 4})
     for ch in data["chapters"]:
         if len(questions) >= n:
             break
@@ -77,7 +99,7 @@ def _offline_quiz(data: dict, chapter_ids: list[str], n: int) -> list[dict]:
             continue
         questions.append({"type": "freitext", "operator": "Erläutern Sie",
                           "question": f"Erläutern Sie die zentralen Inhalte von „{ch['title']}“ und geben Sie ein Beispiel.",
-                          "options": [], "correct_index": -1, "explanation": "",
+                          "options": [], "correct_indices": [], "explanation": "",
                           "sample_answer": "Mit eigenen Notizen und Folien abgleichen.", "points": 6})
     return questions[:n]
 
@@ -86,13 +108,15 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
                  context: str | None = None, chapter_ids: list[str] | None = None) -> None:
     """Quiz zum ganzen Modul, zu ausgewählten Vorlesungen (scope_label + context) oder zu einer Vorlesung."""
     module = get_module(cfg, module_id)
+    fmt = exam_format(module)
     has_ai = ai_hint("Der Quiz-Generator")
+    st.caption(f":material/assignment: Klausurformat: **{fmt['label']}**")
     with st.form(f"quiz_cfg_{module_id}_{scope_key}"):
         if chapter_ids is None:
             chapter_ids = st.multiselect("Kapitel", [ch["id"] for ch in data["chapters"]],
                                          format_func=lambda cid: chapter_label(data, cid))
         c1, c2, c3 = st.columns(3)
-        types = c1.selectbox("Fragetyp", ["Gemischt", "Multiple Choice", "Freitext"])
+        types = c1.selectbox("Fragetyp", QUIZ_TYPES)
         n = c2.slider("Anzahl", 3, 20, 6)
         difficulty = c3.select_slider("Schwierigkeit", ["leicht", "mittel", "klausurnah", "schwer"], value="klausurnah")
         use_exams = st.checkbox("Stil der hochgeladenen Altklausuren berücksichtigen", value=True, disabled=not has_ai)
@@ -109,18 +133,22 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
                         exam_hint = ("\nOrientiere dich an Aufbau und Stil dieser Altklausuren:\n<altklausuren>\n"
                                      + "\n\n".join(get_document_text(d) for d in exams) + "\n</altklausuren>\n")
                     titles = scope_label or ", ".join(chapter_label(data, c) for c in chapter_ids) or "alle Kapitel"
-                    type_text = {"Gemischt": "gemischt (ca. halb MC, halb Freitext)", "Multiple Choice": "nur mc",
-                                 "Freitext": "nur freitext"}[types]
+                    choice_type = {"mc_multi": "nur mc_multi", "sc4": "nur mc"}.get(fmt["type"],
+                                                                                     "mc und mc_multi gemischt")
+                    type_text = {QUIZ_TYPES[0]: EXAM_TYPE_TEXT[fmt["type"]],
+                                 QUIZ_TYPES[1]: "gemischt (ca. halb Auswahlfragen, halb freitext)",
+                                 QUIZ_TYPES[2]: choice_type, QUIZ_TYPES[3]: "nur freitext"}[types]
                     result = ai.complete_json(QUIZ_PROMPT.format(module=module["name"], chapters=titles, n=n,
                                                                  types=type_text, difficulty=difficulty,
+                                                                 exam_format=fmt["label"],
                                                                  exam_hint=exam_hint, context=context),
                                               ai.QUIZ_SCHEMA)
                     questions = result.get("questions", [])
                 else:
                     questions = _offline_quiz(data, chapter_ids, n)
-                    if types == "Multiple Choice":
+                    if types == QUIZ_TYPES[2]:
                         questions = [q for q in questions if q["type"] == "mc"]
-                    elif types == "Freitext":
+                    elif types == QUIZ_TYPES[3]:
                         questions = [q for q in questions if q["type"] == "freitext"]
                 if not questions:
                     st.warning("Offline konnten keine Fragen erzeugt werden – lege zuerst Formeln oder Lernkarten an.")
@@ -143,16 +171,23 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
         with st.container(border=True):
             st.markdown(f"**Aufgabe {i + 1}** · _{q.get('operator', '')}_ · {q.get('points', 1)} P.")
             st.markdown(q["question"])
-            if q["type"] == "mc" and q.get("options"):
-                choice = st.radio("Antwort", list(range(len(q["options"]))), key=qkey, index=None,
-                                  format_func=lambda j, q=q: q["options"][j], label_visibility="collapsed")
+            if q["type"] in ("mc", "mc_multi") and q.get("options"):
+                right = correct_indices(q)
+                if q["type"] == "mc_multi":
+                    st.caption("Mehrere Antworten können richtig sein.")
+                    picked = [j for j, opt in enumerate(q["options"]) if st.checkbox(opt, key=f"{qkey}_{j}")]
+                else:
+                    choice = st.radio("Antwort", list(range(len(q["options"]))), key=qkey, index=None,
+                                      format_func=lambda j, q=q: q["options"][j], label_visibility="collapsed")
+                    picked = [] if choice is None else [choice]
                 if st.session_state.get(f"{qkey}_checked"):
                     total += q.get("points", 1)
-                    if choice == q["correct_index"]:
+                    if picked == right:
                         reached += q.get("points", 1)
                         st.success("✓ Richtig!")
                     else:
-                        st.error(f"Richtig wäre: {q['options'][q['correct_index']]}")
+                        st.error("Richtig wäre: " + " · ".join(q["options"][j] for j in right
+                                                                 if 0 <= j < len(q["options"])))
                     if q.get("explanation"):
                         st.caption(q["explanation"])
             else:

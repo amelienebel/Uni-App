@@ -55,7 +55,7 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
     data = load_module(module_id)
     state = load_todos()
     nav = st.columns([2, 1, 1])
-    nav[0].button("← Zurück zum Ablauf", key=f"back_{ex['id']}", on_click=open_unit, args=(module_id, None))
+    nav[0].button("Zum Ablauf", key=f"back_{ex['id']}", on_click=open_unit, args=(module_id, None))
     idx = exs.index(ex)
     if idx > 0:
         nav[1].button("◀ vorige Übung", key=f"prev_{ex['id']}", on_click=open_unit,

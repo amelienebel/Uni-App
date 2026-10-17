@@ -15,9 +15,9 @@ st.set_page_config(page_title="Amelies Lern-App", page_icon=":material/school:",
 
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
 from utils.config import WEEKDAYS, get_module, get_secret, load_config, module_ids, module_label  # noqa: E402
-from views import (bulk_upload, dashboard, exam_plan_view, export_view, formulas, module_view,  # noqa: E402
+from views import (bulk_upload, cards_center, dashboard, exam_plan_view, formulas, module_view,  # noqa: E402
                    settings_view, today_view)
-from views.common import NAV_PAGES, PAGES, goto, micon, open_unit  # noqa: E402
+from views.common import NAV_PAGES, PAGES, back_button, goto, micon, open_unit, track_history  # noqa: E402
 from utils import upload_debug  # noqa: E402
 
 upload_debug.install()
@@ -60,6 +60,15 @@ if cloud_sync.is_configured():
         cloud_sync.ensure_started(storage.DATA_DIR)
 cfg = load_config()
 ids = module_ids(cfg)
+if st.session_state.get("nav") not in NAV_PAGES:
+    st.session_state["nav"] = PAGES["today"]
+if st.session_state.get("nav_module") not in ids:
+    st.session_state["nav_module"] = ids[0]
+track_history()
+page = st.session_state["nav"]
+module_id = st.session_state["nav_module"]
+# Ablenkungsfreier Lernmodus: aktive Session im Lernzentrum blendet Seitenleiste und Kopfzeile aus
+focus = page == PAGES["cards"] and cards_center.session_active()
 
 st.markdown("""
 <style>
@@ -118,22 +127,17 @@ for _m in cfg["modules"]:
     ]
 st.markdown(f"<style>{' '.join(_rules)}</style>", unsafe_allow_html=True)
 
-with st.sidebar:
+
+def sidebar() -> None:
     st.title(":material/school: Amelies Lern-App")
     st.caption(f"{cfg['app'].get('semester_label', '')} · {WEEKDAYS[storage.today().weekday()]}, {storage.today():%d.%m.%Y}")
     # Hauptnavigation: ganze Zeile antippbar (keine Radio-Kreise)
-    if st.session_state.get("nav") not in NAV_PAGES:
-        st.session_state["nav"] = PAGES["today"]
-    page = st.session_state["nav"]
     for key, label in PAGES.items():
         icon, _, text = label.partition(": ")
         st.button(text, key=f"navpage_{key}", icon=icon + ":", width="stretch",
                   type="primary" if page == label else "tertiary", on_click=goto, args=(key,))
 
     # Module direkt als Unterpunkte (ohne Aufklappen)
-    if st.session_state.get("nav_module") not in ids:
-        st.session_state["nav_module"] = ids[0]
-    module_id = st.session_state["nav_module"]
     st.markdown("<div class='small-muted' style='margin:0.4rem 0 0.2rem 0'>Module</div>", unsafe_allow_html=True)
     for mid in ids:
         active = page == PAGES["module"] and mid == module_id
@@ -179,6 +183,18 @@ with st.sidebar:
     else:
         st.caption("Kein API-Key – Offline-Modus")
 
+
+if focus:
+    st.markdown("""<style>
+      [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], [data-testid="stHeader"],
+      [data-testid="stToolbar"] { display: none !important; }
+      .block-container { max-width: 860px; padding-top: 1.5rem !important; }
+    </style>""", unsafe_allow_html=True)
+else:
+    with st.sidebar:
+        sidebar()
+    back_button()
+
 if page == PAGES["today"]:
     today_view.render(cfg)
 elif page == PAGES["week"]:
@@ -191,7 +207,7 @@ elif page == PAGES["formulas"]:
     formulas.render(cfg)
 elif page == PAGES["bulk"]:
     bulk_upload.render(cfg)
-elif page == PAGES["export"]:
-    export_view.render(cfg)
+elif page == PAGES["cards"]:
+    cards_center.render(cfg)
 else:
     settings_view.render(cfg)

@@ -46,7 +46,7 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
         st.session_state[tabs_key] = tab_labels[3]
     if st.session_state.get(tabs_key) not in tab_labels:
         st.session_state.pop(tabs_key, None)
-    t_cards, t_quiz, t_chat, t_weak, t_exam = st.tabs(tab_labels, key=tabs_key)
+    t_cards, t_quiz, t_chat, t_weak, t_exam = st.tabs(tab_labels, key=tabs_key, on_change="rerun")
     with t_weak:
         _weak_tab(cfg, module_id, data)
     with t_exam:

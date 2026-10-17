@@ -1,4 +1,4 @@
-"""Wochenübersicht & Lernplan."""
+"""Wochenübersicht."""
 
 from __future__ import annotations
 
@@ -196,7 +196,7 @@ def render(cfg: dict) -> None:
     week_now = planner.semester_week(sem_start, now, breaks)
     _grid_css(cfg)
 
-    st.title(":material/calendar_month: Wochenübersicht & Lernplan")
+    st.title(":material/calendar_month: Wochenübersicht")
     if week_now < 1:
         st.caption(f"Vorlesungsbeginn am {sem_start:%d.%m.%Y}.")
     elif now > sem_end:

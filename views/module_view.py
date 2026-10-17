@@ -112,7 +112,7 @@ def render(cfg: dict, module_id: str) -> None:
     _header(cfg, module, data, lecs, exs)
     if st.session_state.get(f"mtabs_{module_id}") not in TABS:
         st.session_state.pop(f"mtabs_{module_id}", None)
-    tabs = st.tabs(TABS, key=f"mtabs_{module_id}")
+    tabs = st.tabs(TABS, key=f"mtabs_{module_id}", on_change="rerun")
     with tabs[0]:
         ablauf.render(cfg, module, lecs, exs)
     with tabs[1]:

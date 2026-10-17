@@ -14,12 +14,12 @@ from utils.storage import chapter_label, documents_of, get_document_text, get_no
 
 PAGES = {
     "today": ":material/today: Heute",
-    "week": ":material/calendar_month: Wochenübersicht & Lernplan",
+    "week": ":material/calendar_month: Wochenübersicht",
     "module": ":material/school: Modul-Bereiche",
+    "cards": ":material/style: Karteikarten-Lernzentrum",
     "examplan": ":material/event_note: Klausur-Lernplan",
     "formulas": ":material/functions: Zentrale Formelsammlung",
     "bulk": ":material/cloud_upload: Bulk-Upload",
-    "export": ":material/download: Export & Backup",
     "settings": ":material/settings: Einstellungen",
 }
 NAV_PAGES = list(PAGES.values())
@@ -38,6 +38,60 @@ def micon(module: dict) -> str:
 
 def page_title(text: str, icon: str) -> None:
     st.title(f":material/{icon}: {text}")
+
+
+# Zurück-Button: Verlauf der Ansichten (Seite, Modul, geöffnete Vorlesung/Übung, Reiter)
+_VIEW_KEYS = ("nav", "nav_module")
+_UNIT_PREFIX = "unit_"
+_TAB_PREFIXES = ("mtabs_", "ltab_", "learntabs_", "settings_tabs")
+_HISTORY_LIMIT = 40
+
+
+def _view_state() -> dict:
+    state = st.session_state
+    return {k: state[k] for k in list(state.keys()) if isinstance(k, str) and (
+        k in _VIEW_KEYS or k.startswith(_UNIT_PREFIX)
+        or (k.startswith(_TAB_PREFIXES) and not k.startswith("ltab_next_")))}
+
+
+def _changed(last: dict, cur: dict) -> bool:
+    for k in last.keys() | cur.keys():
+        if k in _VIEW_KEYS or k.startswith(_UNIT_PREFIX):
+            if last.get(k) != cur.get(k):
+                return True
+        elif k in last and k in cur and last[k] != cur[k]:  # Reiter, die gerade erst erscheinen, zählen nicht
+            return True
+    return False
+
+
+def track_history() -> None:
+    """Zu Beginn jedes Durchlaufs: Hat sich die Ansicht geändert, merkt sich die App die vorige."""
+    cur = _view_state()
+    last = st.session_state.get("_nav_last")
+    if not st.session_state.pop("_nav_going_back", False) and last is not None and _changed(last, cur):
+        history = st.session_state.setdefault("_nav_history", [])
+        history.append(last)
+        del history[:-_HISTORY_LIMIT]
+    st.session_state["_nav_last"] = cur
+
+
+def go_back() -> None:
+    """Callback: vorige Ansicht wiederherstellen (Seite, Modul, Vorlesung/Übung und Reiter)."""
+    history = st.session_state.get("_nav_history") or []
+    if not history:
+        return
+    prev = history.pop()
+    for k in list(_view_state()):
+        if k not in prev and (k.startswith(_UNIT_PREFIX) or k.startswith(_TAB_PREFIXES)):
+            st.session_state.pop(k, None)
+    for k, v in prev.items():
+        st.session_state[k] = v
+    st.session_state["_nav_going_back"] = True
+
+
+def back_button() -> None:
+    st.button("Zurück", key="nav_back_btn", icon=":material/arrow_back:", on_click=go_back,
+              disabled=not st.session_state.get("_nav_history"))
 
 
 def goto(page: str, module_id: str | None = None) -> None:

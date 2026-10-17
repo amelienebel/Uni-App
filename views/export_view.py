@@ -1,4 +1,4 @@
-"""Export & Backup."""
+"""Export & Backup – als Unterbereiche der Einstellungen."""
 
 from __future__ import annotations
 
@@ -11,9 +11,7 @@ from utils.export import backup_zip, build_blocks, restore_zip, to_markdown, to_
 from utils.storage import load_module, reload_all
 
 
-def render(cfg: dict) -> None:
-    st.title(":material/download: Export & Backup")
-
+def export_section(cfg: dict) -> None:
     st.subheader("Lernunterlagen exportieren (Offline-Lernen)")
     ids = [m["id"] for m in cfg["modules"]]
     selected = st.multiselect("Module", ids, default=ids, format_func=lambda mid: module_label(cfg, mid))
@@ -46,7 +44,8 @@ def render(cfg: dict) -> None:
         with st.expander("Vorschau"):
             st.markdown(markdown[:20000] + ("\n\n…" if len(markdown) > 20000 else ""))
 
-    st.divider()
+
+def backup_section() -> None:
     st.subheader("Vollständiges Backup")
     st.markdown("Sichert den kompletten Ordner `data/` (Einstellungen, Notizen, Karten inkl. Lernstand, Uploads) als ZIP.")
     if st.button("Backup erstellen"):

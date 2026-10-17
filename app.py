@@ -16,7 +16,7 @@ st.set_page_config(page_title="Amelies Lern-App", page_icon=":material/school:",
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
 from utils.config import WEEKDAYS, get_module, get_secret, load_config, module_ids, module_label  # noqa: E402
 from views import (bulk_upload, cards_center, dashboard, exam_plan_view, formulas, module_view,  # noqa: E402
-                   settings_view, today_view)
+                   quiz_center, settings_view, today_view)
 from views.common import NAV_PAGES, PAGES, back_button, goto, micon, open_unit, track_history  # noqa: E402
 from utils import upload_debug  # noqa: E402
 
@@ -67,8 +67,8 @@ if st.session_state.get("nav_module") not in ids:
 track_history()
 page = st.session_state["nav"]
 module_id = st.session_state["nav_module"]
-# Ablenkungsfreier Lernmodus: aktive Session im Lernzentrum blendet Seitenleiste und Kopfzeile aus
-focus = page == PAGES["cards"] and cards_center.session_active()
+# Ablenkungsfreier Lernmodus: aktive Karten- oder Quiz-Session blendet Seitenleiste und Kopfzeile aus
+focus = (page == PAGES["cards"] and cards_center.session_active()) or (page == PAGES["quiz"] and quiz_center.session_active())
 
 st.markdown("""
 <style>
@@ -133,6 +133,8 @@ def sidebar() -> None:
     st.caption(f"{cfg['app'].get('semester_label', '')} · {WEEKDAYS[storage.today().weekday()]}, {storage.today():%d.%m.%Y}")
     # Hauptnavigation: ganze Zeile antippbar (keine Radio-Kreise)
     for key, label in PAGES.items():
+        if key == "module":
+            continue
         icon, _, text = label.partition(": ")
         st.button(text, key=f"navpage_{key}", icon=icon + ":", width="stretch",
                   type="primary" if page == label else "tertiary", on_click=goto, args=(key,))
@@ -209,5 +211,7 @@ elif page == PAGES["bulk"]:
     bulk_upload.render(cfg)
 elif page == PAGES["cards"]:
     cards_center.render(cfg)
+elif page == PAGES["quiz"]:
+    quiz_center.render(cfg)
 else:
     settings_view.render(cfg)

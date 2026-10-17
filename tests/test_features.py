@@ -1,4 +1,4 @@
-"""Lernzentrum (Focus Mode, Zurück zur vorigen Karte), Zurück-Button der Navigation, Vorbereitung und Quiz."""
+"""Karteikarten (Focus Mode, Zurück zur vorigen Karte), Zurück-Button der Navigation, Vorbereitung und Quiz."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def test_cards_center_focus_session_and_back():
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
     at.session_state["nav"] = PAGES["cards"]
     _run(at)
-    assert any("Lernzentrum" in t.value for t in at.title)
+    assert any("Karteikarten" in t.value for t in at.title)
     _button(at, "Jetzt lernen").click()
     _run(at)
     assert at.session_state["cc_session"]["queue"]
@@ -145,11 +145,13 @@ def test_prep_and_quiz_formats(monkeypatch):
         return {"must_watch": [{"slides": "12–15", "topic": "Determinante", "why": "Herleitung"}],
                 "concept_table": [{"slides": "3", "term": "Matrix", "short": "Zahlenschema", "watch_out": "m×n"}],
                 "summary": "- **Folie 1–3** · Matrizen", "formulas": [],
-                "check_questions": [{"question": "Was ist eine Matrix?", "answer": "Schema"}]}
+                "quiz": [{"type": "mc_multi", "question": "Was ist eine Matrix?", "options": list("ABCDE"),
+                          "correct_indices": [1], "explanation": "Folie 3", "slides": "3"}]}
 
     monkeypatch.setattr(ai, "complete_json", fake_json)
     learning.run_analysis(cfg, "mathe", doc, visual=False)
     assert seen["task"] == "summary" and "Foliennummer" in seen["prompt"]
+    assert "genau 5 Quizfragen" in seen["prompt"] and '"mc_multi", genau 5 Optionen' in seen["prompt"]
     assert doc["analysis"]["important_slides"][0]["page"] == 12
     assert doc["analysis"]["key_concepts"] == [{"term": "Matrix", "explanation": "Zahlenschema"}]
     assert exams.correct_indices({"correct_index": 2}) == [2]
@@ -170,3 +172,164 @@ def test_prep_and_quiz_formats(monkeypatch):
     _run(at)
     assert any("Must-Watch" in m.value for m in at.markdown)
     assert any("| Folie | Kernbegriff / Formel" in m.value for m in at.markdown)
+    assert any("Was ist eine Matrix?" in m.value for m in at.markdown)  # Quiz in der Vorbereitung
+
+
+def test_figures_first_then_prep(monkeypatch):
+    """Mit Abbildungen entsteht die Vorbereitung erst, wenn entschieden ist, welche Seiten genau gelesen werden."""
+    from utils import learning, storage, units
+    from utils.config import get_module, load_config
+    from views.common import PAGES
+
+    cfg = load_config()
+    data = storage.load_module("mathe")
+    lecs, _ = units.all_units(cfg, get_module(cfg, "mathe"), data)
+    doc = {"id": "d2", "filename": "VL1.pdf", "doc_type": "folien", "unit": lecs[0]["id"], "kind": "pdf",
+           "figure_pages": [2, 5], "path": "x.pdf"}
+    data["documents"].append(doc)
+    storage.save_module("mathe")
+    assert learning.pending_figures(doc) == [2, 5]
+    calls = []
+    monkeypatch.setattr(learning, "run_analysis", lambda *a, **k: calls.append(1) or "ok")
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["module"]
+    at.session_state["nav_module"] = "mathe"
+    at.session_state["unit_mathe"] = lecs[0]["id"]
+    _run(at)
+    assert any("kann ich die Abbildungen nicht sehen" in m.value for m in at.markdown)
+    assert not any(b.label == "Vorbereitung erstellen" for b in at.button)
+    at.button(key="figno_d2").click()
+    _run(at)
+    assert at.session_state["_module_mathe"]["documents"][-1]["skipped_figures"] == [2, 5]
+
+
+def test_exercise_deadlines_and_next_session():
+    from datetime import date
+
+    from utils import planner
+    from utils.config import get_module, load_config
+    from utils.storage import get_schedule, lecture_breaks
+
+    cfg = load_config()
+    schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
+    for mid, weekday in (("mathe", 5), ("statistik", 5), ("invfin", 2)):
+        module = get_module(cfg, mid)
+        for ex in planner.exercises_of(module)[1:4]:
+            assert planner.exercise_due(module, ex, schedule, breaks).weekday() == weekday, (mid, ex["title"])
+    nxt = planner.next_session(cfg, get_module(cfg, "mathe"), schedule, date(2026, 10, 17))
+    assert nxt["date"].weekday() == 0
+
+
+def test_sidebar_without_module_page_and_custom_todos():
+    from views.common import PAGES
+
+    at = _run(AppTest.from_file(str(ROOT / "app.py"), default_timeout=120))
+    keys = [b.key for b in at.sidebar.button]
+    assert "navpage_module" not in keys and "navmod_mathe" in keys and "navpage_quiz" in keys
+    at.text_input(key="today_new_title").input("Bücher zurückgeben")
+    at.button(key="today_new_add").click()
+    _run(at)
+    assert any("Bücher zurückgeben" in b.label for b in at.button)
+    todo = at.session_state["_todos"]["_custom"][0]
+    at.session_state["nav"] = PAGES["week"]
+    _run(at)
+    assert any("Bücher zurückgeben" in b.label for b in at.button)
+    at.session_state["nav"] = PAGES["today"]
+    _run(at)
+    at.button(key=f"del_today_custom:{todo['id']}").click()
+    _run(at)
+    assert not at.session_state["_todos"]["_custom"]
+
+
+def test_cards_browse_filter_delete_and_feedback(monkeypatch):
+    from utils import ai, learning
+    from views.cards_center import is_weak
+    from views.common import PAGES
+
+    cards = _add_cards(3)
+    from utils import spaced_repetition as sr
+
+    sr.review(cards[0], 0)
+    from utils import storage
+
+    storage.save_module("mathe")
+    assert is_weak(cards[0]) and not is_weak(cards[1])
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["cards"]
+    _run(at)
+    at.selectbox(key="cb_filter").select("weak")
+    _run(at)
+    assert _button(at, "Diese Karten lernen").label.endswith("(1)")
+    at.button(key=f"cbdel_{cards[0]['id']}").click()
+    _run(at)
+    assert len(at.session_state["_module_mathe"]["cards"]) == 2
+
+    def fake_json(prompt, schema, **kw):
+        assert "kürzer" in prompt
+        return {"front": "Neue Frage?", "answer": ["Neu"], "explanation": "E", "keywords": ["Neu"]}
+
+    monkeypatch.setattr(ai, "is_available", lambda: True)
+    monkeypatch.setattr(ai, "complete_json", fake_json)
+    card = at.session_state["_module_mathe"]["cards"][0]
+    learning.rewrite_card("mathe", card, "Antwort kürzer")
+    assert card["front"] == "Neue Frage?" and card["back"] == "- Neu" and card["previous"]["front"].startswith("Frage")
+    learning.undo_rewrite("mathe", card)
+    assert card["front"].startswith("Frage") and "previous" not in card
+
+
+def test_quiz_center_focus_session():
+    from utils import storage
+    from views.common import PAGES
+    from views.module_tabs import exams
+
+    data = storage.load_module("rewe")
+    quiz = exams.save_quiz("rewe", data, [
+        {"type": "mc", "operator": "", "question": "Was ist richtig?", "options": ["A", "B", "C", "D"],
+         "correct_indices": [2], "explanation": "Weil C.", "sample_answer": "", "points": 1},
+        {"type": "mc_multi", "operator": "", "question": "Welche stimmen?", "options": list("ABCDE"),
+         "correct_indices": [0, 1], "explanation": "", "sample_answer": "", "points": 1}], [], "center", "VL 1")
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["quiz"]
+    _run(at)
+    at.button(key=f"qz_again_{quiz['id']}").click()
+    _run(at)
+    assert not at.sidebar.button  # Focus Mode
+    at.radio(key=f"qz_{quiz['id']}_0").set_value(2)
+    at.button(key=f"qz_{quiz['id']}_0_check").click()
+    _run(at)
+    assert at.success and any("Mehr Infos" in e.label for e in at.expander)
+    at.button(key="qz_next").click()
+    _run(at)
+    at.checkbox(key=f"qz_{quiz['id']}_1_0").check()
+    at.button(key=f"qz_{quiz['id']}_1_check").click()
+    _run(at)
+    assert at.error  # B fehlt
+    at.button(key="qz_next").click()
+    _run(at)
+    assert at.session_state["_module_rewe"]["quizzes"][-1]["last_score"] == [1, 2]
+    at.button(key="qz_finish").click()
+    _run(at)
+    assert at.sidebar.button
+
+
+def test_formula_sheet_selection():
+    from utils import storage
+    from views.common import PAGES
+
+    storage.add_formulas("invfin", [{"name": "Barwert", "latex": "PV = \\frac{C}{(1+r)^t}", "explanation": ""},
+                                    {"name": "Kapitalwert", "latex": "NPV = -I_0 + PV", "explanation": ""}], "manuell")
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["formulas"]
+    _run(at)
+    assert at.title[0].value.endswith(": Formelsammlung")
+    at.toggle(key="fs_choose").set_value(True)
+    _run(at)
+    barwert = next(f for f in at.session_state["_module_invfin"]["formulas"] if f["name"] == "Barwert")
+    at.checkbox(key=f"fs_sel_{barwert['id']}").uncheck()
+    _run(at)
+    assert barwert["in_sheet"] is False or not next(
+        f for f in at.session_state["_module_invfin"]["formulas"] if f["name"] == "Barwert")["in_sheet"]
+    at.toggle(key="fs_choose").set_value(False)
+    _run(at)
+    shown = [m.value for m in at.markdown]
+    assert any("Kapitalwert" in v for v in shown) and not any("Barwert" in v for v in shown)

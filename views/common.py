@@ -15,12 +15,13 @@ from utils.storage import chapter_label, documents_of, get_document_text, get_no
 PAGES = {
     "today": ":material/today: Heute",
     "week": ":material/calendar_month: Wochenübersicht",
-    "module": ":material/school: Modul-Bereiche",
-    "cards": ":material/style: Karteikarten-Lernzentrum",
+    "cards": ":material/style: Karteikarten",
+    "quiz": ":material/quiz: Quiz",
     "examplan": ":material/event_note: Klausur-Lernplan",
-    "formulas": ":material/functions: Zentrale Formelsammlung",
+    "formulas": ":material/functions: Formelsammlung",
     "bulk": ":material/cloud_upload: Bulk-Upload",
     "settings": ":material/settings: Einstellungen",
+    "module": ":material/school: Module",  # nicht in der Navigation – Module stehen direkt in der Seitenleiste
 }
 NAV_PAGES = list(PAGES.values())
 
@@ -124,6 +125,49 @@ def toggle_todo(todo: dict, widget_key: str) -> None:
         save_module(todo["module_id"])
 
 
+# Eigene To-dos ohne Modul erscheinen unter diesem Pseudo-Modul
+FREE_MODULE = {"id": "frei", "name": "Eigene Aufgabe", "short": "Eigenes", "symbol": "edit_note", "color": "#7a7a7a"}
+
+
+def todo_module(cfg: dict, todo: dict) -> dict:
+    return get_module(cfg, todo["module_id"]) if todo.get("module_id") else FREE_MODULE
+
+
+def _add_custom_todo(key: str) -> None:
+    from utils.storage import load_todos, new_id, save_todos
+
+    title = (st.session_state.get(f"{key}_title") or "").strip()
+    if not title:
+        return
+    load_todos().setdefault("_custom", []).append({
+        "id": new_id(), "title": title, "date": st.session_state[f"{key}_date"].isoformat(),
+        "module_id": st.session_state.get(f"{key}_mod")})
+    save_todos()
+    st.session_state[f"{key}_title"] = ""
+
+
+def delete_custom_todo(todo_key: str) -> None:
+    """Callback: eigenes To-do löschen (samt Haken und Planung)."""
+    from utils.storage import load_todos, save_todos
+
+    state = load_todos()
+    item_id = todo_key.removeprefix("custom:")
+    state["_custom"] = [t for t in state.get("_custom", []) if t["id"] != item_id]
+    state.pop(todo_key, None)
+    state.get("_plan", {}).pop(todo_key, None)
+    save_todos()
+
+
+def custom_todo_form(cfg: dict, key: str, default_day) -> None:
+    """Popover: eigenes To-do mit Datum und optionalem Modul anlegen."""
+    with st.popover("To-do hinzufügen", icon=":material/add:"):
+        st.text_input("Was?", key=f"{key}_title", placeholder="z. B. Bücher zurückgeben")
+        st.date_input("Wann?", value=default_day, key=f"{key}_date", format="DD.MM.YYYY")
+        st.selectbox("Modul", [None] + [m["id"] for m in cfg["modules"]], key=f"{key}_mod",
+                     format_func=lambda mid: "Ohne Modul" if mid is None else get_module(cfg, mid)["short"])
+        st.button("Hinzufügen", key=f"{key}_add", type="primary", on_click=_add_custom_todo, args=(key,))
+
+
 def open_unit(module_id: str, unit_id: str | None) -> None:
     """Callback: Vorlesung/Übung öffnen (None = zurück zum Ablauf)."""
     goto("module", module_id)
@@ -134,6 +178,10 @@ def open_todo(todo: dict) -> None:
     """Callback: Aufgabe anklicken → passende Vorlesung/Übung (bzw. Lernbereich) im Modul öffnen."""
     parts = todo["key"].split(":")
     module_id = todo["module_id"]
+    if todo.get("custom"):
+        if module_id:
+            open_unit(module_id, None)
+        return
     unit_id = None
     if len(parts) >= 4 and parts[1] == "vl":
         unit_id = f"vl:{parts[2]}"

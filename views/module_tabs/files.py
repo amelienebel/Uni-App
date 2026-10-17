@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from utils import ai
-from utils.learning import run_analysis
+from utils.learning import pending_figures, run_analysis
 from utils import textbook
 from utils.config import get_module, load_config
 from utils.storage import (IMAGE_TYPES, abs_data_path, add_file, data_file_exists, delete_document, load_module,
@@ -205,7 +205,7 @@ def textbook_section(cfg: dict, module_id: str) -> None:
 
 def uploader(cfg: dict, module_id: str, unit: dict, doc_type: str, label: str, key: str,
              allow_images: bool = False, analyse: bool = False) -> None:
-    """Upload-Feld für einen Dateityp. Folien werden direkt nach dem Hochladen zusammengefasst."""
+    """Upload-Feld für einen Dateityp. Folien ohne Abbildungen werden direkt nach dem Hochladen zusammengefasst."""
     counter_key = f"upround_{key}"
     types = ["pdf"] + (list(IMAGE_TYPES) if allow_images else [])
     files = st.file_uploader(label, type=types, accept_multiple_files=True,
@@ -218,7 +218,11 @@ def uploader(cfg: dict, module_id: str, unit: dict, doc_type: str, label: str, k
             doc = add_file(module_id, f.name, f.getvalue(), doc_type, unit.get("chapter_id"), unit["id"])
         if doc.get("kind") != "image" and doc["n_chars"] < 50:
             messages.append(("warning", f"{f.name}: kaum Text gefunden (gescanntes PDF?)."))
-        if analyse and doc.get("kind") != "image":
+        if analyse and doc.get("kind") != "image" and (pending := pending_figures(doc)):
+            messages.append(("info", f"{f.name}: Auf Seite(n) {', '.join(map(str, pending))} kann ich die Abbildungen "
+                                     "nicht sehen. Wähle unter „Vorbereiten“, welche ich genau lesen soll – danach "
+                                     "erstelle ich die Vorbereitung."))
+        elif analyse and doc.get("kind") != "image":
             with st.spinner(f"Erstelle Zusammenfassung von {f.name} …" + (" (KI)" if ai.is_available() else "")):
                 try:
                     messages.append(("success", f"{f.name}: {run_analysis(cfg, module_id, doc)}"))

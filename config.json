@@ -268,7 +268,7 @@
       "deadlines": {
         "prep_weekday": 6,
         "review_weekday": 2,
-        "exercise_weekday": 6
+        "exercise_weekday": 5
       },
       "symbol": "calculate"
     },
@@ -1331,7 +1331,7 @@
       "deadlines": {
         "prep_weekday": 2,
         "review_weekday": 5,
-        "exercise_weekday": 6
+        "exercise_weekday": 5
       },
       "symbol": "bar_chart"
     }

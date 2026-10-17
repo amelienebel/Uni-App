@@ -9,12 +9,13 @@ import streamlit as st
 
 from utils import ai, planner, textbook
 from utils.config import WEEKDAYS, get_module, load_config
-from utils.learning import page_cost_estimate, read_pages_visual, run_analysis, unit_material
+from utils.learning import page_cost_estimate, pending_figures, read_pages_visual, run_analysis, unit_material
 from utils.pdf_parser import figure_pages
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
                            load_todos, now_iso, read_data_file, save_module, save_todos, save_upload)
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
 from views.common import LECTURE_TABS, ai_hint, open_unit, render_formula, toggle_todo
+from views import quiz_center
 from views.module_tabs import exams, study, tutor
 from views.module_tabs.files import file_list, show_messages, uploader
 
@@ -77,7 +78,7 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
 
 def _files_tab(cfg: dict, module_id: str, lec: dict, exs: list[dict], all_units: list[dict]) -> None:
     data = load_module(module_id)
-    uploader(cfg, module_id, lec, "folien", "Folien hochladen (PDF) – die Zusammenfassung wird sofort erstellt",
+    uploader(cfg, module_id, lec, "folien", "Folien hochladen (PDF)",
              key=f"fol_{lec['id']}", analyse=True)
     docs = unit_docs(data, lec)
     file_list(module_id, docs, key=lec["id"], all_units=all_units,
@@ -112,43 +113,60 @@ def _book_chapters(module_id: str, data: dict, lec: dict) -> None:
                    placeholder="Kein Buchkapitel zugeordnet")
 
 
-def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
-    """Seiten mit Abbildungen vorschlagen – die Studentin entscheidet, welche (teurer) genau gelesen werden."""
-    if doc.get("kind") == "image":
-        return
+def _ensure_figure_pages(module_id: str, doc: dict) -> None:
     if "figure_pages" not in doc:  # ältere Uploads: einmalig nachträglich prüfen
         try:
             doc["figure_pages"] = figure_pages(read_data_file(doc["path"]))
         except (OSError, ValueError):
             doc["figure_pages"] = []
         save_module(module_id)
-    pending = [p for p in doc["figure_pages"] if p not in doc.get("visual_pages", [])]
+
+
+def _run(cfg: dict, module_id: str, job, spinner: str) -> None:
+    with st.spinner(spinner):
+        try:
+            st.session_state[f"upmsg_{module_id}"] = [("success", job())]
+        except ai.AIError as exc:
+            st.session_state[f"upmsg_{module_id}"] = [("error", str(exc))]
+    st.rerun()
+
+
+def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
+    """Seiten mit Abbildungen nennen – die Studentin entscheidet, welche (teurer) genau gelesen werden.
+    Die Vorbereitung entsteht erst nach dieser Entscheidung."""
+    if doc.get("kind") == "image":
+        return
+    _ensure_figure_pages(module_id, doc)
+    pending = pending_figures(doc)
     if doc.get("visual_pages"):
         st.caption(f"Genau gelesen: Seite(n) {', '.join(map(str, doc['visual_pages']))}")
     if not pending:
         return
+    has_prep = bool(doc.get("analysis"))
     with st.container(border=True, key=f"figbox_{doc['id']}"):
-        st.markdown(f":material/image: **{len(pending)} Seite(n) mit Abbildungen**, die beim günstigen Text-Lesen "
-                    f"fehlen: {', '.join(map(str, pending))}")
+        st.markdown(f":material/image: **Auf {len(pending)} Seite(n) kann ich die Abbildungen nicht sehen:** "
+                    f"{', '.join(map(str, pending))}")
         wkey = f"figsel_{doc['id']}"
-        chosen = st.multiselect("Welche Seiten sollen genau gelesen werden?", pending, default=pending, key=wkey,
+        chosen = st.multiselect("Welche Seiten soll ich genau lesen?", pending, default=pending, key=wkey,
                                 format_func=lambda p: f"Seite {p}")
         cost = page_cost_estimate(len(chosen)) * 100
-        c1, c2 = st.columns([2, 1])
-        if c1.button(f"Ausgewählte Seiten genau lesen (ca. {cost:.1f} Cent)", key=f"figgo_{doc['id']}",
-                     type="primary", disabled=not chosen or not ai.is_available()):
-            with st.spinner(f"Lese {len(chosen)} Seite(n) genau …"):
-                try:
-                    st.session_state[f"upmsg_{module_id}"] = [("success", read_pages_visual(cfg, module_id, doc,
-                                                                                          chosen))]
-                except ai.AIError as exc:
-                    st.session_state[f"upmsg_{module_id}"] = [("error", str(exc))]
-            st.rerun()
-        if c2.button("Nicht nötig", key=f"figno_{doc['id']}"):
-            doc["visual_pages"] = sorted(set(doc.get("visual_pages", [])) | set(pending))
-            doc["figures_skipped"] = True
+        verb = "aktualisieren" if has_prep else "erstellen"
+        c1, c2 = st.columns([3, 2])
+
+        def skip(pages: list[int]) -> None:
+            doc["skipped_figures"] = sorted(set(doc.get("skipped_figures", [])) | set(pages))
             save_module(module_id)
-            st.rerun()
+
+        if c1.button(f"Genau lesen & Vorbereitung {verb} (ca. {cost:.1f} Cent)", key=f"figgo_{doc['id']}",
+                     type="primary", disabled=not chosen or not ai.is_available()):
+            skip([p for p in pending if p not in chosen])
+            _run(cfg, module_id, lambda: read_pages_visual(cfg, module_id, doc, chosen),
+                 f"Lese {len(chosen)} Seite(n) genau und erstelle die Vorbereitung …")
+        if c2.button("Keine genau lesen" + ("" if has_prep else " – Vorbereitung erstellen"), key=f"figno_{doc['id']}"):
+            skip(pending)
+            if has_prep:
+                st.rerun()
+            _run(cfg, module_id, lambda: run_analysis(cfg, module_id, doc), "Erstelle Vorbereitung …")
 
 
 def _cell(text: str) -> str:
@@ -156,13 +174,25 @@ def _cell(text: str) -> str:
 
 
 def _check_questions(doc: dict, questions: list[dict]) -> None:
-    st.markdown("#### :material/quiz: Pre-Check: 3 Verständnisfragen")
+    """Pre-Check im alten Format (Frage + Musterantwort)."""
+    st.markdown("#### :material/quiz: Pre-Check: Verständnisfragen")
     for i, q in enumerate(questions[:3], start=1):
         st.markdown(f"**{i}. {q['question']}**")
         st.text_area("Deine Antwort", key=f"cq_{doc['id']}_{i}", height=70, label_visibility="collapsed",
                      placeholder="Erst selbst antworten, dann auflösen …")
         with st.expander("Lösung anzeigen"):
             st.markdown(q["answer"])
+
+
+def _prep_quiz(doc: dict, questions: list[dict]) -> None:
+    st.markdown(f"#### :material/quiz: Quiz: {len(questions)} Fragen zum Selbsttest")
+    store = st.session_state.setdefault(f"prepquiz_{doc['id']}", {})
+    for i, q in enumerate(questions, start=1):
+        if quiz_center.question_card(q, f"pq_{doc['id']}_{i}", store, title=f"Frage {i}"):
+            st.rerun()
+    graded = [r for r in store.values() if r["correct"] is not None]
+    if graded:
+        st.caption(f"{sum(r['correct'] for r in graded)} von {len(graded)} richtig")
 
 
 def _prep_view(doc: dict, analysis: dict) -> None:
@@ -186,7 +216,9 @@ def _prep_view(doc: dict, analysis: dict) -> None:
             st.caption("In die Formelsammlung kommen sie erst, wenn du sie unter „Formeln & Notizen“ bestätigst.")
             for f in analysis["formulas"]:
                 render_formula(f)
-    if analysis.get("check_questions"):
+    if analysis.get("quiz"):
+        _prep_quiz(doc, analysis["quiz"])
+    elif analysis.get("check_questions"):
         _check_questions(doc, analysis["check_questions"])
 
 
@@ -215,20 +247,18 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
     slides = [d for d in unit_docs(data, lec) if d.get("kind") != "image"]
     if not slides:
-        st.info("Lade unter „Dateien“ die Folien hoch – die Zusammenfassung wird dann automatisch erstellt.")
+        st.info("Lade unter „Dateien“ die Folien hoch.")
         return
     for doc in slides:
         analysis = doc.get("analysis")
         if len(slides) > 1:
             st.markdown(f"### {doc['filename']}")
         if not analysis:
-            if st.button("Vorbereitung erstellen", key=f"an_{doc['id']}", type="primary"):
-                with st.spinner("Erstelle Vorbereitung …"):
-                    try:
-                        st.session_state[f"upmsg_{module_id}"] = [("success", run_analysis(cfg, module_id, doc))]
-                    except ai.AIError as exc:
-                        st.session_state[f"upmsg_{module_id}"] = [("error", str(exc))]
-                st.rerun()
+            _ensure_figure_pages(module_id, doc)
+            if pending_figures(doc):
+                _figure_pages(cfg, module_id, doc)
+            elif st.button("Vorbereitung erstellen", key=f"an_{doc['id']}", type="primary"):
+                _run(cfg, module_id, lambda doc=doc: run_analysis(cfg, module_id, doc), "Erstelle Vorbereitung …")
             continue
         if "concept_table" in analysis:
             _prep_view(doc, analysis)

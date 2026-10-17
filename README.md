@@ -30,8 +30,8 @@ ablegen. Daten bleiben über einen privaten GitHub-Speicher erhalten, ein Passwo
 | 🏠 **Wochenübersicht & Lernplan** | Klausur-Countdown, Wochenraster aus dem Stundenplan, generierte To-dos mit Fristen (Vorlesung vor-/nachbereiten, Übungsblatt, Wiederholung, Altklausur), Fortschrittsbalken pro Modul, priorisierter Lernfahrplan |
 | **Heute** | Termine, fällige To-dos, Karteikarten, Klausurplan und Schwachstellen auf einen Blick |
 | **Klausur-Lernplan** | Verteilt Kapitel-Wiederholung, Schwachstellen und Altklausuren automatisch auf die Tage bis zu den Klausuren |
-| 📚 **Modul-Bereiche** | Pro Modul 3 Reiter: **Ablauf** (Kapitel mit Vorlesungen, Übungen und Tutorien – jede Vorlesung/Übung hat eine eigene Seite mit Dateien, Vorbereitung, Nachbereitung und Lernen) · **Lernen & Klausur** (mehrere Vorlesungen auswählen: Karteikarten, Quiz, Tutor, Altklausuren) · **Formeln & Notizen** |
-| 📐 **Zentrale Formelsammlung** | Alle Formeln modulübergreifend, filter- und durchsuchbar, LaTeX-Rendering mit `st.latex`, Markdown-Download |
+| 📚 **Module** (direkt in der Seitenleiste) | Pro Modul 3 Reiter: **Ablauf** (Kapitel mit Vorlesungen, Übungen und Tutorien – jede Vorlesung/Übung hat eine eigene Seite mit Dateien, Vorbereitung, Nachbereitung und Lernen) · **Lernen & Klausur** (mehrere Vorlesungen auswählen: Karteikarten, Quiz, Tutor, Altklausuren) · **Formeln & Notizen** |
+| 📐 **Formelsammlung** | Ausgewählte Formeln modulübergreifend, filter- und durchsuchbar, LaTeX-Rendering mit `st.latex`, Markdown-Download |
 | 📂 **Bulk-Upload** | Viele PDFs oder Moodle-ZIP-Ordner auf einmal; automatische Zuordnung zu Modul, Dokumenttyp und Kapitel, vor dem Import korrigierbar |
 | 📥 **Export & Backup** | Notizen, Zusammenfassungen, Formeln, Karten als Markdown oder PDF; komplettes Backup/Restore als ZIP |
 | ⚙️ **Einstellungen & Klausurtermine** | Klausurtermine, Semesterzeitraum, Stundenplan, Lernparameter, KI-Modell und Effort |

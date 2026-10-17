@@ -24,8 +24,11 @@ Erstelle:
    in $...$), short (Kurzerklärung, max. ~15 Wörter), watch_out (worauf achten: Falle, Verwechslung, Bedingung –
    max. ~12 Wörter).
 3. summary: Ablauf der Vorlesung als Markdown-Stichpunktliste entlang der Folien; jeder Abschnitt beginnt mit
-   „**Folie N–M** · Thema“, darunter 1–3 kurze Unterpunkte. Keine Absätze, keine Überschriften.
-4. check_questions: genau 3 kurze Verständnisfragen zum Selbst-Beantworten, jeweils mit knapper Musterantwort.
+   „**Folie N–M** · Thema“, darunter 2–4 kurze Unterpunkte (je max. ~20 Wörter, auch Zusammenhang oder Warum).
+   Keine Absätze, keine Überschriften.
+4. quiz: genau 5 Quizfragen zum Selbsttest, die das Verständnis der wichtigsten Inhalte prüfen. {quiz_format}
+   Plausible Distraktoren (typische Denkfehler). correct_indices = Indizes der richtigen Optionen (ab 0).
+   explanation: kurz, warum richtig bzw. falsch, mit Foliennummer. slides: Foliennummer(n) der Frage.
 5. formulas: alle mathematischen und betriebswirtschaftlichen Formeln als sauberes LaTeX (ohne $-Zeichen) mit Name,
    kurzer Erklärung der Variablen und Foliennummer (page). Übernimm sie exakt wie auf den Folien."""
 
@@ -221,6 +224,24 @@ mit allen Achsen, Werten und Aussagen beschrieben. Nichts zusammenfassen, nichts
 """ + _PREP_TASKS
 
 
+QUIZ_FORMATS = {
+    "mc_multi": 'Wie in der Klausur: type "mc_multi", genau 5 Optionen, eine oder mehrere richtig.',
+    "sc4": 'Wie in der Klausur: type "mc", genau 4 Optionen, genau eine richtig.',
+}
+QUIZ_FORMAT_MIXED = ('Gemischt: type "mc" (genau 4 Optionen, genau eine richtig) und type "mc_multi" (genau 5 '
+                     'Optionen, eine oder mehrere richtig).')
+
+
+def _quiz_format(module: dict) -> str:
+    return QUIZ_FORMATS.get(exam_format(module)["type"], QUIZ_FORMAT_MIXED)
+
+
+def pending_figures(doc: dict) -> list[int]:
+    """Seiten mit Abbildungen, über die noch nicht entschieden wurde (genau lesen oder überspringen)."""
+    decided = set(doc.get("visual_pages", [])) | set(doc.get("skipped_figures", []))
+    return [p for p in doc.get("figure_pages", []) if p not in decided]
+
+
 def _first_page(slides: str) -> int:
     match = re.search(r"\d+", slides or "")
     return int(match.group()) if match else 0
@@ -258,7 +279,8 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
         if len(content) > MAX_VISUAL_BYTES:
             raise ai.AIError("Die Datei ist für die genaue Lesung zu groß (max. 30 MB). Bitte normal analysieren.")
         result = ai.complete_json([ai.pdf_block(content),
-                                   {"type": "text", "text": VISUAL_PROMPT.format(module=module["name"], chapter=chapter)}],
+                                   {"type": "text", "text": VISUAL_PROMPT.format(module=module["name"], chapter=chapter,
+                                                                                 quiz_format=_quiz_format(module))}],
                                   ai.VISUAL_ANALYSIS_SCHEMA, max_tokens=64000, task="summary")
         slides = sorted(result.pop("slides", []), key=lambda s: s["page"])
         if slides:
@@ -267,6 +289,7 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
         result["visual"] = True
     elif ai.is_available():
         result = ai.complete_json(ANALYSIS_PROMPT.format(module=module["name"], chapter=chapter,
+                                                         quiz_format=_quiz_format(module),
                                                          text=get_document_text(doc, label="Folie")),
                                   ai.ANALYSIS_SCHEMA, effort="low", task="summary")
         result["mode"] = "ki"
@@ -281,7 +304,7 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
                              source=f"{doc['filename']} ({'KI' if result['mode'] == 'ki' else 'heuristisch'})",
                              chapter_id=doc.get("chapter_id"))
     msg = "Zusammenfassung erstellt (nur Text gelesen)." if not result.get("visual") else "Zusammenfassung erstellt."
-    pending = [p for p in doc.get("figure_pages", []) if p not in doc.get("visual_pages", [])]
+    pending = pending_figures(doc)
     if pending and not result.get("visual"):
         msg += (f" Auf {len(pending)} Seite(n) sind Abbildungen ({', '.join(map(str, pending))}) – unter "
                 "„Vorbereiten“ kannst du entscheiden, ob sie genau gelesen werden sollen.")
@@ -602,3 +625,65 @@ def read_pages_visual(cfg: dict, module_id: str, doc: dict, pages: list[int]) ->
     save_module(module_id)
     run_analysis(cfg, module_id, doc, visual=False)  # Zusammenfassung mit den neuen Inhalten
     return f"{len(pages)} Seite(n) genau gelesen und die Zusammenfassung aktualisiert."
+
+
+REWRITE_PROMPT = """Überarbeite diese Karteikarte nach dem Feedback der Nutzerin (BWL, 1. Semester, LMU).
+Setze das Feedback um, ändere sonst so wenig wie möglich. Inhaltlich nur, was in Karte oder Quelle steht – nichts
+erfinden. Regeln: Frage eigenständig verständlich und präzise; Antwort als Stichpunkte im Telegrammstil (ein
+Stichpunkt pro Listenelement, ohne Aufzählungszeichen, Unterpunkte mit zwei führenden Leerzeichen); Formeln in
+LaTeX mit $...$; Erklärung 40–120 Wörter Fließtext fürs Verständnis; keywords 2–6 Kernbegriffe exakt wie in der
+Antwort geschrieben.
+
+<karte>
+Frage: {front}
+Antwort:
+{back}
+Erklärung: {explanation}
+</karte>
+
+<feedback>
+{feedback}
+</feedback>
+
+<quelle>
+{source}
+</quelle>"""
+
+REWRITE_SCHEMA = {"type": "object", "additionalProperties": False,
+                  "required": ["front", "answer", "explanation", "keywords"], "properties": {
+                      "front": {"type": "string"}, "answer": {"type": "array", "items": {"type": "string"}},
+                      "explanation": {"type": "string"}, "keywords": {"type": "array", "items": {"type": "string"}}}}
+
+_CARD_TEXT_FIELDS = ("front", "back", "explanation", "keywords")
+
+
+def _card_source_text(data: dict, card: dict) -> str:
+    parts = []
+    for src in card.get("sources", []):
+        doc = next((d for d in data["documents"] if d["id"] == src.get("doc_id")), None)
+        if not doc:
+            continue
+        pages = get_document_pages(doc)
+        parts += [f"--- {doc['filename']} S. {p} ---\n{pages[p - 1]}" for p in src.get("pages", [])
+                  if 1 <= p <= len(pages)]
+    return "\n\n".join(parts) or "(keine Quelle gespeichert)"
+
+
+def rewrite_card(module_id: str, card: dict, feedback: str) -> None:
+    """Karte nach Feedback umformulieren (vorige Fassung bleibt für „Rückgängig“ erhalten)."""
+    data = load_module(module_id)
+    result = ai.complete_json(REWRITE_PROMPT.format(front=card["front"], back=card["back"],
+                                                    explanation=card.get("explanation", ""), feedback=feedback,
+                                                    source=_card_source_text(data, card)),
+                              REWRITE_SCHEMA, max_tokens=8000, effort="low", task="cards")
+    card["previous"] = {f: card.get(f) for f in _CARD_TEXT_FIELDS}
+    card.update({"front": result["front"].strip(), "back": answer_markdown(result["answer"]),
+                 "explanation": result["explanation"].strip(), "keywords": result["keywords"]})
+    card.setdefault("feedback", []).append({"date": now_iso(), "text": feedback})
+    save_module(module_id)
+
+
+def undo_rewrite(module_id: str, card: dict) -> None:
+    if previous := card.pop("previous", None):
+        card.update(previous)
+        save_module(module_id)

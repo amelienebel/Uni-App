@@ -142,13 +142,15 @@ def next_session(cfg: dict, module_cfg: dict, schedule: list[dict], now: date) -
     lectures = {lec["date"]: lec for lec in lectures_of(module_cfg)}
     exercises = exercises_of(module_cfg)
     monday = monday_of(now)
-    # Sondertermine: Blatt mit festem Datum, an dem laut Stundenplan keine Übung/kein Tutorium stattfindet
+    # Sondertermine: Blatt mit festem Datum und Uhrzeit, an dem laut Stundenplan keine Übung/kein Tutorium
+    # stattfindet (ohne Uhrzeit ist das Datum nur eine Abgabefrist, z. B. Selbststudium bis Sonntag)
     session_days = {ev["date"] for week in range(0, 20) for ev in week_events(schedule, monday + timedelta(weeks=week))
                     if ev.get("module_id") == module_id and ev.get("type") in ("Übung", "Tutorium")}
     special = min(({"date": ex["due"], "type": "Übung", "start": ex.get("start", ""), "end": ex.get("end", ""),
                     "room": ex.get("room", ""), "module_id": module_id, "topic": ex["title"],
                     "chapter_id": ex.get("chapter_id")}
-                   for ex in exercises if ex["due"] and ex["due"] >= now and ex["due"] not in session_days),
+                   for ex in exercises if ex["due"] and ex.get("start") and ex["due"] >= now
+                   and ex["due"] not in session_days),
                   key=lambda e: e["date"], default=None)
     regular = _next_regular(module_id, schedule, now, monday, sem_end, breaks, lectures, exercises)
     candidates = [e for e in (special, regular) if e]
@@ -342,6 +344,18 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             })
 
     todos.sort(key=lambda t: (t["due"], t["module_id"]))
+    return todos
+
+
+def custom_todos(todo_state: dict, start: date | None = None, end: date | None = None) -> list[dict]:
+    """Selbst eingetragene To-dos (todos.json → _custom) mit Datum im Zeitraum."""
+    todos = []
+    for item in todo_state.get("_custom", []):
+        due = date.fromisoformat(item["date"])
+        if (start is None or due >= start) and (end is None or due <= end):
+            todos.append({"key": f"custom:{item['id']}", "module_id": item.get("module_id"), "chapter_id": None,
+                          "status_field": None, "kind": "Eigenes", "title": item["title"], "due": due,
+                          "custom": True})
     return todos
 
 

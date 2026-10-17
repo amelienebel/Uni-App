@@ -104,6 +104,46 @@ def _offline_quiz(data: dict, chapter_ids: list[str], n: int) -> list[dict]:
     return questions[:n]
 
 
+def build_quiz(cfg: dict, module_id: str, data: dict, n: int, types: str, difficulty: str, use_exams: bool,
+               context: str | None, scope_label: str | None, chapter_ids: list[str]) -> list[dict]:
+    """Erstellt Quizfragen (KI, sonst offline aus Formeln und Karten). Wirft ai.AIError."""
+    module = get_module(cfg, module_id)
+    fmt = exam_format(module)
+    if not ai.is_available():
+        questions = _offline_quiz(data, chapter_ids, n)
+        if types == QUIZ_TYPES[2]:
+            questions = [q for q in questions if q["type"] == "mc"]
+        elif types == QUIZ_TYPES[3]:
+            questions = [q for q in questions if q["type"] == "freitext"]
+        return questions
+    if context is None:
+        context, _ = module_context(module_id)
+    exam_hint = ""
+    exams = documents_of(data, ("altklausur",))
+    if use_exams and exams:
+        exam_hint = ("\nOrientiere dich an Aufbau und Stil dieser Altklausuren:\n<altklausuren>\n"
+                     + "\n\n".join(get_document_text(d) for d in exams) + "\n</altklausuren>\n")
+    titles = scope_label or ", ".join(chapter_label(data, c) for c in chapter_ids) or "alle Kapitel"
+    choice_type = {"mc_multi": "nur mc_multi", "sc4": "nur mc"}.get(fmt["type"], "mc und mc_multi gemischt")
+    type_text = {QUIZ_TYPES[0]: EXAM_TYPE_TEXT[fmt["type"]],
+                 QUIZ_TYPES[1]: "gemischt (ca. halb Auswahlfragen, halb freitext)",
+                 QUIZ_TYPES[2]: choice_type, QUIZ_TYPES[3]: "nur freitext"}[types]
+    result = ai.complete_json(QUIZ_PROMPT.format(module=module["name"], chapters=titles, n=n, types=type_text,
+                                                 difficulty=difficulty, exam_format=fmt["label"],
+                                                 exam_hint=exam_hint, context=context), ai.QUIZ_SCHEMA)
+    return result.get("questions", [])
+
+
+def save_quiz(module_id: str, data: dict, questions: list[dict], chapter_ids: list[str], scope_key: str,
+              label: str = "") -> dict:
+    quiz = {"id": new_id(), "created_at": now_iso(), "questions": questions, "chapters": chapter_ids,
+            "results": {}, "scope": scope_key, "label": label}
+    data["quizzes"].append(quiz)
+    data["quizzes"] = data["quizzes"][-30:]
+    save_module(module_id)
+    return quiz
+
+
 def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main", scope_label: str | None = None,
                  context: str | None = None, chapter_ids: list[str] | None = None) -> None:
     """Quiz zum ganzen Modul, zu ausgewählten Vorlesungen (scope_label + context) oder zu einer Vorlesung."""
@@ -124,39 +164,12 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
     if submitted:
         with st.spinner("Erstelle Quiz …"):
             try:
-                if has_ai:
-                    if context is None:
-                        context, _ = module_context(module_id)
-                    exam_hint = ""
-                    exams = documents_of(data, ("altklausur",))
-                    if use_exams and exams:
-                        exam_hint = ("\nOrientiere dich an Aufbau und Stil dieser Altklausuren:\n<altklausuren>\n"
-                                     + "\n\n".join(get_document_text(d) for d in exams) + "\n</altklausuren>\n")
-                    titles = scope_label or ", ".join(chapter_label(data, c) for c in chapter_ids) or "alle Kapitel"
-                    choice_type = {"mc_multi": "nur mc_multi", "sc4": "nur mc"}.get(fmt["type"],
-                                                                                     "mc und mc_multi gemischt")
-                    type_text = {QUIZ_TYPES[0]: EXAM_TYPE_TEXT[fmt["type"]],
-                                 QUIZ_TYPES[1]: "gemischt (ca. halb Auswahlfragen, halb freitext)",
-                                 QUIZ_TYPES[2]: choice_type, QUIZ_TYPES[3]: "nur freitext"}[types]
-                    result = ai.complete_json(QUIZ_PROMPT.format(module=module["name"], chapters=titles, n=n,
-                                                                 types=type_text, difficulty=difficulty,
-                                                                 exam_format=fmt["label"],
-                                                                 exam_hint=exam_hint, context=context),
-                                              ai.QUIZ_SCHEMA)
-                    questions = result.get("questions", [])
-                else:
-                    questions = _offline_quiz(data, chapter_ids, n)
-                    if types == QUIZ_TYPES[2]:
-                        questions = [q for q in questions if q["type"] == "mc"]
-                    elif types == QUIZ_TYPES[3]:
-                        questions = [q for q in questions if q["type"] == "freitext"]
+                questions = build_quiz(cfg, module_id, data, n, types, difficulty, use_exams and has_ai, context,
+                                       scope_label, chapter_ids)
                 if not questions:
                     st.warning("Offline konnten keine Fragen erzeugt werden – lege zuerst Formeln oder Lernkarten an.")
                 else:
-                    data["quizzes"].append({"id": new_id(), "created_at": now_iso(), "questions": questions,
-                                            "chapters": chapter_ids, "results": {}, "scope": scope_key})
-                    data["quizzes"] = data["quizzes"][-30:]
-                    save_module(module_id)
+                    save_quiz(module_id, data, questions, chapter_ids, scope_key)
             except ai.AIError as exc:
                 st.error(str(exc))
 

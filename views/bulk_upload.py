@@ -9,7 +9,7 @@ import streamlit as st
 
 from utils import ai, textbook, units
 from utils.config import get_module
-from utils.learning import run_analysis
+from utils.learning import pending_figures, run_analysis
 from utils.pdf_parser import (extract_pdf, guess_chapter_from_plan, guess_chapter_index,
                               guess_doc_type, guess_module,
                               pdfs_from_zip)
@@ -150,7 +150,7 @@ def _upload_tab(cfg: dict) -> None:
                             "book_chapter": textbook.guess_chapter_from_filename(item["name"]) or 0})
             save_module(module_id)
             imported += 1
-            if doc_type == "folien" and doc["n_chars"] >= 50:
+            if doc_type == "folien" and doc["n_chars"] >= 50 and not pending_figures(doc):
                 to_analyse.append((module_id, doc))
         if to_analyse:
             bar = st.progress(0.0, text="Erstelle Zusammenfassungen der Folien …")

@@ -12,7 +12,7 @@ from utils import planner
 from utils.config import WEEKDAYS, get_module, module_label
 from utils.storage import (get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
-from views.common import goto, micon, open_todo, toggle_todo
+from views.common import custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -100,17 +100,20 @@ def _move_popover(t: dict, monday: date, place: str) -> None:
         b1.button("Verschieben", key=f"mvb_{place}_{t['key']}", type="primary",
                   on_click=_move_todo, args=(t["key"], day_key, slot_key))
         b2.button("Zurücksetzen", key=f"mvr_{place}_{t['key']}", on_click=_reset_todo, args=(t["key"],))
+        if t.get("custom"):
+            st.button("Löschen", key=f"mvdel_{place}_{t['key']}", icon=":material/delete:",
+                      on_click=delete_custom_todo, args=(t["key"],))
 
 
 def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monday: date, now: date,
                  place: str, compact: bool = False) -> None:
     """Volle Zeile: Abhaken links, Frist in der Mitte, Verschieben rechts."""
-    module = get_module(cfg, t["module_id"])
+    module = todo_module(cfg, t)
     key = f"todo_{place}_{t['key']}_{monday.isoformat()}"
     done = planner.todo_done(t, modules_data, todo_state)
     st.session_state[key] = done
     _, slot = _placement(t, monday)
-    with st.container(key=f"tdrow_{t['module_id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
+    with st.container(key=f"tdrow_{module['id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
         c0, c1, c2, c3 = st.columns([0.5, 7, 3, 1], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
         c1.button(f"**{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary", icon=micon(module),
@@ -123,12 +126,12 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
 
 def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: date, key: str) -> None:
     """Kärtchen im Raster – Antippen öffnet die passende Vorlesung/Übung (abhaken in der Liste darunter)."""
-    module = get_module(cfg, t["module_id"])
+    module = todo_module(cfg, t)
     done = planner.todo_done(t, modules_data, todo_state)
     overdue = not done and t["due"] < now
     mark = "✓ " if done else ("! " if overdue else "")
     state = "done" if done else "open"
-    with st.container(key=f"chip_{state}_{t['module_id']}_{key}"):
+    with st.container(key=f"chip_{state}_{module['id']}_{key}"):
         st.button(f"{mark}**{module['short']}**  \n{_short_label(t)}", key=f"chipbtn_{key}", type="tertiary",
                   on_click=open_todo, args=(t,), help=t["title"])
 
@@ -228,6 +231,7 @@ def render(cfg: dict) -> None:
               and not planner.break_for(e["date"], breaks)]
     todos = planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end, settings["learning"], breaks)
     todo_state = load_todos()
+    todos += planner.custom_todos(todo_state, monday, monday + timedelta(days=6))
     placed: dict[tuple[date, int | None], list[dict]] = {}
     for t in todos:
         placed.setdefault(_placement(t, monday), []).append(t)
@@ -285,7 +289,11 @@ def render(cfg: dict) -> None:
                     _todo_chip(t, cfg, modules_data, todo_state, now, f"{day:%Y%m%d}_l{j}")
 
     # --- Aufgaben dieser Woche (abhaken & verschieben) ---------------------------
-    st.subheader(":material/checklist: Aufgaben dieser Woche")
+    h1, h2 = st.columns([3, 1], vertical_alignment="bottom")
+    h1.subheader(":material/checklist: Aufgaben dieser Woche")
+    with h2:
+        custom_todo_form(cfg, f"week_new_{monday.isoformat()}",
+                         now if monday <= now <= monday + timedelta(days=6) else monday)
     if not todos:
         st.caption("Für diese Woche sind keine Aufgaben geplant.")
     else:
@@ -293,7 +301,7 @@ def render(cfg: dict) -> None:
         st.progress(1 - open_count / len(todos), text=f"{len(todos) - open_count} von {len(todos)} erledigt")
         for day in days:
             day_todos = sorted((t for t in todos if _placement(t, monday)[0] == day),
-                               key=lambda t: (_placement(t, monday)[1] or 99, t["module_id"]))
+                               key=lambda t: (_placement(t, monday)[1] or 99, t["module_id"] or ""))
             if not day_todos:
                 continue
             st.markdown(f"**{WEEKDAYS[day.weekday()]}, {day:%d.%m.}**")
@@ -316,7 +324,7 @@ def render(cfg: dict) -> None:
             c_a, c_b = st.columns([4, 1])
             c_a.markdown(f"**{rank}. {module_label(cfg, rec['module_id'])}**  \n"
                          f"<span class='small-muted'>{rec['reason']}</span>", unsafe_allow_html=True)
-            c_b.button("Öffnen", key=f"rec_{rec['module_id']}", on_click=goto, args=(1, rec["module_id"]))
+            c_b.button("Öffnen", key=f"rec_{rec['module_id']}", on_click=goto, args=("module", rec["module_id"]))
         due_total = sum(r["due"] for r in recs)
         if due_total:
             st.info(f"Heute insgesamt **{due_total}** Lernkarten fällig.")

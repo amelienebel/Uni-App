@@ -13,7 +13,8 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
                            load_todos, semester_dates, today)
 from utils.weakness import weakest
-from views.common import MODULE_TABS, goto, micon, open_todo, open_unit, toggle_todo
+from views.common import (MODULE_TABS, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit,
+                          todo_module, toggle_todo)
 from views.module_tabs.study import WEAK_TAB_STATE
 
 
@@ -37,15 +38,18 @@ def _open_event(cfg: dict, ev: dict) -> None:
 
 
 def _todo_row(cfg: dict, t: dict, modules_data: dict, state: dict, now) -> None:
-    module = get_module(cfg, t["module_id"])
+    module = todo_module(cfg, t)
     key = f"today_{t['key']}"
     st.session_state[key] = planner.todo_done(t, modules_data, state)
-    with st.container(key=f"tdrow_{t['module_id']}_today_{_safe(t['key'])}"):
-        c0, c1, c2 = st.columns([0.5, 8, 3], vertical_alignment="center")
+    with st.container(key=f"tdrow_{module['id']}_today_{_safe(t['key'])}"):
+        c0, c1, c2, c3 = st.columns([0.5, 8, 3, 0.6], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
         c1.button(f"**{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary", icon=micon(module),
                   on_click=open_todo, args=(t,))
         c2.caption(planner.format_due(t["due"], now))
+        if t.get("custom"):
+            c3.button("", key=f"del_{key}", icon=":material/delete:", type="tertiary", help="Löschen",
+                      on_click=delete_custom_todo, args=(t["key"],))
 
 
 def render(cfg: dict) -> None:
@@ -66,6 +70,7 @@ def render(cfg: dict) -> None:
     for start in (monday - timedelta(weeks=1), monday):
         todos += planner.generate_todos(cfg, modules_data, schedule, start, sem_start, sem_end,
                                         load_settings()["learning"], breaks)
+    todos += planner.custom_todos(state, end=now + timedelta(days=1))
     seen, open_todos = set(), []
     for t in todos:
         if t["key"] in seen or t["kind"] in ("Wiederholung", "Klausurvorbereitung"):
@@ -73,7 +78,7 @@ def render(cfg: dict) -> None:
         seen.add(t["key"])
         if not planner.todo_done(t, modules_data, state) and t["due"] <= now + timedelta(days=1):
             open_todos.append(t)
-    open_todos.sort(key=lambda t: (t["due"], t["module_id"]))
+    open_todos.sort(key=lambda t: (t["due"], t["module_id"] or ""))
     new_min = int(load_settings()["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
     card_plan = {mid: sr.daily_plan(d["cards"], days_until_exam(mid), new_min) for mid, d in modules_data.items()}
     due_cards = {mid: p["reviews"] + p["new"] for mid, p in card_plan.items()}
@@ -104,7 +109,10 @@ def render(cfg: dict) -> None:
                 c2.caption(f"{ev.get('start', '')}–{ev.get('end', '')} · {ev.get('room', '')}")
 
         # --- To-dos ----------------------------------------------------------------
-        st.subheader(":material/checklist: To-dos")
+        h1, h2 = st.columns([3, 2], vertical_alignment="bottom")
+        h1.subheader(":material/checklist: To-dos")
+        with h2:
+            custom_todo_form(cfg, "today_new", now)
         if not open_todos:
             st.caption("Nichts offen – stark!")
         for t in open_todos:

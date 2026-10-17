@@ -247,13 +247,23 @@ _INT = {"type": "integer"}
 
 FORMULA_SCHEMA = _obj({"name": _STR, "latex": _STR, "explanation": _STR, "page": _INT})
 
-# Vorlesungsvorbereitung: scannbar (Must-Watch, Tabelle mit Foliennummern, 3 Pre-Check-Fragen)
+# Auswahlfrage (Quiz in der Vorbereitung): Single Choice ("mc") oder Multiple Choice ("mc_multi")
+CHOICE_QUESTION_SCHEMA = _obj({
+    "type": {"type": "string", "enum": ["mc", "mc_multi"]},
+    "question": _STR,
+    "options": {"type": "array", "items": _STR},
+    "correct_indices": {"type": "array", "items": _INT},
+    "explanation": _STR,
+    "slides": _STR,
+})
+
+# Vorlesungsvorbereitung: scannbar (Must-Watch, Tabelle mit Foliennummern, 5 Quizfragen)
 ANALYSIS_SCHEMA = _obj({
     "must_watch": {"type": "array", "items": _obj({"slides": _STR, "topic": _STR, "why": _STR})},
     "concept_table": {"type": "array", "items": _obj({"slides": _STR, "term": _STR, "short": _STR,
                                                       "watch_out": _STR})},
     "summary": _STR,
-    "check_questions": {"type": "array", "items": _obj({"question": _STR, "answer": _STR})},
+    "quiz": {"type": "array", "items": CHOICE_QUESTION_SCHEMA},
     "formulas": {"type": "array", "items": FORMULA_SCHEMA},
 })
 

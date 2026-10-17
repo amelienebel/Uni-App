@@ -1,4 +1,4 @@
-"""Karteikarten-Lernzentrum: Lernstand aller Module, Empfehlung, freie Auswahl und ablenkungsfreier Lernmodus."""
+"""Karteikarten: Lernstand aller Module, Empfehlung, freie Auswahl und ablenkungsfreier Lernmodus."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from utils import ai, learning, units
 from utils import spaced_repetition as sr
-from utils import units
 from utils.config import exam_format, get_module, module_label
 from utils.storage import chapter_label, days_until_exam, load_module, load_settings, save_module
 from views.common import micon
@@ -44,10 +44,54 @@ def _pool(cfg: dict, module_id: str, lecture_ids: list[str]) -> tuple[dict, list
     return data, cards
 
 
+FILTERS = {
+    "due": "Heute fällige + neue (empfohlen)",
+    "all": "Alle Karten",
+    "weak": "Nur schwache Karten",
+    "new": "Nur neue (noch nie gelernt)",
+    "learned": "Nur schon gelernte",
+    "flagged": "Nur „bitte prüfen“",
+    "high": "Nur wichtige",
+}
+BROWSE_FILTERS = {"all": "Alle", "weak": "Schwach", "due": "Heute fällig", "new": "Neu", "learned": "Gelernt",
+                  "mastered": "Sicher", "flagged": "Bitte prüfen", "high": "Wichtig", "low": "Randthema"}
+
+
+def is_weak(card: dict) -> bool:
+    """Schwach: zuletzt „Gar nicht“/„Etwas“, öfter vergessen oder nur noch < 70 % Erinnerung."""
+    sr._upgrade(card)
+    if sr.is_new(card):
+        return False
+    history = card.get("history") or []
+    r = sr.retrievability(card)
+    return bool(history and history[-1]["grade"] <= 1) or card.get("lapses", 0) >= 2 or (r is not None and r < 0.7)
+
+
+def matches(card: dict, mode: str) -> bool:
+    sr._upgrade(card)
+    return {
+        "all": lambda: True,
+        "weak": lambda: is_weak(card),
+        "due": lambda: not sr.is_new(card) and sr.is_due(card),
+        "new": lambda: sr.is_new(card),
+        "learned": lambda: not sr.is_new(card),
+        "mastered": lambda: (card.get("stability") or 0) >= sr.MASTERED_STABILITY,
+        "flagged": lambda: bool(card.get("needs_review")),
+        "high": lambda: card.get("priority") == "high",
+        "low": lambda: card.get("priority") == "low",
+    }[mode]()
+
+
+def _weak_order(card: dict) -> float:
+    r = sr.retrievability(card)
+    return r if r is not None else 1.0
+
+
 def _queue_for(cfg: dict, module_id: str, lecture_ids: list[str], mode: str) -> list[dict]:
     data, cards = _pool(cfg, module_id, lecture_ids)
-    if mode == "all":
-        return sorted(cards, key=lambda c: c["due"])
+    if mode != "due":
+        chosen = [c for c in cards if matches(c, mode)]
+        return sorted(chosen, key=_weak_order) if mode == "weak" else sorted(chosen, key=lambda c: c["due"])
     minimum, limit = _prefs()
     days = days_until_exam(module_id)
     quota = sr.new_per_day(data["cards"], days, minimum)
@@ -98,7 +142,7 @@ def _recommendation(cfg: dict, rows: list[dict]) -> None:
         st.markdown(":material/lightbulb: **Empfehlung**")
         if not candidates:
             st.markdown("#### Für heute alles geschafft")
-            st.caption("Unten kannst du trotzdem beliebige Karten üben (Modus „Alle Karten“).")
+            st.caption("Unten kannst du trotzdem beliebige Karten üben (z. B. „Alle Karten“).")
             return
         best = max(candidates, key=lambda r: r["score"])
         module = best["module"]
@@ -166,17 +210,105 @@ def _manual(cfg: dict, rows: list[dict]) -> None:
         selection[mid] = st.multiselect(f"{module['short']}: Vorlesungen", options, key=key,
                                         format_func=labels.get, placeholder="Keine Vorlesung gewählt")
     selection = {mid: ids for mid, ids in selection.items() if ids}
-    mode = st.radio("Welche Karten?", ["due", "all"], key="cc_mode", horizontal=True,
-                    format_func={"due": "Heute fällige + neue (empfohlen)", "all": "Alle Karten der Auswahl"}.get)
+    mode = st.selectbox("Welche Karten?", list(FILTERS), key="cc_mode", format_func=FILTERS.get)
     n = sum(len(_queue_for(cfg, mid, ids, mode)) for mid, ids in selection.items())
     st.button(f"Lernsession starten ({n} Karten)", key="cc_start", type="primary", disabled=not n,
               icon=":material/play_arrow:", on_click=_start, args=(cfg, selection, mode))
     if not n and selection and mode == "due":
-        st.caption("In dieser Auswahl ist heute nichts fällig – wähle „Alle Karten der Auswahl“.")
+        st.caption("In dieser Auswahl ist heute nichts fällig – wähle „Alle Karten“.")
+
+
+PAGE_SIZE = 25
+
+
+def _start_cards(entries: list[list[str]]) -> None:
+    if entries:
+        st.session_state[SESSION] = {"queue": entries, "done": [], "view": None, "step": 0}
+
+
+def _delete_cards(entries: list[list[str]]) -> None:
+    by_module: dict[str, set[str]] = {}
+    for mid, cid in entries:
+        by_module.setdefault(mid, set()).add(cid)
+    for mid, ids in by_module.items():
+        data = load_module(mid)
+        data["cards"] = [c for c in data["cards"] if c["id"] not in ids]
+        save_module(mid)
+
+
+def _edit_form(module_id: str, card: dict, key: str) -> None:
+    with st.form(f"ccedit_{key}"):
+        front = st.text_area("Frage", card["front"], height=80)
+        back = st.text_area("Antwort", card["back"], height=150)
+        explanation = st.text_area("Erklärung", card.get("explanation", ""), height=110)
+        c1, c2 = st.columns(2)
+        prio = c1.selectbox("Priorität", list(study.PRIORITY_LABELS), format_func=study.PRIORITY_LABELS.get,
+                            index=list(study.PRIORITY_LABELS).index(card.get("priority", "normal")))
+        review = c2.checkbox("Bitte prüfen", card.get("needs_review", False))
+        if st.form_submit_button("Speichern", type="primary") and front.strip() and back.strip():
+            card.update({"front": front.strip(), "back": back.strip(), "explanation": explanation.strip(),
+                         "priority": prio, "needs_review": review})
+            if not review:
+                card.pop("review_note", None)
+            save_module(module_id)
+            st.rerun()
+
+
+def _browse(cfg: dict, rows: list[dict]) -> None:
+    st.subheader(":material/view_list: Alle Karten")
+    with_cards = [r["id"] for r in rows if r["stats"]["total"]]
+    if not with_cards:
+        return
+    c1, c2, c3 = st.columns([2, 1, 2])
+    modules = c1.multiselect("Module", with_cards, default=with_cards, key="cb_mods",
+                             format_func=lambda m: module_label(cfg, m, short=True))
+    mode = c2.selectbox("Filter", list(BROWSE_FILTERS), key="cb_filter", format_func=BROWSE_FILTERS.get)
+    search = c3.text_input("Suche", key="cb_search", placeholder="Begriff in Frage oder Antwort")
+    found = []
+    for mid in modules:
+        data = load_module(mid)
+        for card in data["cards"]:
+            if matches(card, mode) and (not search or search.lower() in (card["front"] + card["back"]).lower()):
+                found.append((mid, data, card))
+    if mode == "weak":
+        found.sort(key=lambda x: _weak_order(x[2]))
+    entries = [[mid, card["id"]] for mid, _, card in found]
+    b1, b2, b3 = st.columns([2, 2, 1], vertical_alignment="center")
+    b1.button(f"Diese Karten lernen ({len(found)})", key="cb_learn", type="primary", icon=":material/play_arrow:",
+              disabled=not found, on_click=_start_cards, args=(entries,), width="stretch")
+    show_back = b3.toggle("Antworten", key="cb_back")
+    with b2.popover(f"Alle {len(found)} löschen", icon=":material/delete:", disabled=not found, width="stretch"):
+        st.markdown(f"Löscht {len(found)} Karte(n) samt Lernstand.")
+        if st.checkbox("Ja, wirklich", key="cb_delall_ok"):
+            st.button("Endgültig löschen", key="cb_delall", type="primary", on_click=_delete_cards, args=(entries,))
+    if not found:
+        st.caption("Keine Karten für diesen Filter.")
+        return
+    pages = (len(found) - 1) // PAGE_SIZE + 1
+    page = st.session_state.get("cb_page", 1)
+    page = min(max(1, page), pages)
+    for mid, data, card in found[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]:
+        with st.container(border=True, key=f"cbrow_{mid}_{card['id']}"):
+            c1, c2, c3 = st.columns([10, 1.3, 0.7], vertical_alignment="top")
+            with c1:
+                _badges(card)
+                st.markdown(f"**{card['front']}**")
+                if show_back:
+                    st.markdown(card["back"])
+                info = [module_label(cfg, mid, short=True), chapter_label(data, card.get("chapter_id"))]
+                if not sr.is_new(card):
+                    info.append(f"fällig {card['due'][8:10]}.{card['due'][5:7]}.")
+                st.caption(" · ".join(x for x in info if x))
+            with c2.popover("", icon=":material/edit:", help="Bearbeiten"):
+                _edit_form(mid, card, f"b_{card['id']}")
+            c3.button("", key=f"cbdel_{card['id']}", icon=":material/delete:", type="tertiary", help="Löschen",
+                      on_click=_delete_cards, args=([[mid, card["id"]]],))
+    if pages > 1:
+        st.number_input(f"Seite (von {pages})", 1, pages, page, key="cb_page")
 
 
 def _overview(cfg: dict) -> None:
-    st.title(":material/style: Karteikarten-Lernzentrum")
+    st.title(":material/style: Karteikarten")
     rows = _overview_rows(cfg)
     _recommendation(cfg, rows)
     st.subheader(":material/monitoring: Lernstand")
@@ -185,6 +317,8 @@ def _overview(cfg: dict) -> None:
     study.forecast(all_cards)
     st.divider()
     _manual(cfg, rows)
+    st.divider()
+    _browse(cfg, rows)
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +406,33 @@ def _solution(data: dict, card: dict, answer: str, key: str) -> list[tuple[str, 
     return hits
 
 
+def _feedback(module_id: str, card: dict, key: str) -> None:
+    """Feedback zur Karte: KI formuliert sie um, selbst bearbeiten oder löschen."""
+    with st.popover("Feedback zur Karte", icon=":material/feedback:"):
+        text = st.text_area("Was soll anders sein?", key=f"{key}_fbtext", height=90,
+                            placeholder="z. B. Frage genauer formulieren, Antwort kürzer, Formel fehlt …")
+        if st.button("Karte überarbeiten", key=f"{key}_fbgo", type="primary", icon=":material/auto_fix_high:",
+                     disabled=not text.strip() or not ai.is_available()):
+            with st.spinner("Überarbeite die Karte …"):
+                try:
+                    learning.rewrite_card(module_id, card, text.strip())
+                except ai.AIError as exc:
+                    st.error(str(exc))
+                    return
+            st.rerun()
+        if card.get("previous"):
+            st.button("Letzte Überarbeitung rückgängig", key=f"{key}_fbundo", icon=":material/undo:",
+                      on_click=learning.undo_rewrite, args=(module_id, card))
+        st.divider()
+        st.markdown("**Selbst bearbeiten**")
+        _edit_form(module_id, card, f"fb_{key}")
+        if st.button("Karte löschen", key=f"{key}_fbdel", icon=":material/delete:"):
+            _delete_cards([[module_id, card["id"]]])
+            sess = st.session_state[SESSION]
+            sess["queue"] = [q for q in sess["queue"] if q != [module_id, card["id"]]]
+            st.rerun()
+
+
 def _current(cfg: dict, sess: dict, module_id: str, data: dict, card: dict) -> None:
     key = f"cc_{sess['step']}_{card['id']}"
     sr._upgrade(card)
@@ -297,6 +458,7 @@ def _current(cfg: dict, sess: dict, module_id: str, data: dict, card: dict) -> N
                                      "before": before})
                 sess["step"] += 1
                 st.rerun()
+    _feedback(module_id, card, key)
     if study._card_chat(card, get_module(cfg, module_id)["name"], key):
         save_module(module_id)
 
@@ -329,6 +491,7 @@ def _past(cfg: dict, sess: dict) -> None:
             _apply_grade(sess, module_id, card, grade)
             entry["grade"] = grade
             st.rerun()
+    _feedback(module_id, card, key)
     if study._card_chat(card, get_module(cfg, module_id)["name"], key):
         save_module(module_id)
     st.button("Weiter" if sess["view"] < len(sess["done"]) - 1 else "Zur aktuellen Karte", key="cc_forward",
@@ -339,7 +502,7 @@ def _finished(sess: dict) -> None:
     st.success(f"Geschafft! {len(sess['done'])} Bewertung(en) in dieser Session.")
     counts = {g["label"]: sum(1 for e in sess["done"] if e["grade"] == g["value"]) for g in sr.GRADES}
     st.markdown(" · ".join(f"**{label}**: {n}" for label, n in counts.items()))
-    st.button("Zurück zum Lernzentrum", key="cc_finish", type="primary", on_click=_end)
+    st.button("Zurück zur Übersicht", key="cc_finish", type="primary", on_click=_end)
 
 
 def _session(cfg: dict) -> None:

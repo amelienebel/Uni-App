@@ -18,7 +18,7 @@ def is_weak(card: dict) -> bool:
     history = card.get("history") or []
     if not history:
         return False
-    return history[-1]["grade"] <= 1 or card.get("lapses", 0) >= 2 or card.get("ease", 2.5) < 2.0
+    return history[-1]["grade"] <= 1 or card.get("lapses", 0) >= 2 or (card.get("difficulty") or 0) >= 8
 
 
 def chapter_stats(data: dict) -> list[dict]:

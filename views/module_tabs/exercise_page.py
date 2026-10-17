@@ -124,5 +124,6 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
     if docs:
         study.generate_button(cfg, module_id, ex, cards, key=ex["id"],
                               label="Karteikarten zu den Lösungswegen erstellen" if not cards else None)
+        study.coverage_panel(cfg, module_id, ex, key=ex["id"])
     study.review_session(cfg, module_id, cards, key=f"ex_{ex['id']}")
     study.manage_cards(module_id, data, cards, key=ex["id"])

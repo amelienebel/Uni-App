@@ -46,7 +46,7 @@ DEFAULT_SETTINGS = {
     "exam_dates": {},  # modul_id -> {"date": "YYYY-MM-DD", "time": "", "room": ""}
     "schedule": None,  # None = Stundenplan aus config.json
     "ai": {"effort": "medium"},
-    "learning": {"daily_review_limit": 60, "prep_days_before": 1, "review_days_after": 2},
+    "learning": {"daily_review_limit": 60, "new_per_day": 15, "prep_days_before": 1, "review_days_after": 2},
 }
 
 

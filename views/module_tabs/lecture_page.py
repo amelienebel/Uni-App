@@ -23,8 +23,6 @@ def _status_toggle(module_id: str, lec: dict, field: str, widget_key: str) -> No
     todo = {"key": planner.lecture_key(module_id, lec["date"], field), "module_id": module_id,
             "chapter_id": lec.get("chapter_id"), "sync": field}
     toggle_todo(todo, widget_key)
-    if field == "nachbereitet" and st.session_state[widget_key]:
-        st.session_state[f"autogen_{module_id}_{lec['id']}"] = True
 
 
 def _set_done(module_id: str, lec: dict, field: str) -> None:
@@ -279,7 +277,6 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
         save_module(module_id)
         if finish:
             _set_done(module_id, lec, "nachbereitet")
-            st.session_state[f"autogen_{module_id}_{lec['id']}"] = True
             st.session_state[f"ltab_next_{lec['id']}"] = LECTURE_TABS[3]
         st.rerun()
     if notes["text"].strip():
@@ -354,11 +351,15 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
                 "damit alles abgedeckt ist.")
     elif not has_notes(data, lec["id"]) and cards:
         st.caption("Tipp: Nach der Nachbereitung „Karten ergänzen“ – dann fließen deine Notizen mit ein.")
+    elif not cards and not has_notes(data, lec["id"]):
+        st.caption("Karten entstehen erst, wenn du auf „Karteikarten erstellen“ klickst – am besten nach der "
+                   "Vorlesung, wenn du in der Nachbereitung eingetragen hast, was betont oder nur kurz angerissen "
+                   "wurde.")
     if has_ai or cards or unit_docs(data, lec):
         study.generate_button(cfg, module_id, lec, cards, key=lec["id"])
     if generated:
-        st.caption(f"Karten zuletzt erstellt am {datetime.fromisoformat(generated):%d.%m. um %H:%M} · "
-                   "Es wird immer der gesamte Stoff abgedeckt (Folien + Nachbereitung).")
+        st.caption(f"Karten zuletzt erstellt am {datetime.fromisoformat(generated):%d.%m. um %H:%M}.")
+    study.coverage_panel(cfg, module_id, lec, key=lec["id"])
     study.review_session(cfg, module_id, cards, key=f"lec_{lec['id']}")
     study.manual_card(module_id, data, lec, key=lec["id"])
     study.manage_cards(module_id, data, cards, key=lec["id"])
@@ -381,10 +382,6 @@ LEC_TABS = LECTURE_TABS
 
 def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[dict]) -> None:
     _header(cfg, module_id, lec, lecs, exs)
-    if st.session_state.pop(f"autogen_{module_id}_{lec['id']}", False):
-        data = load_module(module_id)
-        if unit_docs(data, lec) or has_notes(data, lec["id"]):
-            study.run_generation(cfg, module_id, lec, unit_cards(data, lec))
     show_messages(module_id)
     if nxt := st.session_state.pop(f"ltab_next_{lec['id']}", None):
         st.session_state[f"ltab_{lec['id']}"] = nxt

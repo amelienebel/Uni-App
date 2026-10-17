@@ -355,3 +355,20 @@ def figure_pages(content: bytes) -> list[int]:
         if any(sig not in template for sig in images) or ops > baseline + 150:
             result.append(i)
     return result
+
+
+def render_page(content: bytes, page: int, scale: float = 1.4) -> bytes | None:
+    """Eine PDF-Seite als PNG (z. B. um auf der Karteikarte die Quell-Folie zu zeigen)."""
+    import io
+
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(content)
+    try:
+        if not 1 <= page <= len(pdf):
+            return None
+        buf = io.BytesIO()
+        pdf[page - 1].render(scale=scale).to_pil().save(buf, format="PNG")
+        return buf.getvalue()
+    finally:
+        pdf.close()

@@ -98,6 +98,10 @@ def render(cfg: dict) -> None:
     with st.form("learning_form"):
         limit = st.number_input("Max. Wiederholungen pro Modul und Sitzung", 10, 500,
                                 int(learning["daily_review_limit"]), step=10)
+        new_min = st.number_input("Neue Karteikarten pro Modul und Tag (mindestens)", 0, 200,
+                                  int(learning.get("new_per_day", 15)), step=5,
+                                  help="Steht die Klausur näher, erhöht die App die Zahl automatisch, damit alle "
+                                  "Karten eine Woche vor der Klausur eingeführt sind.")
         days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
         lines = []
         for m in cfg["modules"]:
@@ -107,7 +111,7 @@ def render(cfg: dict) -> None:
                              f"{days[dl['review_weekday']]} · Übungsblatt {days[dl['exercise_weekday']]}")
         st.caption("Feste Fristen (in config.json → deadlines):\n" + "\n".join(lines))
         if st.form_submit_button("Speichern"):
-            learning.update({"daily_review_limit": int(limit)})
+            learning.update({"daily_review_limit": int(limit), "new_per_day": int(new_min)})
             save_settings()
             st.success("Gespeichert.")
 

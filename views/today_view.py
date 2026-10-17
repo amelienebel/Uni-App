@@ -74,12 +74,16 @@ def render(cfg: dict) -> None:
         if not planner.todo_done(t, modules_data, state) and t["due"] <= now + timedelta(days=1):
             open_todos.append(t)
     open_todos.sort(key=lambda t: (t["due"], t["module_id"]))
-    due_cards = {mid: len(sr.due_queue(d["cards"], days_until_exam(mid))) for mid, d in modules_data.items()}
+    new_min = int(load_settings()["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
+    card_plan = {mid: sr.daily_plan(d["cards"], days_until_exam(mid), new_min) for mid, d in modules_data.items()}
+    due_cards = {mid: p["reviews"] + p["new"] for mid, p in card_plan.items()}
     exams = sorted((days_until_exam(m["id"]), m) for m in cfg["modules"] if (days_until_exam(m["id"]) or -1) >= 0)
     c1, c2, c3 = st.columns(3)
     c1.metric("Offene To-dos (bis morgen)", len(open_todos),
               help="Überfällig, heute und morgen fällig")
-    c2.metric("Karteikarten fällig", sum(due_cards.values()))
+    c2.metric("Karteikarten heute", sum(due_cards.values()),
+              help=f"{sum(p['reviews'] for p in card_plan.values())} Wiederholungen + "
+              f"{sum(p['new'] for p in card_plan.values())} neue Karten")
     if exams:
         c3.metric(f"Nächste Klausur: {exams[0][1]['short']}", f"{exams[0][0]} Tage")
 
@@ -141,7 +145,9 @@ def render(cfg: dict) -> None:
             if n:
                 with st.container(key=f"tdrow_{module['id']}_cards"):
                     c1, c2 = st.columns([3, 2], vertical_alignment="center")
-                    c1.markdown(f"{micon(module)} **{module['short']}** · {n} fällig")
+                    p = card_plan[module["id"]]
+                    c1.markdown(f"{micon(module)} **{module['short']}** · {p['reviews']} wiederholen"
+                                + (f" + {p['new']} neu" if p["new"] else ""))
                     c2.button("Lernen", key=f"learn_{module['id']}", on_click=_open_learn, args=(module["id"],),
                               width="stretch")
 

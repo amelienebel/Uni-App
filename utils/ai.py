@@ -72,6 +72,7 @@ TASKS = {
     "summary": ("Zusammenfassungen der Folien", "claude-haiku-5-5"),
     "cards": ("Karteikarten & Definitionen", "claude-sonnet-5-5"),
     "tutor": ("Tutor-Chat", "claude-sonnet-5-5"),
+    "check": ("Antworten & Karten prüfen", "claude-haiku-5-5"),
     "default": ("Alles andere (Quiz, Lösungsvergleich, Abtippen, Karten-Nachfragen …)", "claude-sonnet-5-5"),
 }
 
@@ -261,10 +262,31 @@ VISUAL_ANALYSIS_SCHEMA = _obj({
 
 DEFINITIONS_SCHEMA = _obj({"definitions": {"type": "array", "items": _obj({"term": _STR, "definition": _STR})}})
 
+_STRS = {"type": "array", "items": _STR}
+_SOURCES = {"type": "array", "items": _obj({"doc": _INT, "pages": {"type": "array", "items": _INT}})}
+CARD_TYPES = ["definition", "list", "process", "formula", "calculation", "comparison", "application", "graphic"]
+
 CARDS_SCHEMA = _obj({
-    "cards": {"type": "array", "items": _obj({"front": _STR, "back": _STR, "chapter_hint": _STR})},
-    "definitions": {"type": "array", "items": _obj({"term": _STR, "definition": _STR})},
+    "cards": {"type": "array", "items": _obj({
+        "section": _STRS,
+        "type": {"type": "string", "enum": CARD_TYPES},
+        "term": _STR,
+        "front": _STR,
+        "answer": _STRS,
+        "keywords": _STRS,
+        "explanation": _STR,
+        "priority": {"type": "string", "enum": ["high", "normal", "low"]},
+        "sources": _SOURCES,
+        "from_notes": {"type": "boolean"},
+        "needs_review": {"type": "boolean"},
+        "chapter_hint": _STR,
+    })},
+    "skipped": {"type": "array", "items": _obj({"doc": _INT, "pages": {"type": "array", "items": _INT},
+                                                "reason": _STR})},
+    "warnings": _STRS,
 })
+
+CARD_CHECK_SCHEMA = _obj({"issues": {"type": "array", "items": _obj({"card": _INT, "problem": _STR})}})
 
 FORMULAS_SCHEMA = _obj({"formulas": {"type": "array", "items": FORMULA_SCHEMA}})
 

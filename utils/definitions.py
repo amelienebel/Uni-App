@@ -12,6 +12,9 @@ def _norm(term: str) -> str:
     return re.sub(r"\s+", " ", (term or "").strip().lower())
 
 
+term_key = _norm  # Schlüssel, über den eine Karte zu ihrer Definition gehört
+
+
 def card_front(term: str) -> str:
     return f"Was versteht man unter „{term.strip()}“?"
 

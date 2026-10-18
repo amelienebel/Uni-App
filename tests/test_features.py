@@ -333,3 +333,67 @@ def test_formula_sheet_selection():
     _run(at)
     shown = [m.value for m in at.markdown]
     assert any("Kapitalwert" in v for v in shown) and not any("Barwert" in v for v in shown)
+
+
+def _script_pdf() -> bytes:
+    import io
+
+    from reportlab.pdfgen import canvas
+
+    pages = [["Inhalt", "1.1 Einleitung ..... 2", "1.2 Bilanz ..... 3", "1.3 GuV ..... 3", "1.4 Anhang ..... 4",
+              "1.5 Lagebericht ..... 5", "2 Jahresabschluss ..... 6"],
+             ["1 Rechnungswesen als Sprache", "1.1 Einleitung", "Text"], ["1.2 Bilanz", "Aktiva", "1.3 GuV", "Ertrag"],
+             ["1.4 Anhang", "Erläuterungen"], ["1.5 Lagebericht", "Lage"], ["2 Jahresabschluss", "2.1 Grundlagen"]]
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    for lines in pages:
+        for i, line in enumerate(lines):
+            c.drawString(72, 750 - 20 * i, line)
+        c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def test_script_split_and_prep(monkeypatch):
+    """Ganzes Skript → Abschnitte je Vorlesung (aus „Skript 1.1–1.4“) → fließt in die Vorbereitung der Folien ein."""
+    from utils import ai, learning, script, storage, units
+    from utils.config import get_module, load_config
+    from utils.pdf_parser import extract_pdf
+
+    assert script.sections_from_topic("Rechnungswesen I – Skript 1.1–1.4") == ("1.1", "1.4")
+    assert script.sections_from_topic("Unternehmensanalyse – Skript Abschnitt 3") == ("3", "3")
+    assert script.sections_from_topic("Grundlagen Buchungstechnik (Baaken)") is None
+    content = _script_pdf()
+    sections, total = script.detect_sections(content, extract_pdf(content)["pages"])
+    assert [s["nr"] for s in sections][:3] == ["1", "1.1", "1.2"] and total == 6
+    assert script.page_range(sections, "1.1", "1.4", total) == (2, 5)
+    assert script.page_range(sections, "2", "2", total) == (6, 6)
+
+    cfg = load_config()
+    module = get_module(cfg, "rewe")
+    lecs = units.lectures(cfg, module)
+    rows = script.proposal(lecs, sections, total)
+    assert rows[0]["unit"] == lecs[0]["id"] and rows[0]["sections"] == "1.1–1.4" and rows[0]["start"] == 2
+    assert script.split_script("rewe", "Skript.pdf", content, rows[:1], {lecs[0]["id"]: "k1"}) == 1
+    data = storage.load_module("rewe")
+    part = next(d for d in data["documents"] if d.get("script_split"))
+    assert part["unit"] == lecs[0]["id"] and part["n_pages"] == 4 and part["script_pages"] == "2–5"
+    assert script.split_script("rewe", "Skript.pdf", content, rows[:1], {}) == 1  # ersetzt, nicht doppelt
+    assert sum(1 for d in storage.load_module("rewe")["documents"] if d.get("script_split")) == 1
+
+    data = storage.load_module("rewe")
+    doc = {"id": "f1", "filename": "VL1.pdf", "doc_type": "folien", "unit": lecs[0]["id"], "kind": "pdf",
+           "figure_pages": []}
+    data["documents"].append(doc)
+    monkeypatch.setattr(ai, "is_available", lambda: True)
+    seen = {}
+
+    def fake_json(prompt, schema, **kw):
+        seen["prompt"] = prompt
+        return {"must_watch": [], "concept_table": [], "summary": "", "formulas": [], "quiz": []}
+
+    monkeypatch.setattr(ai, "complete_json", fake_json)
+    learning.run_analysis(cfg, "rewe", doc, visual=False)
+    assert "--- Skript S. 2 ---" in seen["prompt"] and "Bilanz" in seen["prompt"] and doc["analysis"]["with_script"]
+    learning.run_analysis(cfg, "rewe", next(d for d in data["documents"] if d.get("script_split")))
+    assert "keine Folien" in seen["prompt"]

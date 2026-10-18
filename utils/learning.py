@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from utils import ai
+from utils import ai, script
 from utils import definitions as defs
 from utils import spaced_repetition as sr
 from utils.config import exam_format, get_module
@@ -42,7 +42,27 @@ ANALYSIS_PROMPT = """Bereite mich auf die Vorlesung vor. Unten stehen die Folien
 
 <folien>
 {text}
-</folien>"""
+</folien>{script}"""
+
+SCRIPT_HINT = """
+
+Zusätzlich liegt der passende Teil des Skripts bei (Seiten markiert mit „--- Skript S. N ---“). Die Folien bestimmen
+Aufbau und Reihenfolge. Nutze das Skript, um Begriffe, Definitionen und Zusammenhänge genauer und verständlicher zu
+erklären, und nimm Kernbegriffe auf, die nur im Skript stehen – „Nur Inhalte der Folien“ heißt hier: Folien und Skript.
+Stützt sich eine Angabe auf das Skript, schreib in "slides" die Skriptseite, z. B. „S. 12“.
+
+<skript>
+{text}
+</skript>"""
+
+SCRIPT_PROMPT = """Bereite mich auf die Vorlesung vor. Für das Modul „{module}“, {chapter}, gibt es (noch) keine Folien –
+Grundlage ist der passende Teil des Skripts. Jede Seite ist mit „--- Skript S. N ---“ markiert. Wo unten „Folie“
+steht, nimm die Skriptseite: "slides" also z. B. „12“ oder „12–15“ (Seitenzahl im Skript), in der Zusammenfassung
+„**S. N–M** · Thema“.
+
+""" + _PREP_TASKS + """
+
+{text}"""
 
 # Bleibt immer gleich ⇒ wird als Systemprompt gecacht (siehe ai._request)
 CARDS_SYSTEM = """Du erstellst Karteikarten für eine Lern-App mit Spaced Repetition (BWL-Bachelor, LMU München,
@@ -277,13 +297,23 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
     data = load_module(module_id)
     visual = visual_enabled() if visual is None else visual
     chapter = chapter_label(data, doc.get("chapter_id")) if doc.get("chapter_id") else "ohne Kapitelangabe"
-    if ai.is_available() and visual and doc.get("kind") != "image":
+    is_script = doc["doc_type"] == script.DOC_TYPE
+    script_text = "" if is_script else script.prep_text(script_docs(data, doc))
+    script_part = SCRIPT_HINT.format(text=script_text) if script_text else ""
+    if ai.is_available() and is_script:
+        result = ai.complete_json(SCRIPT_PROMPT.format(module=module["name"], chapter=chapter,
+                                                       quiz_format=_quiz_format(module),
+                                                       text=script.prep_text([doc])),
+                                  ai.ANALYSIS_SCHEMA, effort="low", task="summary")
+        result["mode"] = "ki"
+    elif ai.is_available() and visual and doc.get("kind") != "image":
         content = read_data_file(doc["path"])
         if len(content) > MAX_VISUAL_BYTES:
             raise ai.AIError("Die Datei ist für die genaue Lesung zu groß (max. 30 MB). Bitte normal analysieren.")
         result = ai.complete_json([ai.pdf_block(content),
                                    {"type": "text", "text": VISUAL_PROMPT.format(module=module["name"], chapter=chapter,
-                                                                                 quiz_format=_quiz_format(module))}],
+                                                                                 quiz_format=_quiz_format(module))
+                                    + script_part}],
                                   ai.VISUAL_ANALYSIS_SCHEMA, max_tokens=64000, task="summary")
         slides = sorted(result.pop("slides", []), key=lambda s: s["page"])
         if slides:
@@ -293,13 +323,16 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
     elif ai.is_available():
         result = ai.complete_json(ANALYSIS_PROMPT.format(module=module["name"], chapter=chapter,
                                                          quiz_format=_quiz_format(module),
-                                                         text=get_document_text(doc, label="Folie")),
+                                                         text=get_document_text(doc, label="Folie"),
+                                                         script=script_part),
                                   ai.ANALYSIS_SCHEMA, effort="low", task="summary")
         result["mode"] = "ki"
     else:
         result = heuristic_analysis(get_document_pages(doc))
     if "concept_table" in result:
         _compat_fields(result)
+    if script_text:
+        result["with_script"] = True
     result["created_at"] = now_iso()
     doc["analysis"] = result
     save_module(module_id)
@@ -315,6 +348,14 @@ def run_analysis(cfg: dict, module_id: str, doc: dict, visual: bool | None = Non
         msg += (f" {added} Formel-Vorschlag/-Vorschläge – bitte unter „Formeln & Notizen“ prüfen, welche "
                 "übernommen werden sollen.")
     return msg
+
+
+def script_docs(data: dict, doc: dict) -> list[dict]:
+    """Skript-Teile derselben Vorlesung wie dieser Foliensatz."""
+    if doc["doc_type"] != "folien" or not doc.get("unit"):
+        return []
+    return [d for d in data["documents"] if d.get("unit") == doc["unit"] and d["doc_type"] == script.DOC_TYPE
+            and d.get("kind") != "image"]
 
 
 def _notes_material(data: dict, unit: dict) -> str:

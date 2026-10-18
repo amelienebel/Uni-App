@@ -9,7 +9,7 @@ import streamlit as st
 
 from utils import ai
 from utils.learning import pending_figures, run_analysis
-from utils import textbook
+from utils import script, textbook
 from utils.config import get_module, load_config
 from utils.storage import (IMAGE_TYPES, abs_data_path, add_file, data_file_exists, delete_document, load_module,
                            read_data_file, save_module, update_document)
@@ -112,6 +112,8 @@ def all_files(cfg: dict, module_id: str) -> None:
     st.markdown(f"#### :material/folder_open: Zugeordnet ({len(assigned)})")
     file_list(module_id, assigned, key="allas", cfg=cfg, show_unit=True, empty="Noch keine zugeordneten Dateien.")
     st.divider()
+    script_section(cfg, module_id)
+    st.divider()
     textbook_section(cfg, module_id)
 
 
@@ -165,6 +167,54 @@ def _whole_book(module_id: str) -> None:
             st.session_state[round_key] = st.session_state.get(round_key, 0) + 1
             st.session_state["files_msg"] = f"{created} Buchkapitel gespeichert."
             st.rerun()
+
+
+def script_section(cfg: dict, module_id: str) -> None:
+    """Ganzes Skript hochladen → Abschnitte erkennen → jede Vorlesung bekommt ihren Teil."""
+    from utils.pdf_parser import extract_pdf
+    from utils.units import lectures
+
+    module = get_module(cfg, module_id)
+    st.markdown("#### :material/description: Skript")
+    round_key = f"scr_round_{module_id}"
+    upload = st.file_uploader("Ganzes Skript (PDF)", type=["pdf"],
+                              key=f"scr_up_{module_id}_{st.session_state.get(round_key, 0)}")
+    if not upload:
+        return
+    lecs = lectures(cfg, module)
+    state_key = f"scr_detect_{module_id}"
+    if st.session_state.get(state_key, {}).get("name") != (upload.name, upload.size):
+        with st.spinner("Lese das Skript und suche die Abschnitte …"):
+            try:
+                pages = extract_pdf(upload.getvalue())["pages"]
+                sections, total = script.detect_sections(upload.getvalue(), pages)
+            except Exception as exc:  # noqa: BLE001 - beschädigtes PDF
+                st.error(f"Das PDF konnte nicht gelesen werden: {exc}")
+                return
+        st.session_state[state_key] = {"name": (upload.name, upload.size), "total": total,
+                                       "rows": script.proposal(lecs, sections, total)}
+    found = st.session_state[state_key]
+    rows = found["rows"] or [{"unit": lec["id"], "lecture": f"VL {lec['nr']} ({lec['date']:%d.%m.})",
+                              "sections": "", "start": None, "end": None} for lec in lecs]
+    st.caption(f"{found['total']} Seiten")
+    edited = st.data_editor(
+        pd.DataFrame([{"Vorlesung": r["lecture"], "Abschnitte": r["sections"], "Von Seite": r["start"],
+                       "Bis Seite": r["end"]} for r in rows]),
+        hide_index=True, width="stretch", key=f"scr_edit_{module_id}", disabled=["Vorlesung"],
+        column_config={c: st.column_config.NumberColumn(min_value=1, max_value=found["total"], step=1)
+                       for c in ("Von Seite", "Bis Seite")})
+    chosen = [{**r, "sections": str(e["Abschnitte"] or "").strip(), "start": int(e["Von Seite"]),
+               "end": int(e["Bis Seite"])}
+              for r, (_, e) in zip(rows, edited.iterrows()) if pd.notna(e["Von Seite"]) and pd.notna(e["Bis Seite"])]
+    if st.button(f"Auf {len(chosen)} Vorlesung(en) aufteilen & speichern", key=f"scr_go_{module_id}", type="primary",
+                 icon=":material/content_cut:", disabled=not chosen):
+        chapters = {lec["id"]: lec.get("chapter_id") for lec in lecs}
+        with st.spinner("Teile das Skript auf …"):
+            created = script.split_script(module_id, upload.name, upload.getvalue(), chosen, chapters)
+        st.session_state.pop(state_key, None)
+        st.session_state[round_key] = st.session_state.get(round_key, 0) + 1
+        st.session_state["files_msg"] = f"Skript auf {created} Vorlesung(en) verteilt."
+        st.rerun()
 
 
 def textbook_section(cfg: dict, module_id: str) -> None:

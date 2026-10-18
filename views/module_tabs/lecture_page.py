@@ -7,9 +7,10 @@ from pathlib import Path
 
 import streamlit as st
 
-from utils import ai, planner, textbook
+from utils import ai, planner, script, textbook
 from utils.config import WEEKDAYS, get_module, load_config
-from utils.learning import page_cost_estimate, pending_figures, read_pages_visual, run_analysis, unit_material
+from utils.learning import (page_cost_estimate, pending_figures, read_pages_visual, run_analysis, script_docs,
+                            unit_material)
 from utils.pdf_parser import figure_pages
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
                            load_todos, now_iso, read_data_file, save_module, save_todos, save_upload)
@@ -197,19 +198,20 @@ def _prep_quiz(doc: dict, questions: list[dict]) -> None:
 
 def _prep_view(doc: dict, analysis: dict) -> None:
     """Scannbare Vorbereitung: Must-Watch, Kernkonzepte als Tabelle mit Folien, Pre-Check-Fragen."""
+    page = "S." if doc["doc_type"] == script.DOC_TYPE else "Folie"
     if analysis.get("must_watch"):
         with st.container(border=True, key=f"nextbox_mw_{doc['id']}"):
             st.markdown("#### :material/star: Must-Watch: vor der Vorlesung ansehen")
-            st.markdown("\n".join(f"- **Folie {m['slides']}** · {m['topic']} – {m['why']}"
+            st.markdown("\n".join(f"- **{page} {m['slides']}** · {m['topic']} – {m['why']}"
                                    for m in analysis["must_watch"]))
     rows = analysis.get("concept_table", [])
     if rows:
         st.markdown("#### :material/table: Kernkonzepte")
-        st.markdown("| Folie | Kernbegriff / Formel | Kurzerklärung | Worauf achten? |\n|---|---|---|---|\n" + "\n".join(
+        st.markdown(f"| {page} | Kernbegriff / Formel | Kurzerklärung | Worauf achten? |\n|---|---|---|---|\n" + "\n".join(
             f"| {_cell(r['slides'])} | **{_cell(r['term'])}** | {_cell(r['short'])} | {_cell(r['watch_out'])} |"
             for r in rows))
     if analysis.get("summary"):
-        with st.expander("Zusammenfassung entlang der Folien"):
+        with st.expander("Zusammenfassung entlang der " + ("Seiten" if page == "S." else "Folien")):
             st.markdown(analysis["summary"])
     if analysis.get("formulas"):
         with st.expander(f"Formeln auf den Folien ({len(analysis['formulas'])})"):
@@ -245,7 +247,8 @@ def _old_prep_view(doc: dict, analysis: dict) -> None:
 
 def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
-    slides = [d for d in unit_docs(data, lec) if d.get("kind") != "image"]
+    docs = [d for d in unit_docs(data, lec) if d.get("kind") != "image"]
+    slides = [d for d in docs if d["doc_type"] != script.DOC_TYPE] or docs
     if not slides:
         st.info("Lade unter „Dateien“ die Folien hoch.")
         return
@@ -264,6 +267,9 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
             _prep_view(doc, analysis)
         else:
             _old_prep_view(doc, analysis)
+        if analysis.get("with_script"):
+            st.caption("Mit Skript: " + ", ".join(f"S. {d['script_pages']}" if d.get("script_pages")
+                                                  else d["filename"] for d in script_docs(data, doc)))
         if doc.get("text_source") == "ki-genau":
             st.caption("Genau gelesen: Formeln, Tabellen und Grafiken wurden mit erfasst.")
         else:

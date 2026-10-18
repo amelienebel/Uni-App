@@ -189,7 +189,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str, defau
     sr._upgrade(card)
     info = [chapter_label(data, card.get("chapter_id"))] + ([" › ".join(card["section"])] if card.get("section") else [])
     st.caption(f"Noch {len(queue)} Karte(n) in dieser Runde · " + " · ".join(info))
-    state_key = f"reveal_{card['id']}"
+    state_key = f"reveal_{key}_{card['id']}"
     with st.container(border=True):
         badges = [_badge("blue", "neu")] if sr.is_new(card) else []
         if card.get("type") in TYPE_LABELS:
@@ -203,10 +203,10 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str, defau
         if badges:
             st.markdown(" ".join(badges))
         st.markdown(f"#### {card['front']}")
-        answer = st.text_area("Deine Antwort", key=f"answer_{card['id']}", height=100,
+        answer = st.text_area("Deine Antwort", key=f"answer_{key}_{card['id']}", height=100,
                               placeholder="Antwort eintippen (oder im Kopf beantworten) …")
         if not st.session_state.get(state_key):
-            if st.button("Auflösen", type="primary", key=f"reveal_btn_{card['id']}"):
+            if st.button("Auflösen", type="primary", key=f"reveal_btn_{key}_{card['id']}"):
                 st.session_state[state_key] = True
                 st.rerun()
         else:
@@ -228,18 +228,18 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str, defau
                     st.markdown(card["explanation"])
             _sources(data, card, f"{key}_{card['id']}")
             if answer.strip() and ai.is_available():
-                if st.button("Antwort von der KI prüfen lassen", key=f"check_{card['id']}",
+                if st.button("Antwort von der KI prüfen lassen", key=f"check_{key}_{card['id']}",
                              help="Günstig mit Haiku (Bruchteil eines Cents)"):
                     with st.spinner("Prüfe …"):
                         try:
-                            st.session_state[f"fb_{card['id']}"] = ai.complete(
+                            st.session_state[f"fb_{key}_{card['id']}"] = ai.complete(
                                 f"Lernkarte – Frage: {card['front']}\nMusterantwort:\n{card['back']}\n\n"
                                 f"Antwort des Studierenden: {answer}\n\nBewerte knapp (max. 80 Wörter): Was ist "
                                 "richtig, was fehlt oder ist falsch? Schlage eine Selbstbewertung vor "
                                 "(Gar nicht / Etwas / Gut / Perfekt).", max_tokens=2000, effort="low", task="check")
                         except ai.AIError as exc:
                             st.error(str(exc))
-                if fb := st.session_state.get(f"fb_{card['id']}"):
+                if fb := st.session_state.get(f"fb_{key}_{card['id']}"):
                     st.markdown(fb)
             suggestion = suggested_grade(hits)
             st.markdown("**Wie gut konntest du die Karte?**"
@@ -258,7 +258,7 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str, defau
                     elif all_mode:
                         st.session_state[f"sessiondone_{key}"] = st.session_state.get(
                             f"sessiondone_{key}", []) + [card["id"]]
-                    for k in (state_key, f"answer_{card['id']}", f"fb_{card['id']}"):
+                    for k in (state_key, f"answer_{key}_{card['id']}", f"fb_{key}_{card['id']}"):
                         st.session_state.pop(k, None)
                     st.rerun()
     if st.session_state.get(state_key):

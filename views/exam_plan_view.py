@@ -15,7 +15,7 @@ from views.common import micon, toggle_todo
 
 def _settings() -> dict:
     conf = load_extra("exam_plan").setdefault("settings", {})
-    conf.setdefault("start", exam_plan.DEFAULT_START.isoformat())
+    exam_plan.start_of(conf)
     conf.setdefault("weekday_blocks", 2)
     conf.setdefault("weekend_blocks", 3)
     return conf

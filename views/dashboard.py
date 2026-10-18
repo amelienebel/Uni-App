@@ -9,9 +9,11 @@ import pandas as pd
 import streamlit as st
 
 from utils import planner
-from utils.config import WEEKDAYS, get_module, module_label
-from utils.storage import (get_exam_date, get_schedule, lecture_breaks,
+from utils import spaced_repetition as sr
+from utils.config import WEEKDAYS, get_module
+from utils.storage import (days_until_exam, get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
+from views import cards_center
 from views.common import custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
@@ -136,6 +138,32 @@ def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: da
                   on_click=open_todo, args=(t,), help=t["title"])
 
 
+def _card_counts(modules_data: dict, day: date, now: date, new_min: int) -> dict[str, int]:
+    """Karteikarten pro Modul an einem Tag: heute fällige + neue, später die dann fälligen Wiederholungen."""
+    if day < now:
+        return {}
+    counts = {}
+    for mid, data in modules_data.items():
+        if day == now:
+            plan = sr.daily_plan(data["cards"], days_until_exam(mid), new_min)
+            n = plan["reviews"] + plan["new"]
+        else:
+            n = sum(1 for c in data["cards"] if not sr.is_new(c) and c["due"][:10] == day.isoformat())
+        if n:
+            counts[mid] = n
+    return counts
+
+
+def _card_chip(cfg: dict, mid: str, n: int, today_chip: bool, key: str) -> None:
+    module = get_module(cfg, mid)
+    with st.container(key=f"chip_open_{mid}_{key}"):
+        if today_chip:
+            st.button(f"**{module['short']}**  \n{n} Karten", key=f"cardchip_{key}", type="tertiary",
+                      on_click=cards_center.learn_due, args=(cfg, mid), help="Jetzt lernen")
+        else:
+            st.markdown(f"**{module['short']}**  \n{n} Karten")
+
+
 def _open_event(ev: dict) -> None:
     """Klick auf eine Veranstaltung: Details merken und direkt ins Modul springen."""
     _select_event(ev)
@@ -232,6 +260,10 @@ def render(cfg: dict) -> None:
     todos = planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end, settings["learning"], breaks)
     todo_state = load_todos()
     todos += planner.custom_todos(todo_state, monday, monday + timedelta(days=6))
+    todos = [t for t in todos if t["kind"] != "Wiederholung"]  # Karteikarten haben eine eigene Zeile
+    new_min = int(settings["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
+    card_counts = {day: _card_counts(modules_data, day, now, new_min) for day in
+                   (monday + timedelta(days=i) for i in range(7))}
     placed: dict[tuple[date, int | None], list[dict]] = {}
     for t in todos:
         placed.setdefault(_placement(t, monday), []).append(t)
@@ -261,9 +293,17 @@ def render(cfg: dict) -> None:
                             st.error(f"Klausur {get_module(cfg, mid)['short']}")
                     for entry in calendar.get(day, []):
                         st.warning(entry)
-        for slot in SLOTS + [None]:
+        for slot in SLOTS + [None, "cards"]:
             row = st.columns(widths)
-            row[0].markdown(f"**{SLOT_LABELS[slot]}**" if slot is not None else "**To-dos**")
+            row[0].markdown("**Karteikarten**" if slot == "cards" else f"**{SLOT_LABELS[slot]}**" if slot is not None
+                            else "**To-dos**")
+            if slot == "cards":
+                for col, day in zip(row[1:], days):
+                    with col:
+                        with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_cards"):
+                            for mid, n in card_counts[day].items():
+                                _card_chip(cfg, mid, n, day == now, f"{day:%Y%m%d}_c_{mid}")
+                continue
             for col, day in zip(row[1:], days):
                 with col:
                     with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_{slot or 'x'}"):
@@ -277,7 +317,7 @@ def render(cfg: dict) -> None:
         for day in days:
             day_events = [e for e in events if e["date"] == day]
             day_todos = [t for (d, _s), ts in placed.items() if d == day for t in ts]
-            if not day_events and not day_todos and not calendar.get(day):
+            if not day_events and not day_todos and not calendar.get(day) and not card_counts[day]:
                 continue
             with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_list", border=True):
                 st.markdown(f"**{WEEKDAYS[day.weekday()]}, {day:%d.%m.}**")
@@ -287,6 +327,10 @@ def render(cfg: dict) -> None:
                     _event_card(cfg, ev, f"{day:%Y%m%d}_l{i}")
                 for j, t in enumerate(day_todos):
                     _todo_chip(t, cfg, modules_data, todo_state, now, f"{day:%Y%m%d}_l{j}")
+                if card_counts[day]:
+                    st.caption("Karteikarten")
+                    for mid, n in card_counts[day].items():
+                        _card_chip(cfg, mid, n, day == now, f"{day:%Y%m%d}_lc_{mid}")
 
     # --- Aufgaben dieser Woche (abhaken & verschieben) ---------------------------
     h1, h2 = st.columns([3, 1], vertical_alignment="bottom")
@@ -318,16 +362,6 @@ def render(cfg: dict) -> None:
                         text=f"{module['short']} – {progress['overall'] * 100:.0f} % "
                              f"({progress['chapters_done']}/{progress['n_chapters']} Kapitel komplett, "
                              f"{stats['due']} Karten fällig)")
-        st.subheader(":material/route: Lernfahrplan für heute")
-        recs = planner.study_recommendations(cfg, modules_data, now)
-        for rank, rec in enumerate(recs[:3], start=1):
-            c_a, c_b = st.columns([4, 1])
-            c_a.markdown(f"**{rank}. {module_label(cfg, rec['module_id'])}**  \n"
-                         f"<span class='small-muted'>{rec['reason']}</span>", unsafe_allow_html=True)
-            c_b.button("Öffnen", key=f"rec_{rec['module_id']}", on_click=goto, args=("module", rec["module_id"]))
-        due_total = sum(r["due"] for r in recs)
-        if due_total:
-            st.info(f"Heute insgesamt **{due_total}** Lernkarten fällig.")
 
     with st.expander("Kapitelstatus aller Module", expanded=False):
         rows = []

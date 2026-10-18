@@ -48,3 +48,43 @@ def test_all_pages_and_modules_open():
         at.sidebar.button(key=f"navmod_{mid}").click()
         _run(at)
         assert at.title, f"Modulseite {mid} ohne Titel"
+
+
+def test_learn_button_opens_focus_mode_and_enter_reveals():
+    import json
+
+    from utils import spaced_repetition as sr
+
+    mid = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))["modules"][0]["id"]
+    at = _run(AppTest.from_file(str(ROOT / "app.py"), default_timeout=120))
+    chapter = (at.session_state[f"_module_{mid}"]["chapters"] or [{}])[0].get("id")
+    at.session_state[f"_module_{mid}"]["cards"] = [sr.new_card(f"Frage {i}?", "- Antwort", chapter_id=chapter)
+                                                   for i in range(3)]
+    _run(at)
+    at.button(key=f"learn_{mid}").click()
+    _run(at)
+    assert at.session_state["cc_session"]["return"] and not at.sidebar.button
+    at.text_input[0].input("Antwort")
+    at.button[[b.label for b in at.button].index("Auflösen")].click()
+    _run(at)
+    assert any(b.label.startswith("Gut") for b in at.button)
+    at.button(key="cc_end").click()
+    _run(at)
+    assert "cc_session" not in at.session_state and at.title[0].value.startswith(":material/today:")
+    from views.common import MODULE_TABS, PAGES
+
+    at.session_state["nav"] = PAGES["week"]
+    _run(at)
+    today_chip = next(b for b in at.button if b.key and b.key.startswith("cardchip_"))
+    today_chip.click()
+    _run(at)
+    assert at.session_state["cc_session"]["queue"]
+    at.button(key="cc_end").click()
+    _run(at)
+    at.sidebar.button(key=f"navmod_{mid}").click()
+    at.session_state[f"mtabs_{mid}"] = MODULE_TABS[1]
+    _run(at)
+    focus = [b for b in at.button if b.key and b.key.startswith("focus_learn_")]
+    focus[0].click()
+    _run(at)
+    assert at.session_state["cc_session"]["return"]

@@ -1,9 +1,9 @@
-"""Heute: Termine, fällige To-dos, Karteikarten, Klausur-Lernplan und Schwachstellen auf einen Blick."""
+"""Heute: Termine, fällige To-dos, Karteikarten und Klausur-Lernplan auf einen Blick."""
 
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import timedelta
 
 import streamlit as st
 
@@ -12,21 +12,12 @@ from utils import spaced_repetition as sr
 from utils.config import WEEKDAYS, get_module
 from utils.storage import (days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
                            load_todos, semester_dates, today)
-from utils.weakness import weakest
-from views.common import (MODULE_TABS, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit,
-                          todo_module, toggle_todo)
-from views.module_tabs.study import WEAK_TAB_STATE
+from views import cards_center
+from views.common import custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
 
 
 def _safe(text: str) -> str:
     return re.sub(r"[^0-9A-Za-z]", "_", text)
-
-
-def _open_learn(module_id: str, weak: bool = False) -> None:
-    st.session_state[f"mtabs_{module_id}"] = MODULE_TABS[1]
-    if weak:
-        st.session_state[WEAK_TAB_STATE.format(module_id)] = True
-    open_unit(module_id, None)
 
 
 def _open_event(cfg: dict, ev: dict) -> None:
@@ -82,15 +73,12 @@ def render(cfg: dict) -> None:
     new_min = int(load_settings()["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
     card_plan = {mid: sr.daily_plan(d["cards"], days_until_exam(mid), new_min) for mid, d in modules_data.items()}
     due_cards = {mid: p["reviews"] + p["new"] for mid, p in card_plan.items()}
-    exams = sorted((days_until_exam(m["id"]), m) for m in cfg["modules"] if (days_until_exam(m["id"]) or -1) >= 0)
-    c1, c2, c3 = st.columns(3)
+    c1, c2, _ = st.columns(3)
     c1.metric("Offene To-dos (bis morgen)", len(open_todos),
               help="Überfällig, heute und morgen fällig")
     c2.metric("Karteikarten heute", sum(due_cards.values()),
               help=f"{sum(p['reviews'] for p in card_plan.values())} Wiederholungen + "
               f"{sum(p['new'] for p in card_plan.values())} neue Karten")
-    if exams:
-        c3.metric(f"Nächste Klausur: {exams[0][1]['short']}", f"{exams[0][0]} Tage")
 
     left, right = st.columns([3, 2], gap="large")
     with left:
@@ -120,8 +108,7 @@ def render(cfg: dict) -> None:
 
         # --- Klausur-Lernplan --------------------------------------------------------
         conf = load_extra("exam_plan").get("settings", {})
-        start = conf.get("start")
-        start_date = date.fromisoformat(start) if start else exam_plan.DEFAULT_START
+        start_date = exam_plan.start_of(conf)
         if now >= start_date:
             st.subheader(":material/event_note: Klausur-Lernplan heute")
             plan = exam_plan.build_plan(cfg, modules_data, state, start_date, now,
@@ -156,19 +143,5 @@ def render(cfg: dict) -> None:
                     p = card_plan[module["id"]]
                     c1.markdown(f"{micon(module)} **{module['short']}** · {p['reviews']} wiederholen"
                                 + (f" + {p['new']} neu" if p["new"] else ""))
-                    c2.button("Lernen", key=f"learn_{module['id']}", on_click=_open_learn, args=(module["id"],),
+                    c2.button("Lernen", key=f"learn_{module['id']}", on_click=cards_center.learn_due, args=(cfg, module["id"]),
                               width="stretch")
-
-        # --- Schwachstellen ------------------------------------------------------------
-        weak = [(module, s) for module in cfg["modules"] for s in weakest(modules_data[module["id"]], 2)]
-        weak.sort(key=lambda x: x[1]["mastery"])
-        if weak:
-            st.subheader(":material/troubleshoot: Schwachstellen")
-            for module, s in weak[:4]:
-                with st.container(key=f"tdrow_{module['id']}_weak_{s['chapter_id']}"):
-                    c1, c2 = st.columns([3, 2], vertical_alignment="center")
-                    c1.markdown(f"**{module['short']}** · {s['label']}  \n"
-                                f"<span class='small-muted'>{s['mastery'] * 100:.0f} % sicher · "
-                                f"{len(s['weak_cards'])} schwache Karten</span>", unsafe_allow_html=True)
-                    c2.button("Üben", key=f"weak_{module['id']}_{s['chapter_id']}", width="stretch",
-                              on_click=_open_learn, args=(module["id"], True))

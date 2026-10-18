@@ -14,7 +14,7 @@ from utils.storage import (chapter_label, get_document_pages, get_document_text,
 from utils.units import lecture_notes, unit_cards, unit_docs
 
 _PREP_TASKS = """Ich lese deine Vorbereitung auf dem Mac mit, während ich auf dem iPad durch die Folien scrolle.
-Darum: KEIN Fließtext, nur knappe Stichpunkte und Tabellenzellen (Telegrammstil, je max. ~15 Wörter).
+Darum: KEIN Fließtext, nur Stichpunkte und Tabellenzellen (Tabellen im Telegrammstil, je max. ~15 Wörter).
 Jede Angabe MUSS mit Foliennummer(n) verknüpft sein – "slides" immer als Nummer oder Bereich, z. B. "12" oder "12–15".
 
 Erstelle:
@@ -23,9 +23,12 @@ Erstelle:
 2. concept_table: alle Kernbegriffe und Formeln in Folienreihenfolge: slides, term (Kernbegriff oder Formel, Formeln
    in $...$), short (Kurzerklärung, max. ~15 Wörter), watch_out (worauf achten: Falle, Verwechslung, Bedingung –
    max. ~12 Wörter).
-3. summary: Ablauf der Vorlesung als Markdown-Stichpunktliste entlang der Folien; jeder Abschnitt beginnt mit
-   „**Folie N–M** · Thema“, darunter 2–4 kurze Unterpunkte (je max. ~20 Wörter, auch Zusammenhang oder Warum).
-   Keine Absätze, keine Überschriften.
+3. summary: Zusammenfassung entlang der Folien als Markdown-Stichpunktliste – ergänzend zu den Folien, so dass ich
+   ohne Vorwissen sofort verstehe, worum es geht. Jeder Abschnitt beginnt mit „**Folie N–M** · Thema“, darunter
+   3–6 Unterpunkte in einfacher, verständlicher Sprache (je 1–2 ganze Sätze, max. ~40 Wörter): Was bedeutet das?
+   Warum ist das wichtig? Wie hängt es mit dem Vorherigen zusammen? Fachbegriffe beim ersten Auftreten in
+   Alltagssprache erklären, Formeln in Worten deuten (was steigt, was sinkt). Erkläre, was die Folien nur andeuten,
+   statt sie abzuschreiben. Nur Inhalte der Folien, kein neuer Stoff. Keine Absätze, keine Überschriften.
 4. quiz: genau 5 Quizfragen zum Selbsttest, die das Verständnis der wichtigsten Inhalte prüfen. {quiz_format}
    Plausible Distraktoren (typische Denkfehler). correct_indices = Indizes der richtigen Optionen (ab 0).
    explanation: kurz, warum richtig bzw. falsch, mit Foliennummer. slides: Foliennummer(n) der Frage.

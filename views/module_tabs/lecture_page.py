@@ -209,7 +209,7 @@ def _prep_view(doc: dict, analysis: dict) -> None:
             f"| {_cell(r['slides'])} | **{_cell(r['term'])}** | {_cell(r['short'])} | {_cell(r['watch_out'])} |"
             for r in rows))
     if analysis.get("summary"):
-        with st.expander("Ablauf entlang der Folien"):
+        with st.expander("Zusammenfassung entlang der Folien"):
             st.markdown(analysis["summary"])
     if analysis.get("formulas"):
         with st.expander(f"Formeln auf den Folien ({len(analysis['formulas'])})"):
@@ -332,19 +332,16 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     with st.form(f"lnotes_{module_id}_{lec['id']}"):
         text = st.text_area("Meine Notizen aus der Vorlesung", notes["text"], height=220,
                             placeholder="Was habe ich mitgeschrieben? Formeln gern in LaTeX: $C_0 = ...$")
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         emphasized = c1.text_area("Vom Dozenten betont", notes["emphasized"], height=130,
                                   placeholder="„Das kommt dran!“, Wiederholungen, Tafelanschrieb …")
         briefly = c2.text_area("Nur kurz angerissen", notes["briefly"], height=130,
                                placeholder="Folien übersprungen, „nur zur Info“ …")
-        examples = c3.text_area("Genannte Beispiele", notes["examples"], height=130,
-                                placeholder="Rechenbeispiele, Unternehmen, Fallstudien …")
         b1, b2 = st.columns(2)
         save = b1.form_submit_button("Speichern", width="stretch")
         finish = b2.form_submit_button("✓ Speichern & Nachbereitung abschließen", type="primary", width="stretch")
     if save or finish:
-        notes.update({"text": text, "emphasized": emphasized, "briefly": briefly, "examples": examples,
-                      "updated_at": now_iso()})
+        notes.update({"text": text, "emphasized": emphasized, "briefly": briefly, "updated_at": now_iso()})
         save_module(module_id)
         if finish:
             _set_done(module_id, lec, "nachbereitet")

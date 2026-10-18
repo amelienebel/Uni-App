@@ -10,12 +10,9 @@ import streamlit as st
 
 from utils import ai, learning
 from utils import spaced_repetition as sr
-from utils.config import get_module
 from utils.pdf_parser import render_page
-from utils.storage import chapter_label, days_until_exam, load_module, load_settings, read_data_file, save_module
+from utils.storage import days_until_exam, load_module, load_settings, read_data_file, save_module
 from utils.units import unit_cards
-
-WEAK_TAB_STATE = "learn_weak_{}"
 
 CARD_CHAT_SYSTEM = (
     ai.BASE_SYSTEM + "\n\nDer Studierende lernt gerade mit einer Lernkarte und hat eine Rückfrage dazu. "
@@ -113,45 +110,21 @@ def _sources(data: dict, card: dict, key: str) -> None:
                 st.image(png, caption=f"Seite {page}", width="stretch")
 
 
-def _edit_card(module_id: str, card: dict, key: str) -> None:
-    with st.expander("Karte ist falsch / unklar – bearbeiten"):
-        with st.form(f"edit_{key}"):
-            front = st.text_area("Frage", card["front"], height=70)
-            back = st.text_area("Musterantwort (Stichpunkte mit „- “, $LaTeX$ erlaubt)", card["back"], height=140)
-            explanation = st.text_area("Erklärung", card.get("explanation", ""), height=100)
-            keywords = st.text_input("Stichwörter (mit Komma getrennt)", ", ".join(card.get("keywords", [])))
-            c1, c2 = st.columns(2)
-            prio = c1.selectbox("Priorität", list(PRIORITY_LABELS), format_func=PRIORITY_LABELS.get,
-                                index=list(PRIORITY_LABELS).index(card.get("priority", "normal")))
-            review = c2.checkbox("Noch prüfen", card.get("needs_review", False))
-            if st.form_submit_button("Speichern") and front.strip() and back.strip():
-                card.update({"front": front.strip(), "back": back.strip(), "explanation": explanation.strip(),
-                             "keywords": [k.strip() for k in keywords.split(",") if k.strip()],
-                             "priority": prio, "needs_review": review})
-                if not review:
-                    card.pop("review_note", None)
-                save_module(module_id)
-                st.rerun()
-
-
-def _queue(cards: list[dict], module_cards: list[dict], days: int | None, key: str, module_id: str,
+def _queue(cards: list[dict], module_cards: list[dict], days: int | None, module_id: str,
            all_mode: bool) -> list[dict]:
     if all_mode:
-        done = set(st.session_state.get(f"sessiondone_{key}", []))
-        return sorted((c for c in cards if c["id"] not in done), key=lambda c: c["due"])
+        return sorted(cards, key=lambda c: c["due"])
     prefs = load_settings()["learning"]
     quota = sr.new_per_day(module_cards, days, int(prefs.get("new_per_day", sr.DEFAULT_NEW_PER_DAY)))
     new_left = max(0, quota - sr.introduced_on(module_cards, date.today())) + st.session_state.get(
         f"extra_new_{module_id}", 0)
-    queue = sr.due_queue(cards, days, limit=int(prefs.get("daily_review_limit", 60)), new_limit=new_left)
-    # „Gar nicht“-Karten erst nach ein paar anderen Karten wieder zeigen
-    wait, step = st.session_state.get(f"wait_{key}", {}), st.session_state.get(f"step_{key}", 0)
-    return [c for c in queue if wait.get(c["id"], 0) <= step] + [c for c in queue if wait.get(c["id"], 0) > step]
+    return sr.due_queue(cards, days, limit=int(prefs.get("daily_review_limit", 60)), new_limit=new_left)
 
 
 def review_session(cfg: dict, module_id: str, cards: list[dict], key: str, default_all: bool = False) -> None:
-    """Abfrage der übergebenen Karten: fällige Wiederholungen + neue Karten im Tageskontingent (oder alle)."""
-    module = get_module(cfg, module_id)
+    """Abfrage der übergebenen Karten im Lernmodus: fällige Wiederholungen + neue Karten (oder alle)."""
+    from views import cards_center
+
     days = days_until_exam(module_id)
     if not cards:
         st.caption("Noch keine Karteikarten vorhanden.")
@@ -171,100 +144,15 @@ def review_session(cfg: dict, module_id: str, cards: list[dict], key: str, defau
                    + (" · Endspurt: jede Karte kommt noch einmal dran" if days <= sr.FINAL_DAYS + 3 else ""))
 
     all_mode = st.toggle("Alle Karten üben (nicht nur die heute fälligen)", key=f"allmode_{key}", value=default_all)
-    queue = _queue(cards, data["cards"], days, key, module_id, all_mode)
+    queue = _queue(cards, data["cards"], days, module_id, all_mode)
     if not queue:
-        if all_mode:
-            st.success("Alle Karten einmal durchgearbeitet!")
-            if st.button("Nochmal von vorn", key=f"restart_{key}"):
-                st.session_state[f"sessiondone_{key}"] = []
-                st.rerun()
-        else:
-            st.success("Für heute alles geschafft!")
-            if stats["new"] and st.button("10 weitere neue Karten lernen", key=f"morenew_{key}"):
-                st.session_state[f"extra_new_{module_id}"] = st.session_state.get(f"extra_new_{module_id}", 0) + 10
-                st.rerun()
+        st.success("Für heute alles geschafft!")
+        if stats["new"] and st.button("10 weitere neue Karten lernen", key=f"morenew_{key}"):
+            st.session_state[f"extra_new_{module_id}"] = st.session_state.get(f"extra_new_{module_id}", 0) + 10
+            st.rerun()
         return
-
-    card = queue[0]
-    sr._upgrade(card)
-    info = [chapter_label(data, card.get("chapter_id"))] + ([" › ".join(card["section"])] if card.get("section") else [])
-    st.caption(f"Noch {len(queue)} Karte(n) in dieser Runde · " + " · ".join(info))
-    state_key = f"reveal_{card['id']}"
-    with st.container(border=True):
-        badges = [_badge("blue", "neu")] if sr.is_new(card) else []
-        if card.get("type") in TYPE_LABELS:
-            badges.append(_badge("violet", TYPE_LABELS[card["type"]]))
-        if card.get("priority") == "high":
-            badges.append(_badge("orange", "wichtig"))
-        elif card.get("priority") == "low":
-            badges.append(_badge("gray", "Randthema"))
-        if card.get("needs_review"):
-            badges.append(_badge("red", "bitte prüfen"))
-        if badges:
-            st.markdown(" ".join(badges))
-        st.markdown(f"#### {card['front']}")
-        answer = st.text_area("Deine Antwort", key=f"answer_{card['id']}", height=100,
-                              placeholder="Antwort eintippen (oder im Kopf beantworten) …")
-        if not st.session_state.get(state_key):
-            if st.button("Auflösen", type="primary", key=f"reveal_btn_{card['id']}"):
-                st.session_state[state_key] = True
-                st.rerun()
-        else:
-            hits = keyword_hits(answer, card.get("keywords", [])) if answer.strip() else []
-            col_user, col_solution = st.columns(2)
-            with col_user:
-                st.markdown("**Deine Antwort**")
-                st.info(answer or "_(keine Eingabe)_")
-                if hits:
-                    st.markdown("Stichwörter: " + " ".join(_badge("green", f"✓ {kw}") if hit else _badge("gray", kw)
-                                                            for kw, hit in hits))
-            with col_solution:
-                st.markdown("**Lösung**")
-                st.success(card["back"])
-            if card.get("review_note"):
-                st.warning(f"Hinweis der Prüfung: {card['review_note']}")
-            if card.get("explanation"):
-                with st.expander("Warum? – Erklärung"):
-                    st.markdown(card["explanation"])
-            _sources(data, card, f"{key}_{card['id']}")
-            if answer.strip() and ai.is_available():
-                if st.button("Antwort von der KI prüfen lassen", key=f"check_{card['id']}",
-                             help="Günstig mit Haiku (Bruchteil eines Cents)"):
-                    with st.spinner("Prüfe …"):
-                        try:
-                            st.session_state[f"fb_{card['id']}"] = ai.complete(
-                                f"Lernkarte – Frage: {card['front']}\nMusterantwort:\n{card['back']}\n\n"
-                                f"Antwort des Studierenden: {answer}\n\nBewerte knapp (max. 80 Wörter): Was ist "
-                                "richtig, was fehlt oder ist falsch? Schlage eine Selbstbewertung vor "
-                                "(Gar nicht / Etwas / Gut / Perfekt).", max_tokens=2000, effort="low", task="check")
-                        except ai.AIError as exc:
-                            st.error(str(exc))
-                if fb := st.session_state.get(f"fb_{card['id']}"):
-                    st.markdown(fb)
-            suggestion = suggested_grade(hits)
-            st.markdown("**Wie gut konntest du die Karte?**"
-                        + (" _(Vorschlag nach deinen Stichwörtern ist markiert)_" if suggestion is not None else ""))
-            nxt = sr.preview(card, days)
-            for col, grade in zip(st.columns(4), sr.GRADES):
-                if col.button(f"{grade['label']}  \n{sr.interval_label(nxt[grade['value']])}",
-                              key=f"grade_{key}_{card['id']}_{grade['value']}", width="stretch",
-                              type="primary" if grade["value"] == suggestion else "secondary"):
-                    sr.review(card, grade["value"], days)
-                    save_module(module_id)
-                    step = st.session_state.get(f"step_{key}", 0) + 1
-                    st.session_state[f"step_{key}"] = step
-                    if card["interval"] == 0:
-                        st.session_state.setdefault(f"wait_{key}", {})[card["id"]] = step + 3
-                    elif all_mode:
-                        st.session_state[f"sessiondone_{key}"] = st.session_state.get(
-                            f"sessiondone_{key}", []) + [card["id"]]
-                    for k in (state_key, f"answer_{card['id']}", f"fb_{card['id']}"):
-                        st.session_state.pop(k, None)
-                    st.rerun()
-    if st.session_state.get(state_key):
-        _edit_card(module_id, card, f"{key}_{card['id']}")
-    if _card_chat(card, module["name"], f"{key}_{card['id']}"):
-        save_module(module_id)
+    st.button(f"Karteikarten lernen ({len(queue)})", key=f"focus_{key}", type="primary", icon=":material/play_arrow:",
+              on_click=cards_center.start_focus, args=([[module_id, c["id"]] for c in queue],))
 
 
 def generate_button(cfg: dict, module_id: str, unit: dict, existing: list[dict], key: str,

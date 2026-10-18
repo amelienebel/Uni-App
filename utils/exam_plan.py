@@ -11,7 +11,15 @@ from datetime import date, timedelta
 from utils.storage import chapter_number, get_exam_date
 from utils.weakness import chapter_stats
 
-DEFAULT_START = date(2027, 1, 11)  # erster Montag nach den Weihnachtsferien
+DEFAULT_START = date(2026, 12, 26)  # Klausurphase ab dem 2. Weihnachtsfeiertag
+_OLD_DEFAULTS = {"2027-01-11"}
+
+
+def start_of(conf: dict) -> date:
+    """Start der Klausurphase aus den Plan-Einstellungen (alter Standardwert → neuer Standard)."""
+    if not conf.get("start") or conf["start"] in _OLD_DEFAULTS:
+        conf["start"] = DEFAULT_START.isoformat()
+    return date.fromisoformat(conf["start"])
 
 
 def plan_key(module_id: str, task_id: str) -> str:

@@ -14,10 +14,12 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   `units.py` (Vorlesungen/Übungen = Einheiten), `planner.py` (To-dos, Fristen), `learning.py` (Folienanalyse, Karten
   inkl. Abdeckung jeder Seite und Prüfdurchgang, Definitionen, Seiten mit Abbildungen genau lesen),
   `spaced_repetition.py` (FSRS mit Klausurtermin: Zielquote, Endspurt, neue Karten pro Tag), `ai.py` (Anthropic, Modell pro Aufgabe in `TASKS`),
-  `textbook.py` (Lehrbuch, nur für Tutor), `definitions.py`, `exam_plan.py`, `weakness.py`, `notify.py` (ntfy-Push).
-- `views/` – `today_view.py` und `dashboard.py` (Wochenübersicht; beide mit eigenen To-dos in todos.json → `_custom`),
+  `textbook.py` (Lehrbuch, nur für Tutor), `definitions.py`, `exam_plan.py` (Klausur-Lernplan ab 26.12.), `weakness.py`, `notify.py` (ntfy-Push).
+- `views/` – `today_view.py` (ohne Klausur-Countdown und Schwachstellen) und `dashboard.py` (Wochenübersicht mit eigener
+  Zeile „Karteikarten“, ohne Lernfahrplan; beide mit eigenen To-dos in todos.json → `_custom`),
   `cards_center.py` (Karteikarten: Lernstand, Empfehlung, freie Auswahl mit Filtern wie „schwach“, Liste aller Karten
-  zum Bearbeiten/Löschen, Focus Mode ohne Seitenleiste mit Zurück und Feedback-Button → KI formuliert um),
+  zum Bearbeiten/Löschen, Focus Mode ohne Seitenleiste mit Zurück und Feedback-Button → KI formuliert um; Enter im
+  Antwortfeld löst auf; „Lernen“ auf Heute/Wochenplan/Modulseiten öffnet direkt den Focus Mode via `start_focus`),
   `quiz_center.py` (Quiz: Fragen zu gewählten Vorlesungen, Focus Mode Frage für Frage, Mehr Infos, Tutor-Rückfragen),
   `formulas.py` (Formelsammlung, Formeln einzeln auswählbar → `in_sheet`), `settings_view.py` (mit Reitern
   Export und Backup aus `export_view.py`), `module_view.py` (Reiter Ablauf / Lernen & Klausur /
@@ -31,7 +33,9 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
 - Modelle: Zusammenfassung Haiku 5.5, Karten Sonnet 5.5, Tutor Sonnet 5.5, Antwort-/Kartenprüfung Haiku 5.5
   (änderbar in den Einstellungen).
 - Vorbereiten (Haiku, effort low): Must-Watch (2–3 Folien), Tabelle Folie | Begriff | Kurzerklärung | Worauf achten,
-  Ablauf als Stichpunkte (2–4 Unterpunkte), 5 Quizfragen im Klausurformat – kein Fließtext, alles mit Foliennummer.
+  Zusammenfassung entlang der Folien als Stichpunkte (3–6 verständliche Unterpunkte, ergänzend zur Folie, ohne Vorwissen
+  verständlich), 5 Quizfragen im Klausurformat – kein Fließtext, alles mit Foliennummer.
+- Nachbereiten: nur Notizen, „betont“, „kurz angerissen“ – kein Feld für genannte Beispiele.
 - Die Vorbereitung entsteht erst, nachdem die Nutzerin bei Seiten mit Abbildungen gewählt hat, welche genau gelesen
   werden (`learning.pending_figures`); ohne Abbildungen direkt nach dem Upload.
 - Keine erklärenden Hinweistexte in der Oberfläche ergänzen (Nutzerin hat sie bewusst entfernen lassen).

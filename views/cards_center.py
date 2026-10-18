@@ -12,7 +12,7 @@ from utils import ai, learning, units
 from utils import spaced_repetition as sr
 from utils.config import exam_format, get_module, module_label
 from utils.storage import chapter_label, days_until_exam, load_module, load_settings, save_module
-from views.common import micon
+from views.common import go_back, goto, micon
 from views.module_tabs import study
 
 SESSION = "cc_session"
@@ -226,6 +226,18 @@ def _start_cards(entries: list[list[str]]) -> None:
         st.session_state[SESSION] = {"queue": entries, "done": [], "view": None, "step": 0}
 
 
+def start_focus(entries: list[list[str]]) -> None:
+    """Callback von anderen Seiten: Lernmodus direkt öffnen, „Beenden“ führt dorthin zurück."""
+    if entries:
+        st.session_state[SESSION] = {"queue": entries, "done": [], "view": None, "step": 0, "return": True}
+        goto("cards")
+
+
+def learn_due(cfg: dict, module_id: str) -> None:
+    """Callback: alle heute fälligen + neuen Karten eines Moduls im Lernmodus lernen."""
+    start_focus([[module_id, c["id"]] for c in _queue_for(cfg, module_id, _all_lectures(cfg, module_id), "due")])
+
+
 def _delete_cards(entries: list[list[str]]) -> None:
     by_module: dict[str, set[str]] = {}
     for mid, cid in entries:
@@ -331,7 +343,9 @@ def _find(module_id: str, card_id: str) -> tuple[dict, dict | None]:
 
 
 def _end() -> None:
-    st.session_state.pop(SESSION, None)
+    sess = st.session_state.pop(SESSION, None)
+    if sess and sess.get("return"):
+        go_back()
 
 
 def _back() -> None:
@@ -433,6 +447,18 @@ def _feedback(module_id: str, card: dict, key: str) -> None:
             st.rerun()
 
 
+def _reveal(key: str) -> None:
+    st.session_state[f"{key}_given"] = st.session_state.get(f"{key}_answer", "")
+    st.session_state[f"{key}_reveal"] = True
+
+
+def answer_form(key: str) -> None:
+    """Antwortfeld: Enter schickt die Antwort ab und löst auf."""
+    with st.form(f"{key}_form", border=False):
+        st.text_input("Deine Antwort", key=f"{key}_answer", placeholder="Antwort eintippen und Enter drücken …")
+        st.form_submit_button("Auflösen", type="primary", width="stretch", on_click=_reveal, args=(key,))
+
+
 def _current(cfg: dict, sess: dict, module_id: str, data: dict, card: dict) -> None:
     key = f"cc_{sess['step']}_{card['id']}"
     sr._upgrade(card)
@@ -440,13 +466,10 @@ def _current(cfg: dict, sess: dict, module_id: str, data: dict, card: dict) -> N
     with st.container(border=True):
         _badges(card)
         st.markdown(f"### {card['front']}")
-        answer = st.text_area("Deine Antwort", key=f"{key}_answer", height=110,
-                              placeholder="Antwort eintippen (oder im Kopf beantworten) …")
         if not st.session_state.get(f"{key}_reveal"):
-            if st.button("Auflösen", key=f"{key}_revealbtn", type="primary", width="stretch"):
-                st.session_state[f"{key}_reveal"] = True
-                st.rerun()
+            answer_form(key)
         else:
+            answer = st.session_state.get(f"{key}_given", "")
             hits = _solution(data, card, answer, key)
             st.markdown("**Wie gut konntest du die Karte?**")
             grade = _grade_buttons(card, module_id, f"{key}_grade", suggestion=study.suggested_grade(hits))
@@ -502,7 +525,8 @@ def _finished(sess: dict) -> None:
     st.success(f"Geschafft! {len(sess['done'])} Bewertung(en) in dieser Session.")
     counts = {g["label"]: sum(1 for e in sess["done"] if e["grade"] == g["value"]) for g in sr.GRADES}
     st.markdown(" · ".join(f"**{label}**: {n}" for label, n in counts.items()))
-    st.button("Zurück zur Übersicht", key="cc_finish", type="primary", on_click=_end)
+    st.button("Fertig" if sess.get("return") else "Zurück zur Übersicht", key="cc_finish", type="primary",
+              on_click=_end)
 
 
 def _session(cfg: dict) -> None:

@@ -157,7 +157,7 @@ def _create(cfg: dict) -> None:
     n = c2.slider("Anzahl", 3, 20, 10, key="qz_n")
     difficulty = c3.select_slider("Schwierigkeit", ["leicht", "mittel", "klausurnah", "schwer"], value="klausurnah",
                                   key="qz_diff")
-    use_exams = st.checkbox("Stil der hochgeladenen Altklausuren berücksichtigen", value=True, key="qz_exams",
+    use_exams = st.checkbox("Stil der Altklausuren und Übungsblätter", value=True, key="qz_exams",
                             disabled=not ai.is_available())
     if not st.button("Quiz erstellen & starten", key="qz_go", type="primary", icon=":material/play_arrow:",
                      disabled=not chosen):

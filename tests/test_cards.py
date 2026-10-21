@@ -121,3 +121,38 @@ def test_generate_cards_with_coverage(monkeypatch):
     # Nachholen: nur die fehlende Seite wird geschickt
     learning.generate_unit_cards({}, "m", unit, only={"d1": {3}})
     assert "--- Folie 3 ---" in seen["prompt"] and "--- Folie 2 ---" not in seen["prompt"]
+
+
+def test_exam_style_and_slim(monkeypatch):
+    from utils import ai, learning
+
+    exam = {"id": "k1", "filename": "Klausur.pdf", "doc_type": "altklausur", "unit": None}
+    sheet = {"id": "b1", "filename": "Blatt1.pdf", "doc_type": "uebung", "unit": None, "chapter_id": "c1"}
+    cards = [{"id": f"x{i}", "front": f"Frage {i}", "back": "- Antwort", "unit": "u1"} for i in range(1, 4)]
+    data = {"cards": cards, "chapters": [], "documents": [exam, sheet], "definitions": []}
+    unit = {"id": "u1", "kind": "lecture", "nr": 2, "topic": "Funktionen"}
+    monkeypatch.setattr(learning, "load_module", lambda _mid: data)
+    monkeypatch.setattr(learning, "save_module", lambda _mid: None)
+    monkeypatch.setattr(learning, "get_module", lambda _cfg, _mid: {"name": "Mathe"})
+    monkeypatch.setattr(learning, "get_document_text",
+                        lambda doc, **kw: {"k1": "Aufgabe 1: Bestimmen Sie f'(x)", "b1": "Blatt: Ableiten"}[doc["id"]])
+    monkeypatch.setattr(learning, "get_document_pages", lambda _doc: [])
+    monkeypatch.setattr(learning, "lecture_notes", lambda _d, _u: {"text": "", "emphasized": "Kettenregel",
+                                                                   "briefly": "", "examples": "", "images": []})
+    style = learning.exam_style_material({}, "m", data)
+    assert "Bestimmen Sie" in style and "Blatt: Ableiten" in style
+
+    def fake_json(prompt, schema, **kw):
+        assert "Kettenregel" in prompt and "Bestimmen Sie" in prompt and "[3] Frage: Frage 3" in prompt
+        return {"delete": [{"card": 2, "reason": "doppelt zu [1]"}],
+                "rewrite": [{"card": 1, "front": "Kettenregel?", "answer": ["$f(g(x))' = f'(g(x))g'(x)$"],
+                             "explanation": "…", "keywords": ["f'(g(x))"], "reason": "kürzer"},
+                            {"card": 2, "front": "doppelt", "answer": ["x"], "explanation": "", "keywords": [],
+                             "reason": ""}]}
+
+    monkeypatch.setattr(ai, "complete_json", fake_json)
+    proposal = learning.propose_slim({}, "m", unit)
+    assert [d["id"] for d in proposal["delete"]] == ["x2"] and [r["id"] for r in proposal["rewrite"]] == ["x1"]
+    assert learning.apply_slim("m", unit) == (1, 1)
+    assert [c["id"] for c in data["cards"]] == ["x1", "x3"] and data["cards"][0]["front"] == "Kettenregel?"
+    assert data["cards"][0]["previous"]["front"] == "Frage 1" and not data["card_slim"]

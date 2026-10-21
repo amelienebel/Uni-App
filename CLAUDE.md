@@ -9,7 +9,7 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Punkt „Module“), Routing über `PAGES` in `views/common.py`,
   Zurück-Button oben auf jeder Seite (Verlauf in `views/common.py`: `track_history`/`go_back`, Reiter mit `on_change="rerun"`).
 - `config.json` – Module (Farbe, Material-Symbol, Stundenplan, Kapitel inkl. `nr`, Vorlesungen, Übungen, Fristen-Wochentage `deadlines`,
-  Klausurformat `exam_format`: mc_multi / sc4 / open / mixed → Karten-Prompt und Quiz), Kalender.
+  Klausurformat `exam_format`: mc_multi / sc4 / open / mixed, VWL = open (freier Text) → Karten-Prompt und Quiz), Kalender.
 - `utils/` – `storage.py` (JSON in `data/`, Cloud-Sync), `cloud_sync.py` (GitHub-Repo, PDFs werden erst bei Bedarf geladen),
   `units.py` (Vorlesungen/Übungen = Einheiten), `planner.py` (To-dos, Fristen), `learning.py` (Folienanalyse, Karten
   inkl. Abdeckung jeder Seite und Prüfdurchgang, Definitionen, Seiten mit Abbildungen genau lesen),
@@ -27,9 +27,14 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Definitionen / Dateien / Formeln & Notizen), `module_tabs/` (Vorlesungs- und Übungsseiten, Lernen, Tutor …).
 
 ## Regeln für KI-Inhalte
-- Karteikarten nur aus Folien/Skript + Nachbereitung; „betont“ gründlicher (priority high), „kurz angerissen“ knapp
-  (low); keine Karten, die Beispiele abfragen (Anwendungskarten zum Konzept erlaubt); Erklärung 40–120 Wörter;
-  jede Definitionskarte → auch Reiter Definitionen. Lehrbuch nur im Tutor. Jede Seite: Karte oder Grund fürs Überspringen.
+- Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als
+  Maßstab ein (`learning.exam_style_material`), was relevant ist. Wenige, kurze Karten (meist 6–15 pro Vorlesung,
+  Antwort ≤ ~25 Wörter, Erklärung 30–80 Wörter), keine Doppelungen, keine Theorie-Details/Herleitungen – Rechnen und
+  Anwenden übt das Quiz (Typ „Übungsaufgaben“, Stil der Übungen/Altklausuren). Nachbereitung entscheidet: „betont“ →
+  high, „kurz angerissen“ → low oder keine Karte, nicht Erwähntes ohne Klausurbezug → überspringen. Keine Karten,
+  die Beispiele abfragen; jede Definitionskarte → auch Reiter Definitionen. Lehrbuch nur im Tutor. Jede Seite: Karte
+  oder Grund fürs Überspringen. „Karten ausdünnen“ (`learning.propose_slim`/`apply_slim`) räumt bestehende Karten
+  einer Einheit auf – erst Vorschlag, dann Übernehmen.
 - Karten entstehen nur auf Klick (nach der Nachbereitung), nie automatisch.
 - Modelle: Zusammenfassung Haiku 5.5, Karten Sonnet 5.5, Tutor Sonnet 5.5, Antwort-/Kartenprüfung Haiku 5.5
   (änderbar in den Einstellungen).

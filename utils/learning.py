@@ -9,9 +9,9 @@ from utils import definitions as defs
 from utils import spaced_repetition as sr
 from utils.config import exam_format, get_module
 from utils.pdf_parser import heuristic_analysis
-from utils.storage import (chapter_label, get_document_pages, get_document_text, load_module, now_iso, read_data_file,
-                           save_module, set_document_pages, suggest_formulas)
-from utils.units import lecture_notes, unit_cards, unit_docs
+from utils.storage import (chapter_label, documents_of, get_document_pages, get_document_text, load_module, now_iso,
+                           read_data_file, save_module, set_document_pages, suggest_formulas)
+from utils.units import all_units, lecture_notes, unit_cards, unit_docs
 
 _PREP_TASKS = """Ich lese deine Vorbereitung auf dem Mac mit, während ich auf dem iPad durch die Folien scrolle.
 Darum: KEIN Fließtext, nur Stichpunkte und Tabellenzellen (Tabellen im Telegrammstil, je max. ~15 Wörter).
@@ -71,54 +71,62 @@ CARDS_SYSTEM = """Du erstellst Karteikarten für eine Lern-App mit Spaced Repeti
 Getippten vergleichbar sein.
 
 # Ziel
-Wer alle Karten beherrscht, kann den KOMPLETTEN Prüfungsstoff dieser Einheit. Nichts Prüfungsrelevantes darf fehlen.
+Karteikarten sind nur EIN Teil des Lernens: Spaced Repetition für das Wissen, das man sicher aus dem Kopf können muss,
+um die Klausur- und Übungsaufgaben zu lösen. Rechnen, Anwenden und Aufgabentypen übt die Nutzerin in einem eigenen
+Quiz im Stil der Übungen und Altklausuren – NICHT mit Karten. Darum: wenige, kurze, scharfe Karten statt
+Vollständigkeit um jeden Preis. Lieber eine Karte zu wenig als drei zu viel; jede Karte kostet täglich Lernzeit.
 
 # Quellen und Gewichtung
 1. DOKUMENTE (<dokument nr="N">): Seiten markiert mit „--- Folie N ---“ (Folien), „--- Skript S. N ---“ (Skript)
-   oder „--- Seite N ---“ (Übungsblatt, Lösung, Sonstiges). Folien sind die Hauptquelle und bestimmen Umfang und
-   Struktur. Das Skript ist gleichrangig und ergänzt Definitionen, Herleitungen, Zusammenhänge.
-2. NACHBEREITUNG der Nutzerin, markiert als:
+   oder „--- Seite N ---“ (Übungsblatt, Lösung, Sonstiges). Inhaltliche Quelle der Karten.
+2. NACHBEREITUNG der Nutzerin – der wichtigste Maßstab dafür, WAS eine Karte bekommt:
    - [NOTIZEN] – eigene Mitschrift. Was nicht auf den Folien steht, wie Folieninhalt behandeln.
-   - [BETONT] – in der Vorlesung hervorgehoben ⇒ immer eigene Karte(n), priority "high", gründlicher, ggf. mehrere
-     Karten inkl. Verständnis- oder Anwendungsfrage.
-   - [ANGERISSEN] – nur kurz erwähnt ⇒ höchstens eine knappe Karte, priority "low", oder gar keine, wenn es nur ein
-     Nebensatz war.
-   - [BEISPIELE] – in der Vorlesung genannte Beispiele ⇒ nur zur Veranschaulichung in "explanation", nie als eigene
-     Karte.
+   - [BETONT] – in der Vorlesung hervorgehoben ⇒ eigene Karte, priority "high".
+   - [ANGERISSEN] – nur kurz erwähnt ⇒ höchstens eine knappe Karte, priority "low", meist gar keine.
+   - [BEISPIELE] – nur zur Veranschaulichung in "explanation", nie als eigene Karte.
    - [TAFELBILD] – abgetippte Tafelbilder/Screenshots ⇒ wie Notizen.
+   Gibt es eine Nachbereitung, bekommen Folieninhalte, die dort weder vorkommen noch betont wurden und die auch in
+   KLAUSUR & ÜBUNGEN keine Rolle spielen, KEINE Karte („laut Nachbereitung nicht relevant“ in "skipped").
+3. KLAUSUR & ÜBUNGEN (<klausur_und_uebungen>): Altklausuren und Übungsblätter des Moduls. Keine Kartenquelle,
+   sondern Maßstab: Was dort gefragt bzw. gerechnet wird, ist relevant; Karten liefern genau das Wissen (Begriff,
+   Bedingung, Formel, Vorgehen), das man dafür parat haben muss – im Detailgrad, den die Aufgaben verlangen.
+   Theorie, die für keine dieser Aufgaben nötig ist (Beweise, Herleitungen, Hintergrund), bekommt keine Karte.
 Kein Wissen außerhalb dieser Quellen in "answer". In "explanation" darfst du allgemeines Fachwissen nutzen, um
 verständlich zu erklären – aber nichts, was den Quellen widerspricht, und keinen zusätzlichen Prüfungsstoff.
 
 # Auswahl
-Leitfrage für jede Karte: Könnte das sinnvoll in der Prüfung abgefragt werden?
-- Behalten: Definitionen, Abgrenzungen zwischen Begriffen, Annahmen, Abläufe, Klassifikationen, Formeln,
-  Rechenschemata, Vor- und Nachteile, Kernbefunde, Anwendung auf Fälle.
-- Streichen: Organisatorisches, Lernziele, Gliederung/Agenda, Literaturlisten, Allgemeinplätze und alles, was
-  schon in VORHANDENE KARTEN abgefragt wird.
-- Ein Merkmal, das zwei Begriffe unterscheidet, ist nie ein Allgemeinplatz.
-- Beispiele (Unternehmen, Anekdoten, konkrete Zahlen) muss die Nutzerin NICHT auswendig können: keine Karte, die
-  ein Beispiel abfragt („Welches Unternehmen …?“). Zahlenbeispiele ⇒ Rechenweg/Schema als Karte, nicht die Zahlen.
-- Durchgearbeitete Fallstudien: Karte zum Kernbefund und dazu, wie das Konzept angewendet wird – nicht die Details.
-- Anwendungskarten ("application") sind erwünscht bei zentralen Konzepten: kurzer, selbst formulierter Fall, auf den
-  die Nutzerin ein Konzept aus den Unterlagen anwendet.
-- Richtwert: 0,5–1 Karte pro Inhaltsfolie, dichte Folien auch 2–3. Deutlich mehr Karten als Folien ⇒ Bündelung prüfen.
-- Prüfungsform beachten (PRÜFUNG im Input): Rechenklausur ⇒ mehr Schema- und Rechenkarten; Open Book ⇒ keine Karten
-  zu reinem Nachschlagewissen, sondern Anwendung.
-- Klausurformat beachten (KLAUSURFORMAT im Input) – als Gewichtung, nicht als Ersatz für die Regeln oben:
-  - Multiple Choice (mehrere richtig) ⇒ etwas mehr Karten zu genauen Bedingungen, Ausnahmen, Abgrenzungen und
-    typischen Fehlvorstellungen (Aussagen, die man sicher als richtig/falsch erkennen muss); Rechenkarten so, dass
-    das Ergebnis sicher und schnell berechnet werden kann.
-  - Single Choice (genau eine richtig) ⇒ etwas mehr Karten, die ähnliche Begriffe, Fälle oder Buchungen präzise
-    unterscheiden; in "explanation" die typische Verwechslung nennen.
-  - Offene Fragen ⇒ etwas mehr Rechenschema- und Erläuterungskarten; Antwort mit vollständigem Lösungsweg in
-    Schritten.
+Leitfrage für jede Karte: Brauche ich das als abrufbares Wissen, um eine Klausur- oder Übungsaufgabe zu lösen?
+- Behalten: zentrale Definitionen, Abgrenzungen, Bedingungen/Voraussetzungen, Formeln, Rechenschemata (als kurzes
+  Vorgehen), Klassifikationen, die in Aufgaben gebraucht werden.
+- Streichen: Organisatorisches, Lernziele, Gliederung, Literatur, Allgemeinplätze, Motivation/Hintergrund, Beweise
+  und Herleitungen, Randbemerkungen, Beispiele (Unternehmen, Anekdoten, konkrete Zahlen).
+- Rechenlastige Module (z. B. Mathematik, Statistik) bzw. Übungseinheiten: nur das Nötigste als Karte – Definition,
+  Satz/Regel mit Bedingung, Formel, Rechenschema in wenigen Schritten. Kein Theorie-Detail, keine Varianten
+  derselben Regel als eigene Karten. Das Üben übernimmt das Quiz.
+- Anwendungskarten ("application") nur sparsam, wenn ein Konzept ohne Anwendung nicht zu verstehen ist.
+- Richtwert: ca. 1 Karte pro 3 Inhaltsfolien; insgesamt meist 6–15 Karten pro Vorlesung, nur bei sehr dichtem,
+  laut Nachbereitung wichtigem Stoff mehr. Übungen: 2–6 Karten (Vorgehen/Schema, keine Zahlen).
+- Prüfungsform beachten (PRÜFUNG im Input): Open Book ⇒ keine Karten zu reinem Nachschlagewissen.
+- Klausurformat beachten (KLAUSURFORMAT im Input) – als Gewichtung:
+  - Multiple Choice (mehrere richtig) ⇒ Karten zu genauen Bedingungen, Ausnahmen und typischen Fehlvorstellungen.
+  - Single Choice (genau eine richtig) ⇒ Karten, die ähnliche Begriffe/Fälle präzise unterscheiden.
+  - Offene Fragen/Freitext ⇒ Karten zu Kernaussagen und Argumentationsketten, die man in eigenen Worten
+    wiedergeben können muss.
   - Unbekannt/gemischt ⇒ ausgewogen.
-- Übungen: Lösungswege (Ansatz, Rechenschritte, Interpretation des Ergebnisses) als Karten, keine Zahlen auswendig.
+
+# Keine Doppelungen (sehr wichtig)
+- Ein Konzept = genau EINE Karte. Definition, Formel und Bedingung desselben Begriffs gehören in dieselbe Karte,
+  nicht in drei.
+- Nichts abfragen, was eine Karte in VORHANDENE KARTEN (auch aus anderen Vorlesungen) schon inhaltlich abdeckt – auch
+  wenn sie anders formuliert ist. Überschneidungen ⇒ Seite in "skipped" mit „schon durch vorhandene Karte abgedeckt“.
+- Keine Überblickskarte UND Einzelkarten zum selben Inhalt – entweder eine Listenkarte oder (wenn die Teile einzeln
+  wichtig sind) Einzelkarten.
 
 # Vollständigkeit (sehr wichtig)
 Gehe die Dokumente Seite für Seite durch. JEDE Seite muss danach entweder in "sources" mindestens einer Karte stehen
-oder in "skipped" mit kurzem Grund (z. B. „Titelfolie“, „Gliederung“, „Organisatorisches“, „Literaturliste“,
-„nur Beispiel ohne neuen Inhalt“, „schon durch vorhandene Karte abgedeckt“). Keine Seite auslassen.
+oder in "skipped" mit kurzem Grund (z. B. „Titelfolie“, „Gliederung“, „Organisatorisches“, „nur Beispiel“,
+„schon durch vorhandene Karte abgedeckt“, „laut Nachbereitung nicht relevant“, „Herleitung/Theorie – wird im Quiz
+geübt“). Keine Seite auslassen – aber eine Seite überspringen ist ausdrücklich in Ordnung und oft richtig.
 
 # Kartentypen ("type")
 - "definition" – Begriff erklären. Jeder in den Unterlagen definierte Fachbegriff bekommt GENAU EINE
@@ -139,8 +147,9 @@ oder in "skipped" mit kurzem Grund (z. B. „Titelfolie“, „Gliederung“, �
 - Zusammengehöriges in einer Frage: „Definition + Annahmen?“, „Arten + Kurzbeschreibung?“.
 
 # Antworten ("answer")
-- Musterantwort, die man tippen könnte: ein Listenelement = ein Stichpunkt, Telegrammstil, meist 2–5 Punkte,
-  höchstens ~40 Wörter (Schemata/Abläufe länger). Unterpunkte mit zwei führenden Leerzeichen.
+- Kurze Musterantwort, die man in einer Minute tippen könnte: ein Listenelement = ein Stichpunkt, Telegrammstil,
+  1–4 Punkte, höchstens ~25 Wörter (Rechenschemata bis ~40). Unterpunkte mit zwei führenden Leerzeichen.
+- Nur das, was man wirklich können muss – keine Zusatzdetails, keine Wiederholung der Frage.
 - Keine Aufzählungszeichen voranstellen; nur nummerieren („1. …“), wenn die Reihenfolge inhaltlich zählt.
 - Bedingungen nie weglassen, Kriterienlisten vollständig, Fachbegriffe exakt wie in der Quelle.
 - „⇒“ für Folgen, „vs.“ für Gegenüberstellungen.
@@ -149,7 +158,8 @@ oder in "skipped" mit kurzem Grund (z. B. „Titelfolie“, „Gliederung“, �
   der Antwort). Daran prüft die App die getippte Antwort.
 
 # Erklärung ("explanation")
-40–120 Wörter Fließtext, Ziel: echtes Verständnis statt Auswendiglernen. Nicht die Musterantwort wiederholen.
+30–80 Wörter Fließtext, Ziel: echtes Verständnis statt Auswendiglernen. Nicht die Musterantwort wiederholen.
+Wenn passend: wie das in Klausur- oder Übungsaufgaben gefragt wird.
 - Warum ist das so / wozu braucht man es?
 - Intuition oder Alltagsbeispiel
 - Typischer Fehler oder Verwechslungsgefahr
@@ -160,8 +170,6 @@ oder in "skipped" mit kurzem Grund (z. B. „Titelfolie“, „Gliederung“, �
 - "section": Pfad entlang der Folienstruktur, z. B. ["2 Portfoliotheorie", "2.1 Rendite und Risiko"].
 - "chapter_hint": Titel des passenden Kapitels aus der KAPITEL-Liste (exakt übernehmen) oder leer.
 - Ein Konzept = eine Karte; Teilaspekte als Stichpunkte in diese Karte.
-- Gleichartige Geschwister (z. B. drei Forschungsarten): erst Überblickskarte, dann je eine Karte mit gleich
-  aufgebauter Frage.
 
 # Priorität ("priority")
 - "high": [BETONT], Kerndefinitionen, zentrale Formeln, alles, was die Folien als zentral markieren
@@ -200,6 +208,10 @@ KAPITEL: {chapters}
 <nachbereitung>
 {notes}
 </nachbereitung>
+
+<klausur_und_uebungen>
+{exam_material}
+</klausur_und_uebungen>
 
 <dokumente>
 {documents}
@@ -433,6 +445,40 @@ def _exam_info(module: dict) -> str:
     return module.get("exam_note") or (f"Klausur am {module['exam_date']}" if module.get("exam_date") else "unbekannt")
 
 
+EXAM_STYLE_CHARS = 30000  # Altklausuren
+EXERCISE_STYLE_CHARS = 20000  # Übungsblätter + Lösungen
+
+
+def exam_style_material(cfg: dict, module_id: str, data: dict, chapter_ids: list[str] | None = None,
+                        exclude: set[str] | None = None) -> str:
+    """Altklausuren und Übungsblätter des Moduls als Maßstab für Karten und Quiz (gekürzt).
+
+    Übungsblätter zu den gewählten Kapiteln zuerst, danach die übrigen, solange Platz ist.
+    """
+    exclude = exclude or set()
+    parts, used = [], 0
+    for doc in documents_of(data, ("altklausur",)):
+        text = get_document_text(doc, with_page_markers=False).strip()
+        if text and used < EXAM_STYLE_CHARS:
+            text = text[:EXAM_STYLE_CHARS - used]
+            used += len(text)
+            parts.append(f"<altklausur name=\"{doc['filename']}\">\n{text}\n</altklausur>")
+    sheets = [d for d in documents_of(data, ("uebung", "loesung")) if d["id"] not in exclude]
+    chapter_of = ({ex["id"]: ex.get("chapter_id") for ex in all_units(cfg, get_module(cfg, module_id), data)[1]}
+                  if sheets and chapter_ids else {})
+    sheets.sort(key=lambda d: (not chapter_ids or chapter_of.get(d.get("unit"), d.get("chapter_id")) not in chapter_ids,
+                               d.get("unit") or ""))
+    used = 0
+    for doc in sheets:
+        text = get_document_text(doc, with_page_markers=False).strip()
+        if text and used < EXERCISE_STYLE_CHARS:
+            text = text[:EXERCISE_STYLE_CHARS - used]
+            used += len(text)
+            kind = "uebungsblatt" if doc["doc_type"] == "uebung" else "loesung"
+            parts.append(f"<{kind} name=\"{doc['filename']}\">\n{text}\n</{kind}>")
+    return "\n\n".join(parts)
+
+
 def answer_markdown(lines: list[str]) -> str:
     """Stichpunkte der KI als Markdown-Liste (Unterpunkte eingerückt, nummerierte Schritte bleiben nummeriert)."""
     out = []
@@ -470,12 +516,15 @@ def card_coverage(data: dict, unit: dict) -> list[dict]:
 
 
 def cards_cost_estimate(data: dict, unit: dict, only: dict[str, set[int]] | None = None) -> float:
-    """Grobe Kosten der Kartenerstellung: Eingabe ≈ Textlänge/3,5; Ausgabe ≈ 350 Tokens je Seite + Denken."""
+    """Grobe Kosten der Kartenerstellung: Eingabe ≈ Textlänge/3,5 (+ Altklausuren/Übungen); Ausgabe ≈ 200 Tokens je
+    Seite + Denken."""
     docs = _card_docs(data, unit)
     text = _card_documents(docs, only) + _card_notes(data, unit)
     n_pages = sum(len(v) for v in only.values()) if only else sum(len(get_document_pages(d)) for d in docs)
-    tokens_in = (len(CARDS_SYSTEM) + len(text) + 60 * len(data["cards"])) / 3.5
-    return ai.estimate_cost("cards", int(tokens_in), 350 * max(n_pages, 5) + 4000)
+    style = sum(min(d.get("n_chars", 0), EXAM_STYLE_CHARS) for d in documents_of(data, ("altklausur", "uebung", "loesung")))
+    tokens_in = (len(CARDS_SYSTEM) + len(text) + min(style, EXAM_STYLE_CHARS + EXERCISE_STYLE_CHARS)
+                 + 60 * len(data["cards"])) / 3.5
+    return ai.estimate_cost("cards", int(tokens_in), 200 * max(n_pages, 5) + 4000)
 
 
 def generate_unit_cards(cfg: dict, module_id: str, unit: dict, only: dict[str, set[int]] | None = None) -> int:
@@ -502,7 +551,9 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, only: dict[str, s
         focus=FOCUS_NOTE if only is not None else "",
         existing="\n".join(c["front"] for c in data["cards"]) or "keine",
         existing_defs="\n".join(d["term"] for d in defs.definitions(data)) or "keine",
-        notes=notes or "keine", documents=documents or "keine")
+        notes=notes or "keine", documents=documents or "keine",
+        exam_material=exam_style_material(cfg, module_id, data, [unit["chapter_id"]] if unit.get("chapter_id") else [],
+                                          exclude={d["id"] for d in docs}) or "keine hochgeladen")
     result = ai.complete_json(prompt, ai.CARDS_SCHEMA, system=CARDS_SYSTEM, max_tokens=64000, task="cards")
 
     def doc_sources(items: list[dict]) -> list[dict]:
@@ -595,6 +646,134 @@ def check_unit_cards(cfg: dict, module_id: str, unit: dict) -> int:
     data.setdefault("cards_checked", {})[unit["id"]] = now_iso()
     save_module(module_id)
     return found
+
+
+SLIM_PROMPT = """Die Karteikarten unten zur Einheit „{scope}“ im Modul „{module}“ sind zu viele, teils zu lang und
+doppeln sich. Die Nutzerin lernt mit einer Kombination aus Spaced Repetition (Karten = nur abrufbares Kernwissen) und
+einem Quiz im Stil der Übungen und Altklausuren (Rechnen, Anwenden, Aufgabentypen). KLAUSURFORMAT: {exam_format}
+
+Räume die Karten auf:
+- Maßstab ist die NACHBEREITUNG (was in der Vorlesung betont wurde bzw. in den Notizen steht) und was KLAUSUR &
+  ÜBUNGEN tatsächlich verlangen. Was dort keine Rolle spielt (Theorie-Details, Herleitungen, Beweise, Hintergrund,
+  Randbemerkungen, Beispiele), fliegt raus.
+- Doppelungen (gleicher Inhalt, auch anders formuliert oder als Definition + Formel getrennt): eine Karte behalten
+  und ggf. zusammenführen, die übrigen löschen.
+- Karten, die eigentlich Übungsaufgaben sind (konkretes Rechnen), löschen – das übt das Quiz.
+- Zu lange Antworten kürzen: 1–4 Stichpunkte im Telegrammstil, höchstens ~25 Wörter (Rechenschemata bis ~40),
+  ohne Aufzählungszeichen, Unterpunkte mit zwei führenden Leerzeichen, Formeln in LaTeX mit $...$.
+  Erklärung 30–80 Wörter Fließtext. keywords 2–6 Kernbegriffe exakt wie in der Antwort.
+- Richtwert danach: meist 6–15 Karten pro Vorlesung, 2–6 pro Übung. Inhalte nur aus Karte, Unterlagen oder
+  Nachbereitung – nichts erfinden.
+
+Ausgabe: "delete" = Karten, die wegfallen (card = Nummer, reason = kurzer Grund, z. B. „doppelt zu [3]“, „laut
+Nachbereitung nicht relevant“, „Übungsaufgabe – im Quiz“). "rewrite" = Karten, die bleiben, aber gekürzt oder mit
+gelöschten zusammengeführt werden (card = Nummer, neue front/answer/explanation/keywords, reason kurz). Karten, die
+weder gelöscht noch umgeschrieben werden, bleiben unverändert. Eine Karte nie in beiden Listen.
+
+<nachbereitung>
+{notes}
+</nachbereitung>
+
+<klausur_und_uebungen>
+{exam_material}
+</klausur_und_uebungen>
+
+<unterlagen>
+{material}
+</unterlagen>
+
+<karten>
+{cards}
+</karten>"""
+
+SLIM_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["delete", "rewrite"], "properties": {
+    "delete": {"type": "array", "items": {"type": "object", "additionalProperties": False,
+                                          "required": ["card", "reason"],
+                                          "properties": {"card": {"type": "integer"}, "reason": {"type": "string"}}}},
+    "rewrite": {"type": "array", "items": {"type": "object", "additionalProperties": False,
+                                           "required": ["card", "front", "answer", "explanation", "keywords", "reason"],
+                                           "properties": {"card": {"type": "integer"}, "front": {"type": "string"},
+                                                          "answer": {"type": "array", "items": {"type": "string"}},
+                                                          "explanation": {"type": "string"},
+                                                          "keywords": {"type": "array", "items": {"type": "string"}},
+                                                          "reason": {"type": "string"}}}}}}
+
+
+def _slim_scope(unit: dict) -> str:
+    title = unit.get("topic") or unit.get("title") or ""
+    return f"Vorlesung {unit.get('nr', '')} – {title}" if unit["kind"] == "lecture" else f"Übung – {title}"
+
+
+def slim_cost_estimate(data: dict, unit: dict) -> float:
+    cards = unit_cards(data, unit)
+    text = _card_documents(_card_docs(data, unit)) + _card_notes(data, unit)
+    size = len(text) + sum(len(c["front"]) + len(c["back"]) + len(c.get("explanation", "")) for c in cards)
+    return ai.estimate_cost("cards", int((size + EXAM_STYLE_CHARS) / 3.5), 4000 + 150 * len(cards))
+
+
+def propose_slim(cfg: dict, module_id: str, unit: dict) -> dict:
+    """KI schlägt vor, welche Karten einer Einheit wegfallen bzw. gekürzt werden. Wird erst nach Bestätigung
+    angewendet (apply_slim); bis dahin liegt der Vorschlag in data["card_slim"][unit_id]."""
+    module = get_module(cfg, module_id)
+    data = load_module(module_id)
+    cards = unit_cards(data, unit)
+    if not cards:
+        return {}
+    listing = "\n\n".join(f"[{i}] Frage: {c['front']}\nAntwort:\n{c['back']}\nErklärung: {c.get('explanation', '')}"
+                           for i, c in enumerate(cards, start=1))
+    docs = _card_docs(data, unit)
+    prompt = SLIM_PROMPT.format(
+        scope=_slim_scope(unit), module=module["name"], exam_format=exam_format(module)["label"],
+        notes=_card_notes(data, unit) or "keine",
+        exam_material=exam_style_material(cfg, module_id, data, [unit["chapter_id"]] if unit.get("chapter_id") else [],
+                                          exclude={d["id"] for d in docs}) or "keine hochgeladen",
+        material=_card_documents(docs) or "keine", cards=listing)
+    result = ai.complete_json(prompt, SLIM_SCHEMA, max_tokens=32000, task="cards")
+    proposal = {"created_at": now_iso(), "delete": [], "rewrite": []}
+    taken = set()
+    for item in result.get("delete", []):
+        if 1 <= item["card"] <= len(cards) and item["card"] not in taken:
+            taken.add(item["card"])
+            card = cards[item["card"] - 1]
+            proposal["delete"].append({"id": card["id"], "front": card["front"], "reason": item["reason"].strip()})
+    for item in result.get("rewrite", []):
+        if 1 <= item["card"] <= len(cards) and item["card"] not in taken and item["front"].strip():
+            taken.add(item["card"])
+            card = cards[item["card"] - 1]
+            proposal["rewrite"].append({"id": card["id"], "old_front": card["front"], "front": item["front"].strip(),
+                                        "back": answer_markdown(item["answer"]),
+                                        "explanation": item["explanation"].strip(),
+                                        "keywords": [k.strip() for k in item["keywords"] if k.strip()],
+                                        "reason": item["reason"].strip()})
+    data.setdefault("card_slim", {})[unit["id"]] = proposal
+    save_module(module_id)
+    return proposal
+
+
+def apply_slim(module_id: str, unit: dict) -> tuple[int, int]:
+    """Vorschlag übernehmen: Karten löschen bzw. kürzen (Lernstand gekürzter Karten bleibt). Gibt (gelöscht,
+    gekürzt) zurück. Definitionen im Reiter Definitionen bleiben erhalten."""
+    data = load_module(module_id)
+    proposal = data.get("card_slim", {}).pop(unit["id"], None) or {}
+    drop = {item["id"] for item in proposal.get("delete", [])}
+    by_id = {c["id"]: c for c in data["cards"]}
+    changed = 0
+    for item in proposal.get("rewrite", []):
+        if card := by_id.get(item["id"]):
+            card["previous"] = {f: card.get(f) for f in _CARD_TEXT_FIELDS}
+            card.update({f: item[f] for f in _CARD_TEXT_FIELDS})
+            changed += 1
+    before = len(data["cards"])
+    data["cards"] = [c for c in data["cards"] if c["id"] not in drop]
+    data.setdefault("cards_slimmed", {})[unit["id"]] = now_iso()
+    save_module(module_id)
+    return before - len(data["cards"]), changed
+
+
+def discard_slim(module_id: str, unit: dict) -> None:
+    data = load_module(module_id)
+    if data.get("card_slim", {}).pop(unit["id"], None) is not None:
+        save_module(module_id)
 
 
 def extract_definitions(cfg: dict, module_id: str, unit: dict) -> int:

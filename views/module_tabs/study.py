@@ -221,8 +221,21 @@ def coverage_panel(cfg: dict, module_id: str, unit: dict, key: str) -> None:
     flagged = sum(1 for c in cards if c.get("needs_review"))
     if flagged:
         st.caption(f"{flagged} Karte(n) sind als „bitte prüfen“ markiert – du siehst den Hinweis beim Lernen.")
-    c1, c2 = st.columns(2)
+    slim_panel(cfg, module_id, unit, cards, key)
+    c1, c2, c3 = st.columns(3)
     if cards:
+        cost = learning.slim_cost_estimate(data, unit)
+        if c3.button(f"Karten ausdünnen (ca. {max(1, round(cost * 100))} Cent)", key=f"slim_{key}",
+                     disabled=bool(data.get("card_slim", {}).get(unit["id"]))):
+            with st.spinner("Gehe die Karten mit deiner Nachbereitung, den Übungen und Altklausuren durch …"):
+                try:
+                    proposal = learning.propose_slim(cfg, module_id, unit)
+                    if not proposal.get("delete") and not proposal.get("rewrite"):
+                        learning.discard_slim(module_id, unit)
+                        st.session_state[f"genmsg_{unit['id']}"] = ("success", "Die Karten passen so.")
+                except ai.AIError as exc:
+                    st.session_state[f"genmsg_{unit['id']}"] = ("error", str(exc))
+            st.rerun()
         checked = data.get("cards_checked", {}).get(unit["id"])
         cost = learning.check_cost_estimate(data, unit)
         if c1.button(f"Karten gegen die Unterlagen prüfen (ca. {max(1, round(cost * 100))} Cent)",
@@ -243,6 +256,34 @@ def coverage_panel(cfg: dict, module_id: str, unit: dict, key: str) -> None:
                                                                             key=f"regen_{key}", type="primary"):
             learning.delete_unit_cards(module_id, unit)
             run_generation(cfg, module_id, unit)
+
+
+def slim_panel(cfg: dict, module_id: str, unit: dict, cards: list[dict], key: str) -> None:
+    """Vorschlag „Karten ausdünnen“ ansehen und übernehmen oder verwerfen."""
+    proposal = load_module(module_id).get("card_slim", {}).get(unit["id"])
+    if not proposal:
+        return
+    delete, rewrite = proposal.get("delete", []), proposal.get("rewrite", [])
+    with st.container(border=True):
+        st.markdown(f"**Vorschlag:** {len(cards)} → {len(cards) - len(delete)} Karten · {len(rewrite)} gekürzt")
+        if delete:
+            with st.expander(f"Löschen ({len(delete)})"):
+                st.markdown("\n".join(f"- ~~{d['front']}~~ – _{d['reason']}_" for d in delete))
+        if rewrite:
+            with st.expander(f"Kürzen / zusammenführen ({len(rewrite)})"):
+                for r in rewrite:
+                    st.markdown(f"**{r['front']}**  \n_{r['reason']}_")
+                    st.markdown(r["back"])
+                    st.divider()
+        c1, c2 = st.columns(2)
+        if c1.button("Übernehmen", key=f"slim_ok_{key}", type="primary", icon=":material/check:", width="stretch"):
+            removed, changed = learning.apply_slim(module_id, unit)
+            st.session_state[f"genmsg_{unit['id']}"] = (
+                "success", f"{removed} Karte(n) gelöscht, {changed} gekürzt.")
+            st.rerun()
+        if c2.button("Verwerfen", key=f"slim_no_{key}", icon=":material/close:", width="stretch"):
+            learning.discard_slim(module_id, unit)
+            st.rerun()
 
 
 def manual_card(module_id: str, data: dict, unit: dict | None, key: str) -> None:

@@ -129,7 +129,7 @@ def test_prep_and_quiz_formats(monkeypatch):
     assert exam_format(get_module(cfg, "mathe"))["type"] == "mc_multi"
     assert exam_format(get_module(cfg, "rewe"))["type"] == "sc4"
     assert exam_format(get_module(cfg, "statistik"))["type"] == "open"
-    assert exam_format(get_module(cfg, "vwl"))["type"] == "mixed"
+    assert exam_format(get_module(cfg, "vwl"))["type"] == "open"
 
     data = storage.load_module("mathe")
     lecs, _ = units.all_units(cfg, get_module(cfg, "mathe"), data)

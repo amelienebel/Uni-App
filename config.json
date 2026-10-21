@@ -797,8 +797,8 @@
       "color": "#8B5CF6",
       "ects": 6,
       "exam_format": {
-        "type": "mixed",
-        "label": "Noch unbekannt – Mix aus offenen Fragen und Multiple/Single Choice"
+        "type": "open",
+        "label": "Freier Text (offene Fragen)"
       },
       "exam_date": "2027-02-09",
       "keywords": [

@@ -7,7 +7,7 @@ import random
 import pandas as pd
 import streamlit as st
 
-from utils import ai
+from utils import ai, learning
 from utils.config import exam_format, get_module
 from utils.exam_analysis import OPERATORS, analyze_operators, analyze_structure
 from utils.storage import (add_document, chapter_label, delete_document, documents_of, get_document_text, load_module,
@@ -19,7 +19,10 @@ Anzahl Fragen: {n}. Fragetypen: {types}. Schwierigkeit: {difficulty}.
 KLAUSURFORMAT des Moduls: {exam_format}
 
 Anforderungen:
-- Orientiere dich am Stil deutscher Universitätsklausuren (LMU, 1. Semester BWL) und verwende typische
+- Liegen Altklausuren oder Übungsblätter bei: Stelle Aufgaben, wie sie dort gestellt werden – gleiche Aufgabentypen,
+  Formulierungen, Rechenumfang und Schwierigkeit, aber mit eigenen Zahlen/Fällen (keine Kopie). Abgefragt wird der
+  Stoff aus dem Kontext, nicht reine Definitionen, die schon Karteikarten abdecken: Anwenden, Rechnen, Erkennen.
+- Sonst orientiere dich am Stil deutscher Universitätsklausuren (LMU, 1. Semester BWL) und verwende typische
   Operatoren („Nennen Sie“, „Erläutern Sie“, „Berechnen Sie“, „Zeigen Sie rechnerisch“ …) – Feld operator.
 - Single Choice (type "mc"): genau 4 Antwortoptionen, genau eine richtig (correct_indices = [Index 0–3]),
   plausible Distraktoren (typische Denkfehler). sample_answer leer lassen.
@@ -43,7 +46,9 @@ EXAM_TYPE_TEXT = {
     "open": "nur freitext (wie in der Klausur: offene Fragen und Rechenaufgaben mit Detaillösung)",
     "mixed": "gemischt: etwa ein Drittel freitext, ein Drittel mc, ein Drittel mc_multi",
 }
-QUIZ_TYPES = ["Wie in der Klausur", "Gemischt", "Multiple/Single Choice", "Freitext"]
+QUIZ_TYPES = ["Wie in der Klausur", "Gemischt", "Multiple/Single Choice", "Freitext", "Übungsaufgaben"]
+EXERCISE_TYPE_TEXT = ("nur freitext im Stil der Übungsblätter: Rechen- bzw. Anwendungsaufgaben mit konkreten Zahlen "
+                      "oder Fällen, ggf. mit Teilaufgaben a), b), c); sample_answer mit vollständigem Lösungsweg")
 
 
 def correct_indices(q: dict) -> list[int]:
@@ -113,21 +118,21 @@ def build_quiz(cfg: dict, module_id: str, data: dict, n: int, types: str, diffic
         questions = _offline_quiz(data, chapter_ids, n)
         if types == QUIZ_TYPES[2]:
             questions = [q for q in questions if q["type"] == "mc"]
-        elif types == QUIZ_TYPES[3]:
+        elif types in QUIZ_TYPES[3:]:
             questions = [q for q in questions if q["type"] == "freitext"]
         return questions
     if context is None:
         context, _ = module_context(module_id)
     exam_hint = ""
-    exams = documents_of(data, ("altklausur",))
-    if use_exams and exams:
-        exam_hint = ("\nOrientiere dich an Aufbau und Stil dieser Altklausuren:\n<altklausuren>\n"
-                     + "\n\n".join(get_document_text(d) for d in exams) + "\n</altklausuren>\n")
+    style = learning.exam_style_material(cfg, module_id, data, chapter_ids) if use_exams else ""
+    if style:
+        exam_hint = ("\nOrientiere dich an Aufbau und Stil dieser Altklausuren und Übungsblätter:\n"
+                     "<klausur_und_uebungen>\n" + style + "\n</klausur_und_uebungen>\n")
     titles = scope_label or ", ".join(chapter_label(data, c) for c in chapter_ids) or "alle Kapitel"
     choice_type = {"mc_multi": "nur mc_multi", "sc4": "nur mc"}.get(fmt["type"], "mc und mc_multi gemischt")
     type_text = {QUIZ_TYPES[0]: EXAM_TYPE_TEXT[fmt["type"]],
                  QUIZ_TYPES[1]: "gemischt (ca. halb Auswahlfragen, halb freitext)",
-                 QUIZ_TYPES[2]: choice_type, QUIZ_TYPES[3]: "nur freitext"}[types]
+                 QUIZ_TYPES[2]: choice_type, QUIZ_TYPES[3]: "nur freitext", QUIZ_TYPES[4]: EXERCISE_TYPE_TEXT}[types]
     result = ai.complete_json(QUIZ_PROMPT.format(module=module["name"], chapters=titles, n=n, types=type_text,
                                                  difficulty=difficulty, exam_format=fmt["label"],
                                                  exam_hint=exam_hint, context=context), ai.QUIZ_SCHEMA)
@@ -159,7 +164,7 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
         types = c1.selectbox("Fragetyp", QUIZ_TYPES)
         n = c2.slider("Anzahl", 3, 20, 6)
         difficulty = c3.select_slider("Schwierigkeit", ["leicht", "mittel", "klausurnah", "schwer"], value="klausurnah")
-        use_exams = st.checkbox("Stil der hochgeladenen Altklausuren berücksichtigen", value=True, disabled=not has_ai)
+        use_exams = st.checkbox("Stil der Altklausuren und Übungsblätter", value=True, disabled=not has_ai)
         submitted = st.form_submit_button("Quiz erstellen", type="primary")
     if submitted:
         with st.spinner("Erstelle Quiz …"):

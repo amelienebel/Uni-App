@@ -336,18 +336,19 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     notes = lecture_notes(data, lec["id"])
     _handwriting(module, module_id, lec, notes)
     with st.form(f"lnotes_{module_id}_{lec['id']}"):
-        text = st.text_area("Meine Notizen aus der Vorlesung", notes["text"], height=220,
+        text = st.text_area("Notizen", notes["text"], height=220,
                             placeholder="Was habe ich mitgeschrieben? Formeln gern in LaTeX: $C_0 = ...$")
-        c1, c2 = st.columns(2)
-        emphasized = c1.text_area("Vom Dozenten betont", notes["emphasized"], height=130,
-                                  placeholder="„Das kommt dran!“, Wiederholungen, Tafelanschrieb …")
-        briefly = c2.text_area("Nur kurz angerissen", notes["briefly"], height=130,
-                               placeholder="Folien übersprungen, „nur zur Info“ …")
+        c1, c2, c3 = st.columns(3)
+        emphasized = c1.text_area("Sehr wichtig", notes["emphasized"], height=130)
+        briefly = c2.text_area("Nicht so wichtig", notes["briefly"], height=130)
+        skip = c3.text_area("Streichen", notes["skip"], height=130)
+        card_hint = st.text_area("Hinweis zur Kartenerstellung", notes["card_hint"], height=80)
         b1, b2 = st.columns(2)
         save = b1.form_submit_button("Speichern", width="stretch")
         finish = b2.form_submit_button("✓ Speichern & Nachbereitung abschließen", type="primary", width="stretch")
     if save or finish:
-        notes.update({"text": text, "emphasized": emphasized, "briefly": briefly, "updated_at": now_iso()})
+        notes.update({"text": text, "emphasized": emphasized, "briefly": briefly, "skip": skip,
+                      "card_hint": card_hint, "updated_at": now_iso()})
         save_module(module_id)
         if finish:
             _set_done(module_id, lec, "nachbereitet")
@@ -407,7 +408,7 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     if old and any((old.get(k) or "").strip() for k in ("text", "emphasized", "briefly", "examples")):
         with st.expander("Ältere Notizen zu diesem Kapitel"):
             old = get_notes(data, lec["chapter_id"])
-            for field, label in (("text", "Notizen"), ("emphasized", "Betont"), ("briefly", "Kurz angerissen"),
+            for field, label in (("text", "Notizen"), ("emphasized", "Sehr wichtig"), ("briefly", "Nicht so wichtig"),
                                  ("examples", "Beispiele")):
                 if old[field].strip():
                     st.markdown(f"**{label}:**\n\n{old[field]}")
@@ -427,7 +428,7 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
         st.caption("Tipp: Nach der Nachbereitung „Karten ergänzen“ – dann fließen deine Notizen mit ein.")
     elif not cards and not has_notes(data, lec["id"]):
         st.caption("Karten entstehen erst, wenn du auf „Karteikarten erstellen“ klickst – am besten nach der "
-                   "Vorlesung, wenn du in der Nachbereitung eingetragen hast, was betont oder nur kurz angerissen "
+                   "Vorlesung, wenn du in der Nachbereitung eingetragen hast, was sehr wichtig oder nicht so wichtig "
                    "wurde.")
     if has_ai or cards or unit_docs(data, lec):
         study.generate_button(cfg, module_id, lec, cards, key=lec["id"])

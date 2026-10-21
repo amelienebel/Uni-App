@@ -73,20 +73,24 @@ Getippten vergleichbar sein.
 # Ziel
 Karteikarten sind nur EIN Teil des Lernens: Spaced Repetition für das Wissen, das man sicher aus dem Kopf können muss,
 um die Klausur- und Übungsaufgaben zu lösen. Rechnen, Anwenden und Aufgabentypen übt die Nutzerin in einem eigenen
-Quiz im Stil der Übungen und Altklausuren – NICHT mit Karten. Darum: wenige, kurze, scharfe Karten statt
-Vollständigkeit um jeden Preis. Lieber eine Karte zu wenig als drei zu viel; jede Karte kostet täglich Lernzeit.
+Quiz im Stil der Übungen und Altklausuren – NICHT mit Karten. Darum: kurze, scharfe Karten statt Vollständigkeit um
+jeden Preis. Jede Karte kostet täglich Lernzeit – sie muss sich lohnen.
 
 # Quellen und Gewichtung
 1. DOKUMENTE (<dokument nr="N">): Seiten markiert mit „--- Folie N ---“ (Folien), „--- Skript S. N ---“ (Skript)
    oder „--- Seite N ---“ (Übungsblatt, Lösung, Sonstiges). Inhaltliche Quelle der Karten.
 2. NACHBEREITUNG der Nutzerin – der wichtigste Maßstab dafür, WAS eine Karte bekommt:
-   - [NOTIZEN] – eigene Mitschrift. Was nicht auf den Folien steht, wie Folieninhalt behandeln.
-   - [BETONT] – in der Vorlesung hervorgehoben ⇒ eigene Karte, priority "high".
-   - [ANGERISSEN] – nur kurz erwähnt ⇒ höchstens eine knappe Karte, priority "low", meist gar keine.
-   - [BEISPIELE] – nur zur Veranschaulichung in "explanation", nie als eigene Karte.
+   - [HINWEIS] – allgemeine Vorgabe der Nutzerin, wie die Karten zu dieser Einheit aussehen sollen ⇒ hat Vorrang vor
+     allen Regeln hier (außer: nichts erfinden).
+   - [NOTIZEN] – eigene Mitschrift; fließt inhaltlich ein. Was nicht auf den Folien steht, wie Folieninhalt behandeln.
+   - [SEHR WICHTIG] – ⇒ eigene Karte(n), priority "high", gründlich genug, dass man es in der Klausur sicher kann.
+   - [NICHT SO WICHTIG] – ⇒ höchstens eine knappe Karte, priority "low", oder gar keine.
+   - [STREICHEN] – nicht klausurrelevant ⇒ KEINE Karte, betroffene Seiten in "skipped" („laut Nachbereitung
+     gestrichen“). Auch nicht in anderen Karten abfragen.
+   - [BEISPIELE] – (ältere Notizen) nur zur Veranschaulichung in "explanation", nie als eigene Karte.
    - [TAFELBILD] – abgetippte Tafelbilder/Screenshots ⇒ wie Notizen.
-   Gibt es eine Nachbereitung, bekommen Folieninhalte, die dort weder vorkommen noch betont wurden und die auch in
-   KLAUSUR & ÜBUNGEN keine Rolle spielen, KEINE Karte („laut Nachbereitung nicht relevant“ in "skipped").
+   Gibt es eine Nachbereitung, bekommen Folieninhalte, die dort weder vorkommen noch als wichtig markiert wurden und
+   die auch in KLAUSUR & ÜBUNGEN keine Rolle spielen, keine Karte („laut Nachbereitung nicht relevant“).
 3. KLAUSUR & ÜBUNGEN (<klausur_und_uebungen>): Altklausuren und Übungsblätter des Moduls. Keine Kartenquelle,
    sondern Maßstab: Was dort gefragt bzw. gerechnet wird, ist relevant; Karten liefern genau das Wissen (Begriff,
    Bedingung, Formel, Vorgehen), das man dafür parat haben muss – im Detailgrad, den die Aufgaben verlangen.
@@ -104,8 +108,9 @@ Leitfrage für jede Karte: Brauche ich das als abrufbares Wissen, um eine Klausu
   Satz/Regel mit Bedingung, Formel, Rechenschema in wenigen Schritten. Kein Theorie-Detail, keine Varianten
   derselben Regel als eigene Karten. Das Üben übernimmt das Quiz.
 - Anwendungskarten ("application") nur sparsam, wenn ein Konzept ohne Anwendung nicht zu verstehen ist.
-- Richtwert: ca. 1 Karte pro 3 Inhaltsfolien; insgesamt meist 6–15 Karten pro Vorlesung, nur bei sehr dichtem,
-  laut Nachbereitung wichtigem Stoff mehr. Übungen: 2–6 Karten (Vorgehen/Schema, keine Zahlen).
+- Anzahl nach Ermessen, keine feste Zahl: so viele wie nötig, so wenige wie möglich. Eine Vorlesung mit wenig
+  Klausurrelevantem braucht nur wenige Karten; dichter, laut Nachbereitung wichtiger Stoff auch mal bis ~30.
+  Übungen: nur Vorgehen/Schema, keine Zahlen.
 - Prüfungsform beachten (PRÜFUNG im Input): Open Book ⇒ keine Karten zu reinem Nachschlagewissen.
 - Klausurformat beachten (KLAUSURFORMAT im Input) – als Gewichtung:
   - Multiple Choice (mehrere richtig) ⇒ Karten zu genauen Bedingungen, Ausnahmen und typischen Fehlvorstellungen.
@@ -158,7 +163,8 @@ geübt“). Keine Seite auslassen – aber eine Seite überspringen ist ausdrüc
   der Antwort). Daran prüft die App die getippte Antwort.
 
 # Erklärung ("explanation")
-30–80 Wörter Fließtext, Ziel: echtes Verständnis statt Auswendiglernen. Nicht die Musterantwort wiederholen.
+Fließtext, so kurz wie möglich und so lang wie nötig, höchstens ~80 Wörter. Ziel: echtes Verständnis statt
+Auswendiglernen. Nicht die Musterantwort wiederholen.
 Wenn passend: wie das in Klausur- oder Übungsaufgaben gefragt wird.
 - Warum ist das so / wozu braucht man es?
 - Intuition oder Alltagsbeispiel
@@ -172,9 +178,9 @@ Wenn passend: wie das in Klausur- oder Übungsaufgaben gefragt wird.
 - Ein Konzept = eine Karte; Teilaspekte als Stichpunkte in diese Karte.
 
 # Priorität ("priority")
-- "high": [BETONT], Kerndefinitionen, zentrale Formeln, alles, was die Folien als zentral markieren
+- "high": [SEHR WICHTIG], Kerndefinitionen, zentrale Formeln, alles, was die Folien als zentral markieren
 - "normal": Standard
-- "low": [ANGERISSEN], Randaspekte
+- "low": [NICHT SO WICHTIG], Randaspekte
 Die App plant damit bis zur Prüfung (high zuerst und öfter, low zuletzt) – bewusst vergeben, nicht alles "high".
 
 # Quellen
@@ -237,7 +243,8 @@ Kriterien, Widersprüche zu den Unterlagen. Stil, Länge und Formulierung ignori
 
 # Seitenmarker je Dokumentart; eigene Lösungen sind keine Kartenquelle (können Fehler enthalten)
 _PAGE_LABELS = {"folien": "Folie", "skript": "Skript S."}
-_NOTE_MARKERS = (("text", "NOTIZEN"), ("emphasized", "BETONT"), ("briefly", "ANGERISSEN"), ("examples", "BEISPIELE"))
+_NOTE_MARKERS = (("card_hint", "HINWEIS"), ("text", "NOTIZEN"), ("emphasized", "SEHR WICHTIG"),
+                 ("briefly", "NICHT SO WICHTIG"), ("skip", "STREICHEN"), ("examples", "BEISPIELE"))
 
 DEFINITIONS_PROMPT = """Sammle alle Definitionen aus den Unterlagen der Einheit „{title}“ im Modul „{module}“.
 Jeder Fachbegriff, der in Folien, Skript oder meinen Notizen definiert oder erklärt wird: term + präzise
@@ -373,8 +380,9 @@ def script_docs(data: dict, doc: dict) -> list[dict]:
 def _notes_material(data: dict, unit: dict) -> str:
     notes = lecture_notes(data, unit["id"])
     parts = [f"{label}:\n{notes[field]}" for field, label in
-             (("text", "Meine Notizen"), ("emphasized", "Vom Dozenten betont"),
-              ("briefly", "Nur kurz angerissen"), ("examples", "Genannte Beispiele")) if notes[field].strip()]
+             (("text", "Meine Notizen"), ("emphasized", "Sehr wichtig"), ("briefly", "Nicht so wichtig"),
+              ("skip", "Nicht klausurrelevant (gestrichen)"), ("examples", "Genannte Beispiele"))
+             if (notes.get(field) or "").strip()]
     parts += [f"Tafelbild „{img['name']}“:\n{img['transcript']}" for img in notes["images"]
               if img.get("transcript") and not img.get("in_notes")]
     return "\n\n".join(parts)
@@ -421,7 +429,8 @@ def _card_notes(data: dict, unit: dict) -> str:
     if unit["kind"] != "lecture":
         return ""
     notes = lecture_notes(data, unit["id"])
-    parts = [f"[{marker}]\n{notes[field].strip()}" for field, marker in _NOTE_MARKERS if notes[field].strip()]
+    parts = [f"[{marker}]\n{notes[field].strip()}" for field, marker in _NOTE_MARKERS
+             if (notes.get(field) or "").strip()]
     parts += [f"[TAFELBILD] „{img['name']}“\n{img['transcript']}" for img in notes["images"]
               if img.get("transcript") and not img.get("in_notes")]
     return "\n\n".join(parts)
@@ -653,17 +662,17 @@ doppeln sich. Die Nutzerin lernt mit einer Kombination aus Spaced Repetition (Ka
 einem Quiz im Stil der Übungen und Altklausuren (Rechnen, Anwenden, Aufgabentypen). KLAUSURFORMAT: {exam_format}
 
 Räume die Karten auf:
-- Maßstab ist die NACHBEREITUNG (was in der Vorlesung betont wurde bzw. in den Notizen steht) und was KLAUSUR &
-  ÜBUNGEN tatsächlich verlangen. Was dort keine Rolle spielt (Theorie-Details, Herleitungen, Beweise, Hintergrund,
+- Maßstab ist die NACHBEREITUNG und was KLAUSUR & ÜBUNGEN tatsächlich verlangen: [HINWEIS] hat Vorrang;
+  [SEHR WICHTIG] bleibt (priority high); [NICHT SO WICHTIG] höchstens knapp; [STREICHEN] fliegt komplett raus. Was dort keine Rolle spielt (Theorie-Details, Herleitungen, Beweise, Hintergrund,
   Randbemerkungen, Beispiele), fliegt raus.
 - Doppelungen (gleicher Inhalt, auch anders formuliert oder als Definition + Formel getrennt): eine Karte behalten
   und ggf. zusammenführen, die übrigen löschen.
 - Karten, die eigentlich Übungsaufgaben sind (konkretes Rechnen), löschen – das übt das Quiz.
 - Zu lange Antworten kürzen: 1–4 Stichpunkte im Telegrammstil, höchstens ~25 Wörter (Rechenschemata bis ~40),
   ohne Aufzählungszeichen, Unterpunkte mit zwei führenden Leerzeichen, Formeln in LaTeX mit $...$.
-  Erklärung 30–80 Wörter Fließtext. keywords 2–6 Kernbegriffe exakt wie in der Antwort.
-- Richtwert danach: meist 6–15 Karten pro Vorlesung, 2–6 pro Übung. Inhalte nur aus Karte, Unterlagen oder
-  Nachbereitung – nichts erfinden.
+  Erklärung so kurz wie möglich, höchstens ~80 Wörter. keywords 2–6 Kernbegriffe exakt wie in der Antwort.
+- Keine feste Zielzahl – nach Ermessen so viele wie nötig, so wenige wie möglich. Inhalte nur aus Karte,
+  Unterlagen oder Nachbereitung – nichts erfinden.
 
 Ausgabe: "delete" = Karten, die wegfallen (card = Nummer, reason = kurzer Grund, z. B. „doppelt zu [3]“, „laut
 Nachbereitung nicht relevant“, „Übungsaufgabe – im Quiz“). "rewrite" = Karten, die bleiben, aber gekürzt oder mit
@@ -854,7 +863,7 @@ REWRITE_PROMPT = """Überarbeite diese Karteikarte nach dem Feedback der Nutzeri
 Setze das Feedback um, ändere sonst so wenig wie möglich. Inhaltlich nur, was in Karte oder Quelle steht – nichts
 erfinden. Regeln: Frage eigenständig verständlich und präzise; Antwort als Stichpunkte im Telegrammstil (ein
 Stichpunkt pro Listenelement, ohne Aufzählungszeichen, Unterpunkte mit zwei führenden Leerzeichen); Formeln in
-LaTeX mit $...$; Erklärung 40–120 Wörter Fließtext fürs Verständnis; keywords 2–6 Kernbegriffe exakt wie in der
+LaTeX mit $...$; Erklärung höchstens ~80 Wörter Fließtext fürs Verständnis; keywords 2–6 Kernbegriffe exakt wie in der
 Antwort geschrieben.
 
 <karte>

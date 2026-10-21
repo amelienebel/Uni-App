@@ -127,9 +127,14 @@ def unit_docs(data: dict, unit: dict) -> list[dict]:
     return own + legacy
 
 
+# Felder der Nachbereitung (Schlüssel bleiben für ältere Daten gleich; „examples“ nur noch aus älteren Notizen)
+NOTE_FIELDS = (("text", "Notizen"), ("emphasized", "Sehr wichtig"), ("briefly", "Nicht so wichtig"),
+               ("skip", "Streichen"), ("card_hint", "Hinweis zur Kartenerstellung"), ("examples", "Genannte Beispiele"))
+
+
 def lecture_notes(data: dict, unit_id: str) -> dict:
     notes = data.setdefault("lecture_notes", {}).setdefault(unit_id, {})
-    for field in ("text", "emphasized", "briefly", "examples"):
+    for field, _ in NOTE_FIELDS:
         notes.setdefault(field, "")
     notes.setdefault("images", [])
     return notes
@@ -137,7 +142,7 @@ def lecture_notes(data: dict, unit_id: str) -> dict:
 
 def has_notes(data: dict, unit_id: str) -> bool:
     notes = data.get("lecture_notes", {}).get(unit_id) or {}
-    return any((notes.get(k) or "").strip() for k in ("text", "emphasized", "briefly", "examples")) \
+    return any((notes.get(k) or "").strip() for k, _ in NOTE_FIELDS) \
         or any(img.get("transcript") for img in notes.get("images", []))
 
 

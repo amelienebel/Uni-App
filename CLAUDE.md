@@ -28,10 +28,12 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
 
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als
-  Maßstab ein (`learning.exam_style_material`), was relevant ist. Wenige, kurze Karten (meist 6–15 pro Vorlesung,
-  Antwort ≤ ~25 Wörter, Erklärung 30–80 Wörter), keine Doppelungen, keine Theorie-Details/Herleitungen – Rechnen und
-  Anwenden übt das Quiz (Typ „Übungsaufgaben“, Stil der Übungen/Altklausuren). Nachbereitung entscheidet: „betont“ →
-  high, „kurz angerissen“ → low oder keine Karte, nicht Erwähntes ohne Klausurbezug → überspringen. Keine Karten,
+  Maßstab ein (`learning.exam_style_material`), was relevant ist. Kurze Karten, Anzahl nach Ermessen (keine feste
+  Zahl, so wenige wie möglich, bei dichtem Stoff auch bis ~30), Antwort ≤ ~25 Wörter, Erklärung höchstens ~80 Wörter,
+  keine Doppelungen, keine Theorie-Details/Herleitungen – Rechnen und
+  Anwenden übt das Quiz (Typ „Übungsaufgaben“, Stil der Übungen/Altklausuren). Nachbereitung entscheidet: „Hinweis zur
+  Kartenerstellung“ hat Vorrang, „Sehr wichtig“ → high, „Nicht so wichtig“ → low oder keine Karte, „Streichen“ →
+  keine Karte, nicht Erwähntes ohne Klausurbezug → überspringen. Keine Karten,
   die Beispiele abfragen; jede Definitionskarte → auch Reiter Definitionen. Lehrbuch nur im Tutor. Jede Seite: Karte
   oder Grund fürs Überspringen. „Karten ausdünnen“ (`learning.propose_slim`/`apply_slim`) räumt bestehende Karten
   einer Einheit auf – erst Vorschlag, dann Übernehmen.
@@ -41,7 +43,8 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
 - Vorbereiten (Haiku, effort low): Must-Watch (2–3 Folien), Tabelle Folie | Begriff | Kurzerklärung | Worauf achten,
   Zusammenfassung entlang der Folien als Stichpunkte (3–6 verständliche Unterpunkte, ergänzend zur Folie, ohne Vorwissen
   verständlich), 5 Quizfragen im Klausurformat – kein Fließtext, alles mit Foliennummer.
-- Nachbereiten: nur Notizen, „betont“, „kurz angerissen“ – kein Feld für genannte Beispiele.
+- Nachbereiten: Notizen, „Sehr wichtig“, „Nicht so wichtig“, „Streichen“ und „Hinweis zur Kartenerstellung“
+  (Felder in `units.NOTE_FIELDS`; Schlüssel emphasized/briefly/skip/card_hint) – kein Feld für genannte Beispiele.
 - Die Vorbereitung entsteht erst, nachdem die Nutzerin bei Seiten mit Abbildungen gewählt hat, welche genau gelesen
   werden (`learning.pending_figures`); ohne Abbildungen direkt nach dem Upload.
 - Keine erklärenden Hinweistexte in der Oberfläche ergänzen (Nutzerin hat sie bewusst entfernen lassen).

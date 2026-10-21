@@ -257,15 +257,15 @@ def module_context(module_id: str, include_fulltext: bool = False) -> tuple[str,
             continue
         notes = get_notes(data, ch["id"])
         content = [f"{label}: {notes[field]}" for field, label in
-                   (("text", "Notizen"), ("emphasized", "Vom Dozenten betont"),
-                    ("briefly", "Nur kurz angerissen"), ("examples", "Beispiele aus der Vorlesung"))
+                   (("text", "Notizen"), ("emphasized", "Sehr wichtig"),
+                    ("briefly", "Nicht so wichtig"), ("examples", "Beispiele aus der Vorlesung"))
                    if notes.get(field, "").strip()]
         if content:
             notes_parts.append(f"### {chapter_label(data, ch['id'])}\n" + "\n".join(content))
     for unit_id, notes in sorted(data.get("lecture_notes", {}).items()):
         content = [f"{label}: {notes[field]}" for field, label in
-                   (("text", "Notizen"), ("emphasized", "Vom Dozenten betont"),
-                    ("briefly", "Nur kurz angerissen"), ("examples", "Beispiele aus der Vorlesung"))
+                   (("text", "Notizen"), ("emphasized", "Sehr wichtig"),
+                    ("briefly", "Nicht so wichtig"), ("examples", "Beispiele aus der Vorlesung"))
                    if (notes.get(field) or "").strip()]
         content += [f"Tafelbild: {img['transcript']}" for img in notes.get("images", []) if img.get("transcript")]
         if content:

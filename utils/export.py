@@ -54,8 +54,8 @@ def build_blocks(cfg: dict, modules_data: dict[str, dict], module_ids: list[str]
                 if notes and any(notes.get(k) for k in ("text", "emphasized", "briefly", "examples", "pitch")):
                     notes = get_notes(data, ch["id"])
                     ch_blocks.append(("h3", "Eigene Notizen"))
-                    for field, label in (("text", "Notizen"), ("emphasized", "Vom Dozenten betont"),
-                                         ("briefly", "Nur kurz angerissen"), ("examples", "Genannte Beispiele")):
+                    for field, label in (("text", "Notizen"), ("emphasized", "Sehr wichtig"),
+                                         ("briefly", "Nicht so wichtig"), ("examples", "Genannte Beispiele")):
                         if notes.get(field, "").strip():
                             ch_blocks.append(("h4", label))
                             ch_blocks.append(("p", notes[field]))
@@ -67,8 +67,8 @@ def build_blocks(cfg: dict, modules_data: dict[str, dict], module_ids: list[str]
                         continue
                     ch_blocks.append(("h3", f"Nachbereitung Vorlesung {lec['date'][8:10]}.{lec['date'][5:7]}.: "
                                             f"{lec.get('topic', '')}"))
-                    for field, label in (("text", "Notizen"), ("emphasized", "Vom Dozenten betont"),
-                                         ("briefly", "Nur kurz angerissen"), ("examples", "Genannte Beispiele")):
+                    for field, label in (("text", "Notizen"), ("emphasized", "Sehr wichtig"),
+                                         ("briefly", "Nicht so wichtig"), ("examples", "Genannte Beispiele")):
                         if (notes.get(field) or "").strip():
                             ch_blocks.append(("h4", label))
                             ch_blocks.append(("p", notes[field]))

@@ -110,7 +110,7 @@ def test_generate_cards_with_coverage(monkeypatch):
 
     monkeypatch.setattr(ai, "complete_json", fake_json)
     assert learning.generate_unit_cards({}, "m", unit) == 1
-    assert "[BETONT]\nRisiko!" in seen["prompt"] and "--- Folie 2 ---" in seen["prompt"]
+    assert "[SEHR WICHTIG]\nRisiko!" in seen["prompt"] and "--- Folie 2 ---" in seen["prompt"]
     assert seen["system"] == learning.CARDS_SYSTEM and seen["task"] == "cards"
     card = data["cards"][0]
     assert card["back"] == "- Streuung der Rendite\n  - um den Erwartungswert"
@@ -137,13 +137,15 @@ def test_exam_style_and_slim(monkeypatch):
     monkeypatch.setattr(learning, "get_document_text",
                         lambda doc, **kw: {"k1": "Aufgabe 1: Bestimmen Sie f'(x)", "b1": "Blatt: Ableiten"}[doc["id"]])
     monkeypatch.setattr(learning, "get_document_pages", lambda _doc: [])
-    monkeypatch.setattr(learning, "lecture_notes", lambda _d, _u: {"text": "", "emphasized": "Kettenregel",
-                                                                   "briefly": "", "examples": "", "images": []})
+    monkeypatch.setattr(learning, "lecture_notes", lambda _d, _u: {"text": "", "emphasized": "Kettenregel", "skip": "Beweis",
+                                                                   "card_hint": "kurz", "briefly": "", "examples": "",
+                                                                   "images": []})
     style = learning.exam_style_material({}, "m", data)
     assert "Bestimmen Sie" in style and "Blatt: Ableiten" in style
 
     def fake_json(prompt, schema, **kw):
-        assert "Kettenregel" in prompt and "Bestimmen Sie" in prompt and "[3] Frage: Frage 3" in prompt
+        assert "[SEHR WICHTIG]\nKettenregel" in prompt and "[STREICHEN]\nBeweis" in prompt
+        assert "[HINWEIS]\nkurz" in prompt and "Bestimmen Sie" in prompt and "[3] Frage: Frage 3" in prompt
         return {"delete": [{"card": 2, "reason": "doppelt zu [1]"}],
                 "rewrite": [{"card": 1, "front": "Kettenregel?", "answer": ["$f(g(x))' = f'(g(x))g'(x)$"],
                              "explanation": "…", "keywords": ["f'(g(x))"], "reason": "kürzer"},

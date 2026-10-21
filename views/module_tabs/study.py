@@ -165,7 +165,7 @@ def generate_button(cfg: dict, module_id: str, unit: dict, existing: list[dict],
         run_generation(cfg, module_id, unit)
     if cost and not existing:
         st.caption(f"Geschätzte Kosten: ca. {max(1, round(cost * 100))} Cent · Am besten erst nach der "
-                   "Nachbereitung (betont / kurz angerissen eingetragen).")
+                   "Nachbereitung (sehr wichtig / nicht so wichtig / streichen eingetragen).")
 
 
 def run_generation(cfg: dict, module_id: str, unit: dict, existing: list[dict] | None = None,

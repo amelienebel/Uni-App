@@ -2,6 +2,13 @@
 
 Nutzerin ist Nicht-Programmiererin: Antworten auf Deutsch, einfach erklärt. Nach jeder Änderung: testen,
 committen, auf den Arbeits-Branch pushen und sagen, dass sie auf share.streamlit.io „Reboot app“ drücken muss.
+
+**WICHTIG – sonst kommt nichts in der App an:** Die App auf share.streamlit.io läuft vom Branch
+`claude/streamlit-bwl-learning-platform-c129um` (Standard-Branch des Repos). Jede fertige, getestete Änderung
+zusätzlich dorthin bringen: `git fetch origin claude/streamlit-bwl-learning-platform-c129um`, den Branch in den
+Arbeits-Branch mergen (Konflikte lösen, erneut testen), dann
+`git push origin HEAD:claude/streamlit-bwl-learning-platform-c129um`. Die Nutzerin hat das ausdrücklich so
+gewünscht (dauerhafte Erlaubnis). Erst danach „Reboot app“ sagen. Nie force-pushen.
 Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
 
 ## Aufbau

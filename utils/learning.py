@@ -83,6 +83,8 @@ jeden Preis. Jede Karte kostet täglich Lernzeit – sie muss sich lohnen.
    - [HINWEIS] – allgemeine Vorgabe der Nutzerin, wie die Karten zu dieser Einheit aussehen sollen ⇒ hat Vorrang vor
      allen Regeln hier (außer: nichts erfinden).
    - [NOTIZEN] – eigene Mitschrift; fließt inhaltlich ein. Was nicht auf den Folien steht, wie Folieninhalt behandeln.
+     Vermerke darin gelten wie die Kategorien: „nicht relevant“, „kommt nicht dran“, „überspringen“ ⇒ wie
+     [STREICHEN]; „wichtig“, „kommt dran“, „klausurrelevant“ ⇒ wie [SEHR WICHTIG].
    - [SEHR WICHTIG] – ⇒ eigene Karte(n), priority "high", gründlich genug, dass man es in der Klausur sicher kann.
    - [NICHT SO WICHTIG] – ⇒ höchstens eine knappe Karte, priority "low", oder gar keine.
    - [STREICHEN] – nicht klausurrelevant ⇒ KEINE Karte, betroffene Seiten in "skipped" („laut Nachbereitung
@@ -663,7 +665,8 @@ einem Quiz im Stil der Übungen und Altklausuren (Rechnen, Anwenden, Aufgabentyp
 
 Räume die Karten auf:
 - Maßstab ist die NACHBEREITUNG und was KLAUSUR & ÜBUNGEN tatsächlich verlangen: [HINWEIS] hat Vorrang;
-  [SEHR WICHTIG] bleibt (priority high); [NICHT SO WICHTIG] höchstens knapp; [STREICHEN] fliegt komplett raus. Was dort keine Rolle spielt (Theorie-Details, Herleitungen, Beweise, Hintergrund,
+  [SEHR WICHTIG] bleibt (priority high); [NICHT SO WICHTIG] höchstens knapp; [STREICHEN] fliegt komplett raus.
+  Vermerke in [NOTIZEN] wie „nicht relevant“ bzw. „wichtig, kommt dran“ gelten genauso. Was dort keine Rolle spielt (Theorie-Details, Herleitungen, Beweise, Hintergrund,
   Randbemerkungen, Beispiele), fliegt raus.
 - Doppelungen (gleicher Inhalt, auch anders formuliert oder als Definition + Formel getrennt): eine Karte behalten
   und ggf. zusammenführen, die übrigen löschen.
@@ -826,9 +829,10 @@ def page_cost_estimate(n_pages: int) -> float:
     return ai.estimate_cost("summary", 1600 * n_pages + 500, 500 * n_pages)
 
 
-def read_pages_visual(cfg: dict, module_id: str, doc: dict, pages: list[int]) -> str:
-    """Liest nur die ausgewählten Seiten als Bild (Abbildungen, Formeln) und ersetzt dort den Textauszug.
-    Danach wird die Zusammenfassung mit dem vollständigen Text neu erstellt."""
+def read_pages_visual(cfg: dict, module_id: str, doc: dict, pages: list[int], update_prep: bool = True) -> str:
+    """Liest nur die ausgewählten Seiten als Bild (Abbildungen, Formeln) und ersetzt dort den Textauszug –
+    davon profitieren Karten, Quiz und Tutor. update_prep: danach die Vorbereitung neu erstellen (beim genauen
+    Lesen für die Nachbereitung nur, wenn es schon eine gibt)."""
     import io
 
     from pypdf import PdfReader, PdfWriter
@@ -855,6 +859,8 @@ def read_pages_visual(cfg: dict, module_id: str, doc: dict, pages: list[int]) ->
     set_document_pages(doc, texts, "teilweise-genau")
     doc["visual_pages"] = sorted(set(doc.get("visual_pages", [])) | set(pages))
     save_module(module_id)
+    if not update_prep:
+        return f"{len(pages)} Seite(n) genau gelesen."
     run_analysis(cfg, module_id, doc, visual=False)  # Zusammenfassung mit den neuen Inhalten
     return f"{len(pages)} Seite(n) genau gelesen und die Zusammenfassung aktualisiert."
 

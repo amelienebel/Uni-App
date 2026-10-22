@@ -158,3 +158,28 @@ def test_exam_style_and_slim(monkeypatch):
     assert learning.apply_slim("m", unit) == (1, 1)
     assert [c["id"] for c in data["cards"]] == ["x1", "x3"] and data["cards"][0]["front"] == "Kettenregel?"
     assert data["cards"][0]["previous"]["front"] == "Frage 1" and not data["card_slim"]
+
+
+def test_read_pages_without_prep(monkeypatch):
+    import io
+
+    from pypdf import PdfWriter
+
+    from utils import ai, learning
+
+    writer = PdfWriter()
+    for _ in range(3):
+        writer.add_blank_page(100, 100)
+    buf = io.BytesIO()
+    writer.write(buf)
+    doc = {"id": "d1", "filename": "VL2.pdf", "doc_type": "folien", "path": "x.pdf", "analysis": None}
+    stored = {}
+    monkeypatch.setattr(learning, "get_module", lambda _cfg, _mid: {"name": "Mathe"})
+    monkeypatch.setattr(learning, "read_data_file", lambda _p: buf.getvalue())
+    monkeypatch.setattr(learning, "get_document_pages", lambda _doc: ["a", "b", "c"])
+    monkeypatch.setattr(learning, "set_document_pages", lambda _doc, pages, _m: stored.update(pages=pages))
+    monkeypatch.setattr(learning, "save_module", lambda _mid: None)
+    monkeypatch.setattr(learning, "run_analysis", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("Vorbereitung")))
+    monkeypatch.setattr(ai, "complete_json", lambda *a, **kw: {"slides": [{"page": 1, "text": "Grafik: f(x)"}]})
+    assert learning.read_pages_visual({}, "m", doc, [2], update_prep=False) == "1 Seite(n) genau gelesen."
+    assert stored["pages"] == ["a", "Grafik: f(x)", "c"] and doc["visual_pages"] == [2]

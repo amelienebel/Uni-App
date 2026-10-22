@@ -32,6 +32,9 @@ Anforderungen:
   explanation begründet jede Option kurz. sample_answer leer lassen.
 - Freitext (type "freitext"): Rechen- oder Erklärungsaufgabe mit konkreten Zahlen, wo sinnvoll; sample_answer
   enthält eine vollständige Detaillösung mit allen Rechenschritten. options und correct_indices leer.
+- Liegt im Kontext eine Nachbereitung bei, bestimmt sie die Auswahl: „Sehr wichtig“ bevorzugt und gründlich
+  abfragen, „Nicht so wichtig“ höchstens selten, „Nicht klausurrelevant (gestrichen)“ NIE abfragen. Vermerke in den
+  Notizen gelten genauso („nicht relevant“, „kommt nicht dran“ ⇒ nie abfragen; „wichtig“, „kommt dran“ ⇒ bevorzugt).
 - explanation: warum die Lösung richtig ist. points: realistische Punktzahl.
 - Formeln in LaTeX mit $...$.
 {exam_hint}

@@ -170,6 +170,42 @@ def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
             _run(cfg, module_id, lambda: run_analysis(cfg, module_id, doc), "Erstelle Vorbereitung …")
 
 
+def _exact_read(cfg: dict, module_id: str, lec: dict) -> None:
+    """Seiten für Karten, Quiz und Übungsaufgaben genau lesen lassen – auch ohne Vorbereitung."""
+    data = load_module(module_id)
+    docs = [d for d in unit_docs(data, lec) if d.get("kind") != "image" and d.get("path")
+            and d["doc_type"] != script.DOC_TYPE and d.get("text_source") != "ki-genau"]
+    for doc in docs:
+        _ensure_figure_pages(module_id, doc)
+        done = set(doc.get("visual_pages", []))
+        options = [p for p in range(1, doc.get("n_pages", 0) + 1) if p not in done]
+        pending = pending_figures(doc)
+        if not options:
+            continue
+        box = (st.container(border=True, key=f"exbox_{doc['id']}") if pending
+               else st.expander(f"Seiten genau lesen – {doc['filename']}", icon=":material/image_search:"))
+        with box:
+            if pending:
+                st.markdown(f":material/image: **{doc['filename']}: Auf {len(pending)} Seite(n) kann ich die "
+                            f"Abbildungen nicht sehen:** {', '.join(map(str, pending))}")
+            if done:
+                st.caption(f"Genau gelesen: Seite(n) {', '.join(map(str, sorted(done)))}")
+            chosen = st.multiselect("Welche Seiten soll ich genau lesen?", options, default=pending,
+                                    key=f"exsel_{doc['id']}", format_func=lambda p: f"Seite {p}")
+            c1, c2 = st.columns([3, 2])
+            if c1.button(f"Genau lesen (ca. {page_cost_estimate(len(chosen)) * 100:.1f} Cent)",
+                         key=f"exgo_{doc['id']}", type="primary", disabled=not chosen or not ai.is_available()):
+                doc["skipped_figures"] = sorted(set(doc.get("skipped_figures", [])) | (set(pending) - set(chosen)))
+                save_module(module_id)
+                _run(cfg, module_id, lambda doc=doc: read_pages_visual(
+                    cfg, module_id, doc, chosen, update_prep=bool(doc.get("analysis"))),
+                     f"Lese {len(chosen)} Seite(n) genau …")
+            if pending and c2.button("Keine genau lesen", key=f"exno_{doc['id']}"):
+                doc["skipped_figures"] = sorted(set(doc.get("skipped_figures", [])) | set(pending))
+                save_module(module_id)
+                st.rerun()
+
+
 def _cell(text: str) -> str:
     return (text or "").replace("|", "\\|").replace("\n", " ").strip() or "–"
 
@@ -430,6 +466,7 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
         st.caption("Karten entstehen erst, wenn du auf „Karteikarten erstellen“ klickst – am besten nach der "
                    "Vorlesung, wenn du in der Nachbereitung eingetragen hast, was sehr wichtig oder nicht so wichtig "
                    "wurde.")
+    _exact_read(cfg, module_id, lec)
     if has_ai or cards or unit_docs(data, lec):
         study.generate_button(cfg, module_id, lec, cards, key=lec["id"])
     if generated:

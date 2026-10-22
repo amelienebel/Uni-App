@@ -185,7 +185,7 @@ def test_figures_first_then_prep(monkeypatch):
     data = storage.load_module("mathe")
     lecs, _ = units.all_units(cfg, get_module(cfg, "mathe"), data)
     doc = {"id": "d2", "filename": "VL1.pdf", "doc_type": "folien", "unit": lecs[0]["id"], "kind": "pdf",
-           "figure_pages": [2, 5], "path": "x.pdf"}
+           "figure_pages": [2, 5], "path": "x.pdf", "n_pages": 6}
     data["documents"].append(doc)
     storage.save_module("mathe")
     assert learning.pending_figures(doc) == [2, 5]
@@ -198,9 +198,39 @@ def test_figures_first_then_prep(monkeypatch):
     _run(at)
     assert any("kann ich die Abbildungen nicht sehen" in m.value for m in at.markdown)
     assert not any(b.label == "Vorbereitung erstellen" for b in at.button)
+    assert at.multiselect(key="exsel_d2").value == [2, 5]  # auch im Reiter Lernen wählbar
     at.button(key="figno_d2").click()
     _run(at)
     assert at.session_state["_module_mathe"]["documents"][-1]["skipped_figures"] == [2, 5]
+
+
+def test_exact_read_after_lecture_without_prep(monkeypatch):
+    """Nach der Vorlesung im Reiter Lernen Seiten genau lesen – ohne dass eine Vorbereitung entsteht."""
+    from utils import ai, learning, storage, units
+    from utils.config import get_module, load_config
+    from views.common import PAGES
+    from views.module_tabs import lecture_page
+
+    cfg = load_config()
+    data = storage.load_module("mathe")
+    lecs, _ = units.all_units(cfg, get_module(cfg, "mathe"), data)
+    doc = {"id": "d3", "filename": "VL2.pdf", "doc_type": "folien", "unit": lecs[1]["id"], "kind": "pdf",
+           "figure_pages": [3], "path": "x.pdf", "n_pages": 4}
+    data["documents"].append(doc)
+    storage.save_module("mathe")
+    calls = []
+    monkeypatch.setattr(lecture_page, "read_pages_visual", lambda *a, **k: calls.append((a[3], k)) or "ok")
+    monkeypatch.setattr(learning, "run_analysis", lambda *a, **k: calls.append("prep") or "ok")
+    monkeypatch.setattr(ai, "is_available", lambda: True)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["module"]
+    at.session_state["nav_module"] = "mathe"
+    at.session_state["unit_mathe"] = lecs[1]["id"]
+    _run(at)
+    at.multiselect(key="exsel_d3").select(1)
+    at.button(key="exgo_d3").click()
+    _run(at)
+    assert [(sorted(p), k) for p, k in calls] == [([1, 3], {"update_prep": False})]
 
 
 def test_exercise_deadlines_and_next_session():

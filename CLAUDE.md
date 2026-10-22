@@ -54,6 +54,9 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   (Felder in `units.NOTE_FIELDS`; Schlüssel emphasized/briefly/skip/card_hint) – kein Feld für genannte Beispiele.
 - Die Vorbereitung entsteht erst, nachdem die Nutzerin bei Seiten mit Abbildungen gewählt hat, welche genau gelesen
   werden (`learning.pending_figures`); ohne Abbildungen direkt nach dem Upload.
+- Genau lesen geht auch ohne Vorbereitung: Reiter „Lernen“ der Vorlesung (`lecture_page._exact_read`) – beliebige
+  Seiten wählbar, Abbildungsseiten vorausgewählt; erstellt keine Vorbereitung (`read_pages_visual(update_prep=False)`).
+- Vermerke in den Notizen („nicht relevant“, „kommt dran“) und die Kategorien gelten für Karten, Ausdünnen und Quiz.
 - Keine erklärenden Hinweistexte in der Oberfläche ergänzen (Nutzerin hat sie bewusst entfernen lassen).
 - PDFs zuerst nur als Text lesen; Seiten mit Abbildungen vorschlagen, genau lesen nur nach Auswahl.
 

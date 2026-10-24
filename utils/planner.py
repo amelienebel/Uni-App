@@ -75,6 +75,9 @@ def tasks_of(module_cfg: dict) -> list[dict]:
 
 
 PREP_DAYS_BEFORE = 1      # Vorlesung vorbereiten: 1 Tag vorher
+# „Vorbereiten“ vorerst abgeschaltet (Reiter, To-dos, Häkchen, Zusammenfassung beim Upload). Der Code bleibt
+# vollständig erhalten – True setzt alles wieder in Gang (Ablauf siehe CLAUDE.md → „Vorbereiten (abgeschaltet)“).
+PREP_ENABLED = False
 REVIEW_DAYS_AFTER = 2     # Vorlesung nachbereiten: 2 Tage danach
 EXERCISE_DAYS_BEFORE = 2  # Übungsblatt lösen: 2 Tage vor der Übung/dem Tutorium
 
@@ -261,13 +264,14 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             if not chapter:
                 continue
             idx = chapter_number(data, chapter["id"])
-            add({
-                "key": f"{module_id}:{chapter['id']}:vorbereitet",
-                "module_id": module_id, "chapter_id": chapter["id"], "status_field": "vorbereitet",
-                "kind": "Vorbereitung",
-                "title": f"Vorlesung vorbereiten – Kap. {idx}: {chapter['title']}",
-                "due": prep_due(module, event["date"]),
-            })
+            if PREP_ENABLED:
+                add({
+                    "key": f"{module_id}:{chapter['id']}:vorbereitet",
+                    "module_id": module_id, "chapter_id": chapter["id"], "status_field": "vorbereitet",
+                    "kind": "Vorbereitung",
+                    "title": f"Vorlesung vorbereiten – Kap. {idx}: {chapter['title']}",
+                    "due": prep_due(module, event["date"]),
+                })
             add({
                 "key": f"{module_id}:{chapter['id']}:nachbereitet",
                 "module_id": module_id, "chapter_id": chapter["id"], "status_field": "nachbereitet",
@@ -301,7 +305,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             for field, kind, verb, due in (("vorbereitet", "Vorbereitung", "vorbereiten", prep_due(module, lec["date"])),
                                            ("nachbereitet", "Nachbereitung", "nachbereiten",
                                             review_due(module, lec["date"]))):
-                if monday <= due <= sunday:
+                if monday <= due <= sunday and (PREP_ENABLED or field != "vorbereitet"):
                     add({"key": lecture_key(module_id, lec["date"], field), "module_id": module_id,
                          "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": field,
                          "kind": kind, "title": f"Vorlesung {verb} – {label}", "due": due})

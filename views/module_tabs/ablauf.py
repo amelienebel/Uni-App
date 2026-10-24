@@ -36,9 +36,11 @@ def _lecture_row(module: dict, data: dict, lec: dict, state: dict, is_next: bool
                   key=f"open_{module_id}_{lec['id']}", type="tertiary", on_click=open_unit, icon=":material/co_present:",
                   args=(module_id, lec["id"]))
         c1.caption(f"{'Folien' if docs else 'keine Folien'}" + (f" · {len(cards)} Karten" if cards else "")
-                   + f" · vorbereiten bis {_due(planner.prep_due(module, lec['date']))}"
+                   + (f" · vorbereiten bis {_due(planner.prep_due(module, lec['date']))}" if planner.PREP_ENABLED else "")
                    + f" · nachbereiten bis {_due(planner.review_due(module, lec['date']))}")
-        for col, field, label in ((c2, "vorbereitet", "Vorbereitet"), (c3, "nachbereitet", "Nachbereitet")):
+        checks = ((c2, "vorbereitet", "Vorbereitet"), (c3, "nachbereitet", "Nachbereitet")) if planner.PREP_ENABLED \
+            else ((c2, "nachbereitet", "Nachbereitet"),)
+        for col, field, label in checks:
             todo = {"key": planner.lecture_key(module_id, lec["date"], field), "module_id": module_id,
                     "chapter_id": lec.get("chapter_id"), "sync": field}
             _check(col, label, todo, state, f"abl_{field}_{module_id}_{lec['id']}")

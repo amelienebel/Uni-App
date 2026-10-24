@@ -47,15 +47,28 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
 - Karten entstehen nur auf Klick (nach der Nachbereitung), nie automatisch.
 - Modelle: Zusammenfassung Haiku 5.5, Karten Sonnet 5.5, Tutor Sonnet 5.5, Antwort-/Kartenprüfung Haiku 5.5
   (änderbar in den Einstellungen).
-- Vorbereiten (Haiku, effort low): Must-Watch (2–3 Folien), Tabelle Folie | Begriff | Kurzerklärung | Worauf achten,
-  Zusammenfassung entlang der Folien als Stichpunkte (3–6 verständliche Unterpunkte, ergänzend zur Folie, ohne Vorwissen
-  verständlich), 5 Quizfragen im Klausurformat – kein Fließtext, alles mit Foliennummer.
-- Nachbereiten: Notizen, „Sehr wichtig“, „Nicht so wichtig“, „Streichen“ und „Hinweis zur Kartenerstellung“
-  (Felder in `units.NOTE_FIELDS`; Schlüssel emphasized/briefly/skip/card_hint) – kein Feld für genannte Beispiele.
-- Die Vorbereitung entsteht erst, nachdem die Nutzerin bei Seiten mit Abbildungen gewählt hat, welche genau gelesen
-  werden (`learning.pending_figures`); ohne Abbildungen direkt nach dem Upload.
-- Genau lesen geht auch ohne Vorbereitung: Reiter „Lernen“ der Vorlesung (`lecture_page._exact_read`) – beliebige
-  Seiten wählbar, Abbildungsseiten vorausgewählt; erstellt keine Vorbereitung (`read_pages_visual(update_prep=False)`).
+- Nachbereiten (Reiter der Vorlesung, Schritte in `lecture_page._review_tab`): 1 · Notizen mit „Sehr wichtig“,
+  „Nicht so wichtig“, „Streichen“, „Hinweis zur Kartenerstellung“ (Felder in `units.NOTE_FIELDS`; Schlüssel
+  emphasized/briefly/skip/card_hint – kein Feld für genannte Beispiele) · 2 · Seiten genau lesen
+  (`_exact_read`, beliebige Seiten, Abbildungsseiten vorausgewählt, `read_pages_visual(update_prep=False)`) ·
+  3 · Karteikarten erstellen (auf Klick, Abdeckung, prüfen, ausdünnen) · 4 · Karten durchsehen
+  (`study.browse_cards`: einzeln durchblättern oder Liste; Feedback → `learning.rewrite_card`, kann auf 2–3 Karten
+  aufteilen, Rückgängig entfernt die Teilkarten; bearbeiten, löschen) · 5 · Formeln (`learning.extract_unit_formulas`
+  sammelt alle Formeln der Vorlesung mit `unit`, `in_sheet: False`; Häkchen = kommt in die Formelsammlung – wichtig für
+  Statistik, dort schreibt sie den Spickzettel selbst) · „Nachbereitung abschließen“ → Reiter Lernen (nur noch
+  Abfrage, Quiz, Tutor).
+- Mathe: Einheit 3 (Selbststudium) ist eine eigene Einheit (`"self_study": true`, Datum 20.10.) mit eigener Seite.
+- **Vorbereiten (abgeschaltet, `planner.PREP_ENABLED = False`)** – auf Wunsch der Nutzerin vorerst entfernt, Code
+  komplett erhalten; `True` stellt alles wieder her: Reiter „Vorbereiten“ (`lecture_page._prep_tab`,
+  `common.lecture_tabs()`), To-dos „Vorlesung vorbereiten“ (`planner.generate_todos`, `units.open_tasks`), Häkchen
+  „Vorbereitet“ (Ablauf, Vorlesungskopf, Kapitelstatus im Wochenplan), Frist in den Einstellungen, Zusammenfassung
+  automatisch nach dem Upload (`files.uploader`, `bulk_upload`). So funktionierte sie: Haiku, effort low; Must-Watch
+  (2–3 Folien), Tabelle Folie | Begriff | Kurzerklärung | Worauf achten, Zusammenfassung entlang der Folien als
+  Stichpunkte (3–6 verständliche Unterpunkte, ergänzend zur Folie, ohne Vorwissen verständlich), 5 Quizfragen im
+  Klausurformat – kein Fließtext, alles mit Foliennummer. Entstand erst, nachdem bei Seiten mit Abbildungen gewählt war,
+  welche genau gelesen werden (`learning.pending_figures`), ohne Abbildungen direkt nach dem Upload; Skript-Teil der
+  Vorlesung floss ein. Legte Formel-Vorschläge in `formula_inbox` ab (Reiter Formeln & Notizen). Tests dafür setzen
+  `PREP_ENABLED` per monkeypatch auf True.
 - Vermerke in den Notizen („nicht relevant“, „kommt dran“) und die Kategorien gelten für Karten, Ausdünnen und Quiz.
 - Keine erklärenden Hinweistexte in der Oberfläche ergänzen (Nutzerin hat sie bewusst entfernen lassen).
 - PDFs zuerst nur als Text lesen; Seiten mit Abbildungen vorschlagen, genau lesen nur nach Auswahl.

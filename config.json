@@ -133,7 +133,13 @@
         {
           "date": "2026-10-19",
           "chapter_id": "e2",
-          "topic": "2. Vorlesung (dazu: 3. Einheit im Selbststudium)"
+          "topic": "2. Vorlesung"
+        },
+        {
+          "date": "2026-10-20",
+          "chapter_id": "e3",
+          "topic": "3. Einheit (Selbststudium)",
+          "self_study": true
         },
         {
           "date": "2026-10-26",

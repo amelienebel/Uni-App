@@ -8,7 +8,7 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 
-from utils import ai
+from utils import ai, planner
 from utils.config import get_module, load_config
 from utils.storage import chapter_label, documents_of, get_document_text, get_notes, load_module
 
@@ -28,8 +28,10 @@ NAV_PAGES = list(PAGES.values())
 MODULE_TABS = [":material/view_timeline: Ablauf", ":material/school: Lernen & Klausur",
                ":material/library_books: Definitionen", ":material/folder_open: Dateien",
                ":material/functions: Formeln & Notizen"]
-LECTURE_TABS = [":material/folder_open: Dateien", ":material/menu_book: Vorbereiten",
-                ":material/edit_note: Nachbereiten", ":material/style: Lernen"]
+LECTURE_TAB = {"files": ":material/folder_open: Dateien", "vorbereitet": ":material/menu_book: Vorbereiten",
+               "nachbereitet": ":material/edit_note: Nachbereiten", "learn": ":material/style: Lernen"}
+def lecture_tabs() -> list[str]:
+    return [t for k, t in LECTURE_TAB.items() if k != "vorbereitet" or planner.PREP_ENABLED]
 
 
 def micon(module: dict) -> str:
@@ -185,7 +187,7 @@ def open_todo(todo: dict) -> None:
     unit_id = None
     if len(parts) >= 4 and parts[1] == "vl":
         unit_id = f"vl:{parts[2]}"
-        st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TABS[2] if parts[3] == "nachbereitet" else LECTURE_TABS[1]
+        st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TAB.get(parts[3], LECTURE_TAB["nachbereitet"])
     elif len(parts) >= 4 and parts[1] == "ex":
         unit_id = f"ex:{parts[2]}:{parts[3]}"
     elif todo.get("kind") in ("Wiederholung", "Klausurvorbereitung"):

@@ -210,7 +210,7 @@ def coverage_panel(cfg: dict, module_id: str, unit: dict, key: str) -> None:
         empty = [f"{c['doc']['filename']} S. {', '.join(map(str, c['empty']))}" for c in coverage if c["empty"]]
         if empty:
             st.caption("Ohne lesbaren Text (vermutlich nur Bild): " + "; ".join(empty) + " – lass sie unter "
-                       "„Vorbereiten“ genau lesen und ergänze dann die Karten.")
+                       "„Seiten genau lesen“ lesen und ergänze dann die Karten.")
     warnings = data.get("card_warnings", {}).get(unit["id"], [])
     skipped_lines = [f"- {c['doc']['filename']} S. {p}: {reason}" for c in coverage for p, reason in c["skipped"].items()]
     if warnings or skipped_lines:
@@ -327,6 +327,87 @@ def manage_cards(module_id: str, data: dict, cards: list[dict], key: str) -> Non
             data["cards"] = keep
             save_module(module_id)
             st.rerun()
+
+
+def _drop_card(module_id: str, card_id: str) -> None:
+    data = load_module(module_id)
+    data["cards"] = [c for c in data["cards"] if c["id"] != card_id]
+    save_module(module_id)
+
+
+def _card_view(module_id: str, data: dict, card: dict, key: str, full: bool) -> None:
+    """Eine Karte zum Durchsehen: Vorder- und Rückseite, Feedback (umformulieren, aufteilen), bearbeiten, löschen."""
+    from views import cards_center
+
+    with st.container(border=True, key=f"cv_{key}_{card['id']}"):
+        cards_center._badges(card)
+        st.markdown(f"**{card['front']}**")
+        st.markdown(card["back"])
+        if full:
+            if card.get("explanation"):
+                st.caption(card["explanation"])
+            _sources(data, card, f"cv_{key}_{card['id']}")
+            with st.form(f"cvfb_{key}_{card['id']}", clear_on_submit=True, border=False):
+                text = st.text_area("Feedback", height=70, label_visibility="collapsed",
+                                    placeholder="z. B. fragt zu viel → auf zwei Karten aufteilen, Antwort kürzer …")
+                go = st.form_submit_button("Karte überarbeiten", icon=":material/auto_fix_high:",
+                                           disabled=not ai.is_available())
+            if go and text.strip():
+                with st.spinner("Überarbeite die Karte …"):
+                    try:
+                        n = learning.rewrite_card(module_id, card, text.strip())
+                    except ai.AIError as exc:
+                        st.error(str(exc))
+                        return
+                st.session_state[f"cvmsg_{key}"] = f"Auf {n} Karten aufgeteilt." if n > 1 else "Karte überarbeitet."
+                st.rerun()
+        c1, c2, c3 = st.columns(3)
+        if card.get("previous"):
+            c1.button("Rückgängig", key=f"cvundo_{key}_{card['id']}", icon=":material/undo:", width="stretch",
+                      on_click=learning.undo_rewrite, args=(module_id, card))
+        with c2.popover("Bearbeiten", icon=":material/edit:", width="stretch"):
+            if not full:
+                feedback = st.text_area("Feedback an die KI", key=f"cvlfb_{key}_{card['id']}", height=70)
+                if st.button("Karte überarbeiten", key=f"cvlgo_{key}_{card['id']}", icon=":material/auto_fix_high:",
+                             disabled=not feedback.strip() or not ai.is_available()):
+                    with st.spinner("Überarbeite die Karte …"):
+                        try:
+                            learning.rewrite_card(module_id, card, feedback.strip())
+                        except ai.AIError as exc:
+                            st.error(str(exc))
+                            return
+                    st.rerun()
+                st.divider()
+            cards_center._edit_form(module_id, card, f"cv_{key}_{card['id']}")
+        c3.button("Löschen", key=f"cvdel_{key}_{card['id']}", icon=":material/delete:", width="stretch",
+                  on_click=_drop_card, args=(module_id, card["id"]))
+
+
+def _step(key: str, n: int, delta: int) -> None:
+    st.session_state[key] = (st.session_state.get(key, 0) + delta) % n
+
+
+def browse_cards(module_id: str, cards: list[dict], key: str) -> None:
+    """Karten einer Einheit durchsehen – einzeln zum Durchblättern oder als Liste."""
+    if not cards:
+        return
+    data = load_module(module_id)
+    if msg := st.session_state.pop(f"cvmsg_{key}", None):
+        st.success(msg)
+    view = st.segmented_control("Ansicht", ["Einzeln", "Liste"], default="Einzeln", key=f"cvmode_{key}",
+                                label_visibility="collapsed") or "Einzeln"
+    if view == "Liste":
+        for card in cards:
+            _card_view(module_id, data, card, key, full=False)
+        return
+    pos_key = f"cvpos_{key}"
+    pos = st.session_state.get(pos_key, 0) % len(cards)
+    st.session_state[pos_key] = pos
+    c1, c2, c3 = st.columns([1, 2, 1], vertical_alignment="center")
+    c1.button("◀", key=f"cvprev_{key}", on_click=_step, args=(pos_key, len(cards), -1), width="stretch")
+    c2.markdown(f"<div style='text-align:center'>Karte {pos + 1} von {len(cards)}</div>", unsafe_allow_html=True)
+    c3.button("▶", key=f"cvnext_{key}", on_click=_step, args=(pos_key, len(cards), 1), width="stretch")
+    _card_view(module_id, data, cards[pos], key, full=True)
 
 
 def forecast(cards: list[dict]) -> None:

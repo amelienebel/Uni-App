@@ -93,6 +93,8 @@ def unit_for_event(cfg: dict, module_cfg: dict, data: dict, ev_type: str, ev_dat
 def short_label(unit: dict) -> str:
     if unit["kind"] == "lecture":
         d = unit["date"]
+        if unit.get("self_study"):
+            return f"Einheit {unit['nr']} · Selbststudium"
         return f"VL {unit['nr']} · {WEEKDAYS_SHORT[d.weekday()]} {d:%d.%m.}"
     d = unit["session"]
     return f"Übung · {WEEKDAYS_SHORT[d.weekday()]} {d:%d.%m.}"
@@ -208,9 +210,11 @@ def open_tasks(cfg: dict, module_cfg: dict, lecture_list: list[dict], exercise_l
             continue
         for field, verb, due in (("vorbereitet", "vorbereiten", planner.prep_due(module_cfg, lec["date"])),
                                  ("nachbereitet", "nachbereiten", planner.review_due(module_cfg, lec["date"]))):
+            if field == "vorbereitet" and not planner.PREP_ENABLED:
+                continue
             if due >= sem_start and not state.get(planner.lecture_key(module_id, lec["date"], field)):
                 tasks.append({"due": due, "unit": lec, "label": f"Vorlesung {lec['nr']} {verb}",
-                              "about": lec["topic"], "tab": 1 if field == "vorbereitet" else 2})
+                              "about": lec["topic"], "tab": field})
     for ex in exercise_list:
         due = planner.exercise_due(module_cfg, ex, schedule, breaks)
         if due >= sem_start and not state.get(ex["plan_key"]):

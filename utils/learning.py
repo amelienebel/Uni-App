@@ -8,10 +8,10 @@ from utils import ai, script
 from utils import definitions as defs
 from utils import spaced_repetition as sr
 from utils.config import exam_format, get_module
-from utils.pdf_parser import heuristic_analysis
+from utils.pdf_parser import find_formula_candidates, heuristic_analysis
 from utils.storage import (chapter_label, documents_of, get_document_pages, get_document_text, load_module, now_iso,
-                           read_data_file, save_module, set_document_pages, suggest_formulas)
-from utils.units import all_units, lecture_notes, unit_cards, unit_docs
+                           read_data_file, save_module, set_document_pages, suggest_formulas, add_formulas)
+from utils.units import all_units, lecture_notes, short_label, unit_cards, unit_docs
 
 _PREP_TASKS = """Ich lese deine Vorbereitung auf dem Mac mit, während ich auf dem iPad durch die Folien scrolle.
 Darum: KEIN Fließtext, nur Stichpunkte und Tabellenzellen (Tabellen im Telegrammstil, je max. ~15 Wörter).
@@ -867,7 +867,8 @@ def read_pages_visual(cfg: dict, module_id: str, doc: dict, pages: list[int], up
 
 REWRITE_PROMPT = """Überarbeite diese Karteikarte nach dem Feedback der Nutzerin (BWL, 1. Semester, LMU).
 Setze das Feedback um, ändere sonst so wenig wie möglich. Inhaltlich nur, was in Karte oder Quelle steht – nichts
-erfinden. Regeln: Frage eigenständig verständlich und präzise; Antwort als Stichpunkte im Telegrammstil (ein
+erfinden. Liefere genau eine Karte – nur wenn das Feedback eine Aufteilung verlangt (z. B. „fragt zu viel“, „auf zwei
+Karten“), 2–3 Karten, die zusammen den Inhalt der alten abdecken, ohne Doppelungen. Regeln für jede Karte: Frage eigenständig verständlich und präzise; Antwort als Stichpunkte im Telegrammstil (ein
 Stichpunkt pro Listenelement, ohne Aufzählungszeichen, Unterpunkte mit zwei führenden Leerzeichen); Formeln in
 LaTeX mit $...$; Erklärung höchstens ~80 Wörter Fließtext fürs Verständnis; keywords 2–6 Kernbegriffe exakt wie in der
 Antwort geschrieben.
@@ -887,10 +888,12 @@ Erklärung: {explanation}
 {source}
 </quelle>"""
 
-REWRITE_SCHEMA = {"type": "object", "additionalProperties": False,
-                  "required": ["front", "answer", "explanation", "keywords"], "properties": {
-                      "front": {"type": "string"}, "answer": {"type": "array", "items": {"type": "string"}},
-                      "explanation": {"type": "string"}, "keywords": {"type": "array", "items": {"type": "string"}}}}
+_REWRITTEN_CARD = {"type": "object", "additionalProperties": False,
+                   "required": ["front", "answer", "explanation", "keywords"], "properties": {
+                       "front": {"type": "string"}, "answer": {"type": "array", "items": {"type": "string"}},
+                       "explanation": {"type": "string"}, "keywords": {"type": "array", "items": {"type": "string"}}}}
+REWRITE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["cards"],
+                  "properties": {"cards": {"type": "array", "items": _REWRITTEN_CARD}}}
 
 _CARD_TEXT_FIELDS = ("front", "back", "explanation", "keywords")
 
@@ -907,21 +910,91 @@ def _card_source_text(data: dict, card: dict) -> str:
     return "\n\n".join(parts) or "(keine Quelle gespeichert)"
 
 
-def rewrite_card(module_id: str, card: dict, feedback: str) -> None:
-    """Karte nach Feedback umformulieren (vorige Fassung bleibt für „Rückgängig“ erhalten)."""
+def rewrite_card(module_id: str, card: dict, feedback: str) -> int:
+    """Karte nach Feedback umformulieren oder auf mehrere Karten aufteilen (vorige Fassung bleibt für „Rückgängig“
+    erhalten). Gibt die Zahl der Karten danach zurück."""
     data = load_module(module_id)
     result = ai.complete_json(REWRITE_PROMPT.format(front=card["front"], back=card["back"],
                                                     explanation=card.get("explanation", ""), feedback=feedback,
                                                     source=_card_source_text(data, card)),
                               REWRITE_SCHEMA, max_tokens=8000, effort="low", task="cards")
+    versions = [c for c in result.get("cards", []) if c["front"].strip() and c["answer"]][:3]
+    if not versions:
+        raise ai.AIError("Die KI hat keine überarbeitete Karte geliefert – bitte noch einmal versuchen.")
+    first, *more = versions
     card["previous"] = {f: card.get(f) for f in _CARD_TEXT_FIELDS}
-    card.update({"front": result["front"].strip(), "back": answer_markdown(result["answer"]),
-                 "explanation": result["explanation"].strip(), "keywords": result["keywords"]})
+    card.update({"front": first["front"].strip(), "back": answer_markdown(first["answer"]),
+                 "explanation": first["explanation"].strip(), "keywords": first["keywords"]})
+    split = []
+    for c in more:
+        extra = sr.new_card(c["front"], answer_markdown(c["answer"]), source="KI", card_type=card.get("type", "basic"),
+                            chapter_id=card.get("chapter_id"), priority=card.get("priority", "normal"),
+                            keywords=c["keywords"], explanation=c["explanation"].strip(),
+                            sources=card.get("sources", []), from_notes=card.get("from_notes", False))
+        extra["unit"] = card.get("unit")
+        data["cards"].append(extra)
+        split.append(extra["id"])
+    if split:
+        card["previous"]["split_into"] = split
     card.setdefault("feedback", []).append({"date": now_iso(), "text": feedback})
     save_module(module_id)
+    return len(versions)
 
 
 def undo_rewrite(module_id: str, card: dict) -> None:
     if previous := card.pop("previous", None):
+        split = set(previous.pop("split_into", []))
+        if split:
+            data = load_module(module_id)
+            data["cards"] = [c for c in data["cards"] if c["id"] not in split]
         card.update(previous)
         save_module(module_id)
+
+
+UNIT_FORMULAS_PROMPT = """Suche ALLE Formeln aus den folgenden Unterlagen der Vorlesung „{title}“ im Modul „{module}“
+(Folien, Skript, meine Nachbereitung). Ich wähle danach selbst aus, welche auf meine Formelsammlung kommen
+(z. B. den selbst geschriebenen Spickzettel für die Klausur). Für jede Formel: kurzer, eindeutiger Name, sauberes LaTeX
+(ohne $-Zeichen, KaTeX-kompatibel), Erklärung aller Variablen und wofür man die Formel braucht (höchstens ~30
+Wörter), Seitennummer. Nur allgemeingültige Formeln – keine reinen Zahlenrechnungen, keine Duplikate, auch nicht zu
+diesen bereits gesammelten: {existing}
+Was laut Nachbereitung gestrichen oder „nicht relevant“ ist, weglassen.
+
+<unterlagen>
+{material}
+</unterlagen>"""
+
+
+def unit_formulas(data: dict, unit: dict) -> list[dict]:
+    return [f for f in data["formulas"] if f.get("unit") == unit["id"]]
+
+
+def formulas_cost_estimate(data: dict, unit: dict) -> float:
+    return ai.estimate_cost("cards", len(unit_material(data, unit)) // 3 + 1500, 3000)
+
+
+def extract_unit_formulas(cfg: dict, module_id: str, unit: dict) -> int:
+    """Alle Formeln einer Vorlesung sammeln – erst einmal nicht in der Formelsammlung (Auswahl per Häkchen)."""
+    module = get_module(cfg, module_id)
+    data = load_module(module_id)
+    if ai.is_available():
+        material = unit_material(data, unit)
+        if not material.strip():
+            raise ai.AIError("Es gibt noch keine Unterlagen oder Notizen, aus denen ich Formeln sammeln kann.")
+        existing = "; ".join(f"{f['name']}: {f['latex']}" for f in data["formulas"]) or "keine"
+        result = ai.complete_json(UNIT_FORMULAS_PROMPT.format(title=unit.get("topic") or unit.get("title") or "",
+                                                              module=module["name"], existing=existing,
+                                                              material=material),
+                                  ai.FORMULAS_SCHEMA, max_tokens=16000, effort="low", task="cards")
+        found, source = result.get("formulas", []), "KI"
+    else:
+        found = [f for doc in unit_docs(data, unit) if doc.get("kind") != "image"
+                 for f in find_formula_candidates(get_document_pages(doc))]
+        source = "heuristisch"
+    before = {f["id"] for f in data["formulas"]}
+    added = add_formulas(module_id, found, f"{short_label(unit)} ({source})", unit.get("chapter_id"))
+    for f in data["formulas"]:
+        if f["id"] not in before:
+            f.update({"unit": unit["id"], "in_sheet": False})
+    data.setdefault("formulas_done", {})[unit["id"]] = now_iso()
+    save_module(module_id)
+    return added

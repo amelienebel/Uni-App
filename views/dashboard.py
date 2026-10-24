@@ -368,6 +368,6 @@ def render(cfg: dict) -> None:
         for module in cfg["modules"]:
             for i, ch in enumerate(modules_data[module["id"]]["chapters"], start=1):
                 rows.append({"Modul": module["short"], "Kapitel": f"{i}. {ch['title']}",
-                             "Vorbereitet": ch["status"]["vorbereitet"],
+                             **({"Vorbereitet": ch["status"]["vorbereitet"]} if planner.PREP_ENABLED else {}),
                              "Nachbereitet": ch["status"]["nachbereitet"], "Übung": ch["status"]["uebung"]})
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)

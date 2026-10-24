@@ -8,7 +8,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from utils import ai, notify
+from utils import ai, notify, planner
 from utils.config import WEEKDAYS, module_label
 from utils.storage import (get_exam_date, get_schedule, load_settings, save_settings,
                            semester_dates)
@@ -122,7 +122,9 @@ def _general(cfg: dict) -> None:
         for m in cfg["modules"]:
             dl = m.get("deadlines", {})
             if dl:
-                lines.append(f"- **{m['short']}**: vorbereiten {days[dl['prep_weekday']]} · nachbereiten "
+                lines.append(f"- **{m['short']}**: "
+                             + (f"vorbereiten {days[dl['prep_weekday']]} · " if planner.PREP_ENABLED else "")
+                             + "nachbereiten "
                              f"{days[dl['review_weekday']]} · Übungsblatt {days[dl['exercise_weekday']]}")
         st.caption("Feste Fristen (in config.json → deadlines):\n" + "\n".join(lines))
         if st.form_submit_button("Speichern"):

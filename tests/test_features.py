@@ -121,7 +121,9 @@ def test_settings_contains_export_and_backup():
 
 
 def test_prep_and_quiz_formats(monkeypatch):
-    from utils import ai, learning, storage, units
+    from utils import ai, learning, planner, storage, units
+
+    monkeypatch.setattr(planner, "PREP_ENABLED", True)  # Vorbereiten ist abgeschaltet, der Code bleibt getestet
     from utils.config import exam_format, get_module, load_config
     from views.module_tabs import exams
 
@@ -177,7 +179,9 @@ def test_prep_and_quiz_formats(monkeypatch):
 
 def test_figures_first_then_prep(monkeypatch):
     """Mit Abbildungen entsteht die Vorbereitung erst, wenn entschieden ist, welche Seiten genau gelesen werden."""
-    from utils import learning, storage, units
+    from utils import learning, planner, storage, units
+
+    monkeypatch.setattr(planner, "PREP_ENABLED", True)
     from utils.config import get_module, load_config
     from views.common import PAGES
 
@@ -296,7 +300,7 @@ def test_cards_browse_filter_delete_and_feedback(monkeypatch):
 
     def fake_json(prompt, schema, **kw):
         assert "kürzer" in prompt
-        return {"front": "Neue Frage?", "answer": ["Neu"], "explanation": "E", "keywords": ["Neu"]}
+        return {"cards": [{"front": "Neue Frage?", "answer": ["Neu"], "explanation": "E", "keywords": ["Neu"]}]}
 
     monkeypatch.setattr(ai, "is_available", lambda: True)
     monkeypatch.setattr(ai, "complete_json", fake_json)
@@ -305,6 +309,15 @@ def test_cards_browse_filter_delete_and_feedback(monkeypatch):
     assert card["front"] == "Neue Frage?" and card["back"] == "- Neu" and card["previous"]["front"].startswith("Frage")
     learning.undo_rewrite("mathe", card)
     assert card["front"].startswith("Frage") and "previous" not in card
+
+    # Feedback „fragt zu viel“ → auf zwei Karten aufteilen, Rückgängig entfernt die zweite wieder
+    monkeypatch.setattr(ai, "complete_json", lambda *a, **k: {"cards": [
+        {"front": "Teil 1?", "answer": ["A"], "explanation": "", "keywords": ["A"]},
+        {"front": "Teil 2?", "answer": ["B"], "explanation": "", "keywords": ["B"]}]})
+    assert learning.rewrite_card("mathe", card, "Antwort kürzer, auf zwei Karten") == 2
+    assert card["front"] == "Teil 1?" and "Teil 2?" in [c["front"] for c in storage.load_module("mathe")["cards"]]
+    learning.undo_rewrite("mathe", card)
+    assert "Teil 2?" not in [c["front"] for c in storage.load_module("mathe")["cards"]]
 
 
 def test_quiz_center_focus_session():
@@ -427,3 +440,47 @@ def test_script_split_and_prep(monkeypatch):
     assert "--- Skript S. 2 ---" in seen["prompt"] and "Bilanz" in seen["prompt"] and doc["analysis"]["with_script"]
     learning.run_analysis(cfg, "rewe", next(d for d in data["documents"] if d.get("script_split")))
     assert "keine Folien" in seen["prompt"]
+
+
+def test_review_steps_without_prep(monkeypatch):
+    """Ohne Vorbereitung: kein Reiter/To-do „vorbereiten“; Nachbereitung mit Karten durchsehen und Formelauswahl."""
+    from datetime import date
+
+    from utils import ai, learning, planner, storage, units
+    from utils.config import get_module, load_config
+    from views.common import PAGES, lecture_tabs
+
+    assert not planner.PREP_ENABLED and not any("Vorbereiten" in t for t in lecture_tabs())
+    cfg = load_config()
+    mathe = get_module(cfg, "mathe")
+    data = storage.load_module("mathe")
+    lecs, exs = units.all_units(cfg, mathe, data)
+    self_study = next(lec for lec in lecs if lec.get("self_study"))
+    assert self_study["chapter_id"] == "e3" and self_study["nr"] == 3
+    tasks = units.open_tasks(cfg, mathe, lecs, exs, {}, date(2026, 10, 1))
+    assert tasks and not any("vorbereiten" in t["label"] for t in tasks)
+
+    lec = lecs[0]
+    _add_cards(2)
+    units.lecture_notes(data, lec["id"])["text"] = "Formel $a^2+b^2=c^2$"
+    storage.save_module("mathe")
+    monkeypatch.setattr(ai, "is_available", lambda: True)
+    monkeypatch.setattr(ai, "complete_json", lambda *a, **k: {"formulas": [
+        {"name": "Pythagoras", "latex": "a^2+b^2=c^2", "explanation": "Seiten im rechtwinkligen Dreieck", "page": 0}]})
+    monkeypatch.setattr(learning, "unit_material", lambda *a, **k: "Formel a^2+b^2=c^2")
+    assert learning.extract_unit_formulas(cfg, "mathe", lec) == 1
+    formula = learning.unit_formulas(storage.load_module("mathe"), lec)[0]
+    assert formula["in_sheet"] is False
+
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["module"]
+    at.session_state["nav_module"] = "mathe"
+    at.session_state["unit_mathe"] = lec["id"]
+    _run(at)
+    assert any("Karte 1 von 2" in m.value for m in at.markdown)
+    at.checkbox(key=f"fxsel_{formula['id']}").check()
+    _run(at)
+    assert at.session_state["_module_mathe"]["formulas"][0]["in_sheet"] is True
+    at.button(key=f"cvnext_{lec['id']}").click()
+    _run(at)
+    assert any("Karte 2 von 2" in m.value for m in at.markdown)

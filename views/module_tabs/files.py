@@ -9,7 +9,7 @@ import streamlit as st
 
 from utils import ai
 from utils.learning import pending_figures, run_analysis
-from utils import script, textbook
+from utils import planner, script, textbook
 from utils.config import get_module, load_config
 from utils.storage import (IMAGE_TYPES, abs_data_path, add_file, data_file_exists, delete_document, load_module,
                            read_data_file, save_module, update_document)
@@ -268,6 +268,7 @@ def uploader(cfg: dict, module_id: str, unit: dict, doc_type: str, label: str, k
             doc = add_file(module_id, f.name, f.getvalue(), doc_type, unit.get("chapter_id"), unit["id"])
         if doc.get("kind") != "image" and doc["n_chars"] < 50:
             messages.append(("warning", f"{f.name}: kaum Text gefunden (gescanntes PDF?)."))
+        analyse = analyse and planner.PREP_ENABLED  # ohne Vorbereitung: genau lesen & Formeln in der Nachbereitung
         if analyse and doc.get("kind") != "image" and (pending := pending_figures(doc)):
             messages.append(("info", f"{f.name}: Auf Seite(n) {', '.join(map(str, pending))} kann ich die Abbildungen "
                                      "nicht sehen. Wähle unter „Vorbereiten“, welche ich genau lesen soll – danach "

@@ -9,14 +9,15 @@ import streamlit as st
 
 from utils import ai, planner, script, textbook
 from utils.config import WEEKDAYS, get_module, load_config
-from utils.learning import (page_cost_estimate, pending_figures, read_pages_visual, run_analysis, script_docs,
-                            unit_material)
+from utils.learning import (extract_unit_formulas, formulas_cost_estimate, page_cost_estimate, pending_figures,
+                            read_pages_visual, run_analysis, script_docs, unit_formulas, unit_material)
 from utils.pdf_parser import figure_pages
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
                            load_todos, now_iso, read_data_file, save_module, save_todos, save_upload)
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
-from views.common import LECTURE_TABS, ai_hint, open_unit, render_formula, toggle_todo
+from views.common import LECTURE_TAB, ai_hint, lecture_tabs, open_unit, render_formula, toggle_todo
 from views import quiz_center
+from views.formulas import in_sheet
 from views.module_tabs import exams, study, tutor
 from views.module_tabs.files import file_list, show_messages, uploader
 
@@ -49,21 +50,23 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
         nav[2].button("nächste VL ▶", key=f"next_{lec['id']}", on_click=open_unit,
                       args=(module_id, lecs[idx + 1]["id"]), width="stretch")
 
-    slot = next((s for s in module["schedule"] if s.get("type") == "Vorlesung"
-                 and int(s.get("weekday", -1)) == lec["date"].weekday()), {})
-    when = f"{WEEKDAYS[lec['date'].weekday()]}, {lec['date']:%d.%m.%Y}"
+    slot = {} if lec.get("self_study") else next((s for s in module["schedule"] if s.get("type") == "Vorlesung"
+                                                  and int(s.get("weekday", -1)) == lec["date"].weekday()), {})
+    when = "Selbststudium" if lec.get("self_study") else f"{WEEKDAYS[lec['date'].weekday()]}, {lec['date']:%d.%m.%Y}"
     if slot:
         when += f" · {slot.get('start', '')}–{slot.get('end', '')} · {slot.get('room', '')}"
-    st.markdown(f"## :material/co_present: Vorlesung {lec['nr']}: {lec['topic']}")
+    st.markdown(f"## :material/co_present: {'Einheit' if lec.get('self_study') else 'Vorlesung'} {lec['nr']}: "
+                f"{lec['topic']}")
     st.caption(when + (f" · {chapter_label(data, lec['chapter_id'])}" if lec.get("chapter_id") else "")
                + (" · vorlesungsfrei" if lec["is_break"] else ""))
 
     state = load_todos()
     c1, c2 = st.columns(2)
     prep, review = planner.prep_due(module, lec["date"]), planner.review_due(module, lec["date"])
-    for col, field, label in ((c1, "vorbereitet", f"Vorbereitet (bis {WEEKDAYS[prep.weekday()][:2]} {prep:%d.%m.})"),
-                              (c2, "nachbereitet",
-                               f"Nachbereitet (bis {WEEKDAYS[review.weekday()][:2]} {review:%d.%m.})")):
+    review_label = f"Nachbereitet (bis {WEEKDAYS[review.weekday()][:2]} {review:%d.%m.})"
+    checks = [(c1, "vorbereitet", f"Vorbereitet (bis {WEEKDAYS[prep.weekday()][:2]} {prep:%d.%m.})"),
+              (c2, "nachbereitet", review_label)] if planner.PREP_ENABLED else [(c1, "nachbereitet", review_label)]
+    for col, field, label in checks:
         wkey = f"lst_{field}_{module_id}_{lec['id']}"
         st.session_state[wkey] = bool(state.get(planner.lecture_key(module_id, lec["date"], field)))
         col.checkbox(label, key=wkey, on_change=_status_toggle, args=(module_id, lec, field, wkey))
@@ -170,11 +173,13 @@ def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
             _run(cfg, module_id, lambda: run_analysis(cfg, module_id, doc), "Erstelle Vorbereitung …")
 
 
-def _exact_read(cfg: dict, module_id: str, lec: dict) -> None:
-    """Seiten für Karten, Quiz und Übungsaufgaben genau lesen lassen – auch ohne Vorbereitung."""
+def _exact_read(cfg: dict, module_id: str, lec: dict) -> bool:
+    """Seiten für Karten, Quiz und Übungsaufgaben genau lesen lassen – auch ohne Vorbereitung.
+    Gibt zurück, ob es noch Seiten zur Auswahl gab."""
     data = load_module(module_id)
     docs = [d for d in unit_docs(data, lec) if d.get("kind") != "image" and d.get("path")
             and d["doc_type"] != script.DOC_TYPE and d.get("text_source") != "ki-genau"]
+    shown = False
     for doc in docs:
         _ensure_figure_pages(module_id, doc)
         done = set(doc.get("visual_pages", []))
@@ -182,6 +187,7 @@ def _exact_read(cfg: dict, module_id: str, lec: dict) -> None:
         pending = pending_figures(doc)
         if not options:
             continue
+        shown = True
         box = (st.container(border=True, key=f"exbox_{doc['id']}") if pending
                else st.expander(f"Seiten genau lesen – {doc['filename']}", icon=":material/image_search:"))
         with box:
@@ -204,6 +210,7 @@ def _exact_read(cfg: dict, module_id: str, lec: dict) -> None:
                 doc["skipped_figures"] = sorted(set(doc.get("skipped_figures", [])) | set(pending))
                 save_module(module_id)
                 st.rerun()
+    return shown
 
 
 def _cell(text: str) -> str:
@@ -367,6 +374,29 @@ def _handwriting(module: dict, module_id: str, lec: dict, notes: dict) -> None:
 
 
 def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
+    st.markdown("#### 1 · Notizen")
+    _notes_step(cfg, module_id, lec)
+    st.markdown("#### 2 · Seiten genau lesen")
+    if not _exact_read(cfg, module_id, lec):
+        st.caption("Noch keine Folien hochgeladen." if not unit_docs(load_module(module_id), lec)
+                   else "Alle Seiten sind genau gelesen.")
+    st.markdown("#### 3 · Karteikarten erstellen")
+    _cards_step(cfg, module_id, lec)
+    data = load_module(module_id)
+    cards = unit_cards(data, lec)
+    st.markdown("#### 4 · Karten durchsehen" + (f" ({len(cards)})" if cards else ""))
+    study.browse_cards(module_id, cards, key=lec["id"])
+    study.manual_card(module_id, data, lec, key=lec["id"])
+    st.markdown("#### 5 · Formeln für die Formelsammlung")
+    _formulas_step(cfg, module_id, lec)
+    st.divider()
+    if st.button("✓ Nachbereitung abschließen", key=f"revdone_{lec['id']}", type="primary", width="stretch"):
+        _set_done(module_id, lec, "nachbereitet")
+        st.session_state[f"ltab_next_{lec['id']}"] = LECTURE_TAB["learn"]
+        st.rerun()
+
+
+def _notes_step(cfg: dict, module_id: str, lec: dict) -> None:
     module = get_module(cfg, module_id)
     data = load_module(module_id)
     notes = lecture_notes(data, lec["id"])
@@ -379,22 +409,17 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
         briefly = c2.text_area("Nicht so wichtig", notes["briefly"], height=130)
         skip = c3.text_area("Streichen", notes["skip"], height=130)
         card_hint = st.text_area("Hinweis zur Kartenerstellung", notes["card_hint"], height=80)
-        b1, b2 = st.columns(2)
-        save = b1.form_submit_button("Speichern", width="stretch")
-        finish = b2.form_submit_button("✓ Speichern & Nachbereitung abschließen", type="primary", width="stretch")
-    if save or finish:
+        save = st.form_submit_button("Speichern", width="stretch")
+    if save:
         notes.update({"text": text, "emphasized": emphasized, "briefly": briefly, "skip": skip,
                       "card_hint": card_hint, "updated_at": now_iso()})
         save_module(module_id)
-        if finish:
-            _set_done(module_id, lec, "nachbereitet")
-            st.session_state[f"ltab_next_{lec['id']}"] = LECTURE_TABS[3]
         st.rerun()
     if notes["text"].strip():
         with st.expander("Vorschau der Notizen (mit Formeln)"):
             st.markdown(notes["text"])
 
-    st.markdown("#### Tafelbilder & Screenshots")
+    st.markdown("**Tafelbilder & Screenshots**")
     images = st.file_uploader("Bilder hochladen", type=list(IMAGE_TYPES), accept_multiple_files=True,
                               key=f"img_up_{lec['id']}_{len(notes['images'])}")
     if images and st.button("Bilder speichern", key=f"img_save_{lec['id']}"):
@@ -450,7 +475,7 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
                     st.markdown(f"**{label}:**\n\n{old[field]}")
 
 
-def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
+def _cards_step(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
     cards = unit_cards(data, lec)
     study.show_generation_message(lec["id"])
@@ -466,15 +491,73 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
         st.caption("Karten entstehen erst, wenn du auf „Karteikarten erstellen“ klickst – am besten nach der "
                    "Vorlesung, wenn du in der Nachbereitung eingetragen hast, was sehr wichtig oder nicht so wichtig "
                    "wurde.")
-    _exact_read(cfg, module_id, lec)
     if has_ai or cards or unit_docs(data, lec):
         study.generate_button(cfg, module_id, lec, cards, key=lec["id"])
     if generated:
         st.caption(f"Karten zuletzt erstellt am {datetime.fromisoformat(generated):%d.%m. um %H:%M}.")
     study.coverage_panel(cfg, module_id, lec, key=lec["id"])
+
+
+def _formulas_step(cfg: dict, module_id: str, lec: dict) -> None:
+    """Alle Formeln der Vorlesung anzeigen – angehakte kommen in die Formelsammlung."""
+    data = load_module(module_id)
+    formulas = unit_formulas(data, lec)
+    if msg := st.session_state.pop(f"fxmsg_{lec['id']}", None):
+        getattr(st, msg[0])(msg[1])
+    if unit_docs(data, lec) or has_notes(data, lec["id"]):
+        done = data.get("formulas_done", {}).get(lec["id"])
+        cost = formulas_cost_estimate(data, lec) if ai.is_available() else 0.0
+        label = ("Erneut nach Formeln suchen" if done else "Formeln suchen") + \
+            (f" (ca. {max(1, round(cost * 100))} Cent)" if cost else "")
+        if st.button(label, key=f"fxgo_{lec['id']}", type="secondary" if done else "primary",
+                     icon=":material/functions:"):
+            with st.spinner("Suche die Formeln …"):
+                try:
+                    added = extract_unit_formulas(cfg, module_id, lec)
+                    st.session_state[f"fxmsg_{lec['id']}"] = (
+                        ("success", f"{added} Formel(n) gefunden.") if added else ("info", "Keine neuen Formeln."))
+                except ai.AIError as exc:
+                    st.session_state[f"fxmsg_{lec['id']}"] = ("error", str(exc))
+            st.rerun()
+    if not formulas:
+        return
+    chosen = sum(in_sheet(f) for f in formulas)
+    st.caption(f"{chosen} von {len(formulas)} in der Formelsammlung")
+    for f in formulas:
+        wkey = f"fxsel_{f['id']}"
+        st.session_state[wkey] = in_sheet(f)
+        with st.container(border=True, key=f"fxbox_{f['id']}"):
+            c1, c2, c3 = st.columns([1, 12, 1.4], vertical_alignment="center")
+            c1.checkbox("In die Formelsammlung", key=wkey, on_change=_toggle_formula, args=(module_id, f, wkey),
+                        label_visibility="collapsed")
+            with c2:
+                render_formula(f)
+                if f.get("page"):
+                    st.caption(f"S. {f['page']}")
+            with c3.popover("", icon=":material/edit:", help="Bearbeiten"):
+                with st.form(f"fxedit_{f['id']}", border=False):
+                    name = st.text_input("Name", f["name"])
+                    latex = st.text_area("LaTeX", f["latex"], height=80)
+                    expl = st.text_area("Erklärung", f.get("explanation", ""), height=80)
+                    if st.form_submit_button("Speichern", type="primary") and name.strip() and latex.strip():
+                        f.update({"name": name.strip(), "latex": latex.strip(), "explanation": expl.strip()})
+                        save_module(module_id)
+                        st.rerun()
+                if st.button("Löschen", key=f"fxdel_{f['id']}", icon=":material/delete:"):
+                    data["formulas"].remove(f)
+                    save_module(module_id)
+                    st.rerun()
+
+
+def _toggle_formula(module_id: str, formula: dict, key: str) -> None:
+    formula["in_sheet"] = bool(st.session_state[key])
+    save_module(module_id)
+
+
+def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
+    data = load_module(module_id)
+    cards = unit_cards(data, lec)
     study.review_session(cfg, module_id, cards, key=f"lec_{lec['id']}")
-    study.manual_card(module_id, data, lec, key=lec["id"])
-    study.manage_cards(module_id, data, cards, key=lec["id"])
 
     st.divider()
     context = unit_material(data, lec)
@@ -489,7 +572,10 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
                      scope_label=label + (" · mit Lehrbuch" if book else ""))
 
 
-LEC_TABS = LECTURE_TABS
+_TAB_VIEWS = {"files": lambda cfg, module_id, lec, lecs, exs: _files_tab(cfg, module_id, lec, exs, lecs + exs),
+              "vorbereitet": lambda cfg, module_id, lec, lecs, exs: _prep_tab(cfg, module_id, lec),
+              "nachbereitet": lambda cfg, module_id, lec, lecs, exs: _review_tab(cfg, module_id, lec),
+              "learn": lambda cfg, module_id, lec, lecs, exs: _learn_tab(cfg, module_id, lec)}
 
 
 def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[dict]) -> None:
@@ -497,14 +583,11 @@ def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[dic
     show_messages(module_id)
     if nxt := st.session_state.pop(f"ltab_next_{lec['id']}", None):
         st.session_state[f"ltab_{lec['id']}"] = nxt
-    if st.session_state.get(f"ltab_{lec['id']}") not in LEC_TABS:
+    labels = lecture_tabs()
+    if st.session_state.get(f"ltab_{lec['id']}") not in labels:
         st.session_state.pop(f"ltab_{lec['id']}", None)
-    tabs = st.tabs(LEC_TABS, key=f"ltab_{lec['id']}", on_change="rerun")
-    with tabs[0]:
-        _files_tab(cfg, module_id, lec, exs, lecs + exs)
-    with tabs[1]:
-        _prep_tab(cfg, module_id, lec)
-    with tabs[2]:
-        _review_tab(cfg, module_id, lec)
-    with tabs[3]:
-        _learn_tab(cfg, module_id, lec)
+    tabs = st.tabs(labels, key=f"ltab_{lec['id']}", on_change="rerun")
+    names = [k for k, label in LECTURE_TAB.items() if label in labels]
+    for tab, name in zip(tabs, names):
+        with tab:
+            _TAB_VIEWS[name](cfg, module_id, lec, lecs, exs)

@@ -10,7 +10,7 @@ from utils import planner, units
 from utils.config import WEEKDAYS, get_module
 from utils.storage import (chapter_label, days_until_exam, get_exam_date, get_schedule, load_module, load_todos,
                            semester_dates, today)
-from views.common import LECTURE_TABS, MODULE_TABS, micon, open_unit
+from views.common import LECTURE_TAB, MODULE_TABS, micon, open_unit
 from views.module_tabs import ablauf, definitions_tab, files, exercise_page, formulas_tab, learn, lecture_page, notes
 
 TABS = MODULE_TABS
@@ -32,9 +32,9 @@ def _stats(module: dict, data: dict) -> None:
     st.progress(progress["overall"])
 
 
-def _go_task(module_id: str, unit_id: str, tab: int | None) -> None:
+def _go_task(module_id: str, unit_id: str, tab: str | None) -> None:
     if tab:
-        st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TABS[tab]
+        st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TAB[tab]
     open_unit(module_id, unit_id)
 
 

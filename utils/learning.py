@@ -80,8 +80,10 @@ jeden Preis. Jede Karte kostet täglich Lernzeit – sie muss sich lohnen.
 1. DOKUMENTE (<dokument nr="N">): Seiten markiert mit „--- Folie N ---“ (Folien), „--- Skript S. N ---“ (Skript)
    oder „--- Seite N ---“ (Übungsblatt, Lösung, Sonstiges). Inhaltliche Quelle der Karten.
 2. NACHBEREITUNG der Nutzerin – der wichtigste Maßstab dafür, WAS eine Karte bekommt:
-   - [HINWEIS] – allgemeine Vorgabe der Nutzerin, wie die Karten zu dieser Einheit aussehen sollen ⇒ hat Vorrang vor
-     allen Regeln hier (außer: nichts erfinden).
+   - [HINWEIS] (= <hinweis_zur_kartenerstellung>) – Vorgabe der Nutzerin, wie die Karten zu dieser Einheit aussehen
+     sollen ⇒ HÖCHSTE PRIORITÄT, Vorrang vor allen Regeln hier (außer: nichts erfinden). Setze jede Anweisung darin
+     wörtlich und konsequent für ALLE Karten um (Themen, Anzahl, Länge, Fragestil, Detailgrad, was weg soll). Prüfe
+     vor der Ausgabe jede Karte gegen den Hinweis und passe an oder streiche, was ihm widerspricht.
    - [NOTIZEN] – eigene Mitschrift; fließt inhaltlich ein. Was nicht auf den Folien steht, wie Folieninhalt behandeln.
      Vermerke darin gelten wie die Kategorien: „nicht relevant“, „kommt nicht dran“, „überspringen“ ⇒ wie
      [STREICHEN]; „wichtig“, „kommt dran“, „klausurrelevant“ ⇒ wie [SEHR WICHTIG].
@@ -197,7 +199,7 @@ Die App plant damit bis zur Prüfung (high zuerst und öfter, low zuletzt) – b
 - Widerspruch zwischen Folien und Skript ⇒ Folien gelten; Widerspruch in "warnings" und in "explanation" erwähnen.
 - "warnings" kurz und konkret (mit Seitenangabe), leer, wenn alles klar ist."""
 
-CARDS_USER = """<meta>
+CARDS_USER = """{hint}<meta>
 MODUL: {module}
 EINHEIT: {scope}
 PRÜFUNG: {exam}
@@ -223,7 +225,7 @@ KAPITEL: {chapters}
 
 <dokumente>
 {documents}
-</dokumente>"""
+</dokumente>{hint_reminder}"""
 
 FOCUS_NOTE = """
 AUFTRAG: Bisher fehlen Karten zu einigen Seiten. Unten stehen NUR diese Seiten. Erstelle die fehlenden Karten
@@ -245,6 +247,25 @@ Kriterien, Widersprüche zu den Unterlagen. Stil, Länge und Formulierung ignori
 
 # Seitenmarker je Dokumentart; eigene Lösungen sind keine Kartenquelle (können Fehler enthalten)
 _PAGE_LABELS = {"folien": "Folie", "skript": "Skript S."}
+HINT_BLOCK = """<hinweis_zur_kartenerstellung>
+{hint}
+</hinweis_zur_kartenerstellung>
+Dieser Hinweis der Nutzerin hat Vorrang vor allem anderen und gilt für jede Karte.
+
+"""
+HINT_REMINDER = """
+
+ERINNERUNG – Hinweis der Nutzerin zur Kartenerstellung (unbedingt umsetzen, jede Karte daran prüfen):
+{hint}"""
+
+
+def card_hint(data: dict, unit: dict) -> str:
+    """„Hinweis zur Kartenerstellung“ aus der Nachbereitung einer Vorlesung."""
+    if unit.get("kind") != "lecture":
+        return ""
+    return (lecture_notes(data, unit["id"]).get("card_hint") or "").strip()
+
+
 _NOTE_MARKERS = (("card_hint", "HINWEIS"), ("text", "NOTIZEN"), ("emphasized", "SEHR WICHTIG"),
                  ("briefly", "NICHT SO WICHTIG"), ("skip", "STREICHEN"), ("examples", "BEISPIELE"))
 
@@ -550,6 +571,7 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, only: dict[str, s
     docs = _card_docs(data, unit)
     documents = _card_documents(docs, only)
     notes = _card_notes(data, unit) if only is None else ""  # beim Nachholen nur die fehlenden Seiten
+    hint = card_hint(data, unit)  # gilt immer, auch beim Nachholen
     if not documents.strip() and not notes.strip():
         raise ai.AIError("Es gibt noch keine Unterlagen oder Notizen, aus denen Karten entstehen können.")
     title = unit.get("topic") or unit.get("title") or ""
@@ -563,6 +585,8 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, only: dict[str, s
         existing="\n".join(c["front"] for c in data["cards"]) or "keine",
         existing_defs="\n".join(d["term"] for d in defs.definitions(data)) or "keine",
         notes=notes or "keine", documents=documents or "keine",
+        hint=HINT_BLOCK.format(hint=hint) if hint else "",
+        hint_reminder=HINT_REMINDER.format(hint=hint) if hint else "",
         exam_material=exam_style_material(cfg, module_id, data, [unit["chapter_id"]] if unit.get("chapter_id") else [],
                                           exclude={d["id"] for d in docs}) or "keine hochgeladen")
     result = ai.complete_json(prompt, ai.CARDS_SCHEMA, system=CARDS_SYSTEM, max_tokens=64000, task="cards")
@@ -663,7 +687,7 @@ SLIM_PROMPT = """Die Karteikarten unten zur Einheit „{scope}“ im Modul „{m
 doppeln sich. Die Nutzerin lernt mit einer Kombination aus Spaced Repetition (Karten = nur abrufbares Kernwissen) und
 einem Quiz im Stil der Übungen und Altklausuren (Rechnen, Anwenden, Aufgabentypen). KLAUSURFORMAT: {exam_format}
 
-Räume die Karten auf:
+{hint}Räume die Karten auf:
 - Maßstab ist die NACHBEREITUNG und was KLAUSUR & ÜBUNGEN tatsächlich verlangen: [HINWEIS] hat Vorrang;
   [SEHR WICHTIG] bleibt (priority high); [NICHT SO WICHTIG] höchstens knapp; [STREICHEN] fliegt komplett raus.
   Vermerke in [NOTIZEN] wie „nicht relevant“ bzw. „wichtig, kommt dran“ gelten genauso. Was dort keine Rolle spielt (Theorie-Details, Herleitungen, Beweise, Hintergrund,
@@ -736,6 +760,7 @@ def propose_slim(cfg: dict, module_id: str, unit: dict) -> dict:
     docs = _card_docs(data, unit)
     prompt = SLIM_PROMPT.format(
         scope=_slim_scope(unit), module=module["name"], exam_format=exam_format(module)["label"],
+        hint=HINT_BLOCK.format(hint=card_hint(data, unit)) if card_hint(data, unit) else "",
         notes=_card_notes(data, unit) or "keine",
         exam_material=exam_style_material(cfg, module_id, data, [unit["chapter_id"]] if unit.get("chapter_id") else [],
                                           exclude={d["id"] for d in docs}) or "keine hochgeladen",
@@ -883,7 +908,7 @@ Erklärung: {explanation}
 <feedback>
 {feedback}
 </feedback>
-
+{hint}
 <quelle>
 {source}
 </quelle>"""
@@ -910,12 +935,19 @@ def _card_source_text(data: dict, card: dict) -> str:
     return "\n\n".join(parts) or "(keine Quelle gespeichert)"
 
 
+def _rewrite_hint(data: dict, card: dict) -> str:
+    hint = ((data.get("lecture_notes", {}).get(card.get("unit")) or {}).get("card_hint") or "").strip()
+    return ("\n<hinweis_zur_kartenerstellung>\n" + hint + "\n</hinweis_zur_kartenerstellung>\n"
+            "(gilt weiter, außer das Feedback sagt etwas anderes)\n") if hint else ""
+
+
 def rewrite_card(module_id: str, card: dict, feedback: str) -> int:
     """Karte nach Feedback umformulieren oder auf mehrere Karten aufteilen (vorige Fassung bleibt für „Rückgängig“
     erhalten). Gibt die Zahl der Karten danach zurück."""
     data = load_module(module_id)
     result = ai.complete_json(REWRITE_PROMPT.format(front=card["front"], back=card["back"],
                                                     explanation=card.get("explanation", ""), feedback=feedback,
+                                                    hint=_rewrite_hint(data, card),
                                                     source=_card_source_text(data, card)),
                               REWRITE_SCHEMA, max_tokens=8000, effort="low", task="cards")
     versions = [c for c in result.get("cards", []) if c["front"].strip() and c["answer"]][:3]

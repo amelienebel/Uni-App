@@ -481,7 +481,10 @@ def _current(cfg: dict, sess: dict, module_id: str, data: dict, card: dict) -> N
                                      "before": before})
                 sess["step"] += 1
                 st.rerun()
-    _feedback(module_id, card, key)
+    c1, c2 = st.columns([1, 1], vertical_alignment="bottom")
+    with c1:
+        _feedback(module_id, card, key)
+    study.priority_picker(c2, module_id, card, key)
     if study._card_chat(card, get_module(cfg, module_id)["name"], key):
         save_module(module_id)
 
@@ -514,7 +517,10 @@ def _past(cfg: dict, sess: dict) -> None:
             _apply_grade(sess, module_id, card, grade)
             entry["grade"] = grade
             st.rerun()
-    _feedback(module_id, card, key)
+    c1, c2 = st.columns([1, 1], vertical_alignment="bottom")
+    with c1:
+        _feedback(module_id, card, key)
+    study.priority_picker(c2, module_id, card, key)
     if study._card_chat(card, get_module(cfg, module_id)["name"], key):
         save_module(module_id)
     st.button("Weiter" if sess["view"] < len(sess["done"]) - 1 else "Zur aktuellen Karte", key="cc_forward",

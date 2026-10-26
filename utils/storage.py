@@ -133,12 +133,17 @@ def get_schedule(cfg: dict | None = None) -> list[dict]:
     cfg = cfg or load_config()
     settings = load_settings()
     if settings.get("schedule"):
-        return [{**e, "room": room_label(e.get("room", ""))} for e in settings["schedule"]]
+        return [{**e, "room": room_label(ROOM_MOVES.get(e.get("room", ""), e.get("room", "")))}
+                for e in settings["schedule"]]
     schedule = []
     for module in cfg["modules"]:
         for event in module["schedule"]:
             schedule.append({"module_id": module["id"], **event})
     return schedule
+
+
+# Umgezogene Räume: gilt auch für einen in den Einstellungen gespeicherten Stundenplan
+ROOM_MOVES = {"Amalienstraße 73a – Raum 220": "Geschw.-Scholl-Pl. 1 (M) – M 110 (Hauptgebäude)"}
 
 
 def room_label(room: str) -> str:

@@ -1,4 +1,4 @@
-"""Reiter „Lernen & Klausur“: mehrere Vorlesungen auswählen und gemeinsam lernen (Karten, Quiz, Tutor, Altklausuren)."""
+"""Reiter „Lernen & Klausur“: mehrere Vorlesungen auswählen und gemeinsam lernen (Karten, Quiz, Tutor, Klausuraufgaben, Altklausuren)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from utils.learning import unit_material
 from utils.storage import load_module, today
 from utils.units import scope_cards, short_label, unit_cards
 from utils.weakness import chapter_stats
-from views.module_tabs import exams, study, tutor
+from views.module_tabs import exam_tasks_tab, exams, study, tutor
 
 
 def _select_all(key: str, ids: list[str]) -> None:
@@ -40,11 +40,14 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
     label = ", ".join(f"VL {lec['nr']}" for lec in chosen)
 
     tab_labels = [":material/style: Karteikarten", ":material/quiz: Quiz", ":material/forum: Tutor",
-                  ":material/troubleshoot: Schwachstellen", ":material/history_edu: Altklausuren"]
+                  ":material/assignment: Klausuraufgaben", ":material/troubleshoot: Schwachstellen",
+                  ":material/history_edu: Altklausuren"]
     tabs_key = f"learntabs_{module_id}"
     if st.session_state.get(tabs_key) not in tab_labels:
         st.session_state.pop(tabs_key, None)
-    t_cards, t_quiz, t_chat, t_weak, t_exam = st.tabs(tab_labels, key=tabs_key, on_change="rerun")
+    t_cards, t_quiz, t_chat, t_tasks, t_weak, t_exam = st.tabs(tab_labels, key=tabs_key, on_change="rerun")
+    with t_tasks:
+        exam_tasks_tab.render(cfg, module, data, chosen)
     with t_weak:
         _weak_tab(cfg, module_id, data)
     with t_exam:

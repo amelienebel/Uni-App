@@ -16,12 +16,15 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Punkt „Module“), Routing über `PAGES` in `views/common.py`,
   Zurück-Button oben auf jeder Seite (Verlauf in `views/common.py`: `track_history`/`go_back`, Reiter mit `on_change="rerun"`).
 - `config.json` – Module (Farbe, Material-Symbol, Stundenplan, Kapitel inkl. `nr`, Vorlesungen, Übungen, Fristen-Wochentage `deadlines`,
-  Klausurformat `exam_format`: mc_multi / sc4 / open / mixed, VWL = open (freier Text) → Karten-Prompt und Quiz), Kalender.
+  Klausurformat `exam_format`: mc_multi / sc4 / open / mixed, VWL und I&F = open (freie Aufgaben) → Karten-Prompt und Quiz), Kalender.
+  Mathe-Tutorium: Raum M 110 (Hauptgebäude, Geschw.-Scholl-Pl. 1); `storage.ROOM_MOVES` korrigiert alte Räume auch im
+  gespeicherten Stundenplan.
 - `utils/` – `storage.py` (JSON in `data/`, Cloud-Sync), `cloud_sync.py` (GitHub-Repo, PDFs werden erst bei Bedarf geladen),
   `units.py` (Vorlesungen/Übungen = Einheiten), `planner.py` (To-dos, Fristen), `learning.py` (Folienanalyse, Karten
   inkl. Abdeckung jeder Seite und Prüfdurchgang, Definitionen, Seiten mit Abbildungen genau lesen),
   `spaced_repetition.py` (FSRS mit Klausurtermin: Zielquote, Endspurt, neue Karten pro Tag), `ai.py` (Anthropic, Modell pro Aufgabe in `TASKS`),
-  `textbook.py` (Lehrbuch, nur für Tutor), `script.py` (ganzes Skript im Reiter Dateien → je Vorlesung ihr Teil laut
+  `textbook.py` (Lehrbuch, nur für Tutor), `exam_tasks.py` (Aufgaben aus Altklausuren auslesen, je Aufgabe die
+  nötigen Vorlesungen), `script.py` (ganzes Skript im Reiter Dateien → je Vorlesung ihr Teil laut
   „Skript 1.1–1.4“ im Thema; fließt in die Vorbereitung ein, ohne Folien Vorbereitung nur aus dem Skript), `definitions.py`, `exam_plan.py` (Klausur-Lernplan ab 26.12.), `weakness.py`, `notify.py` (ntfy-Push).
 - `views/` – `today_view.py` (ohne Klausur-Countdown und Schwachstellen) und `dashboard.py` (Wochenübersicht mit eigener
   Zeile „Karteikarten“, ohne Lernfahrplan; beide mit eigenen To-dos in todos.json → `_custom`),
@@ -30,8 +33,11 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Antwortfeld löst auf; „Lernen“ auf Heute/Wochenplan/Modulseiten öffnet direkt den Focus Mode via `start_focus`),
   `quiz_center.py` (Quiz: Fragen zu gewählten Vorlesungen, Focus Mode Frage für Frage, Mehr Infos, Tutor-Rückfragen),
   `formulas.py` (Formelsammlung, Formeln einzeln auswählbar → `in_sheet`), `settings_view.py` (mit Reitern
-  Export und Backup aus `export_view.py`), `module_view.py` (Reiter Ablauf / Lernen & Klausur /
-  Definitionen / Dateien / Formeln & Notizen), `module_tabs/` (Vorlesungs- und Übungsseiten, Lernen, Tutor …).
+  Export und Backup aus `export_view.py`), Abhak-Knöpfe statt Kästchen (`common.done_button`: grün mit Haken / gestrichelt offen; Ablauf, Vorlesungs- und
+  Übungsseite). Übungsseite nur Blatt, Musterlösung, Fragen (keine eigene Lösung, keine Karten). Priorität einer Karte
+  direkt an der Karte umstellbar (`study.priority_picker`: Focus Mode und Durchsehen). `module_view.py` (Reiter Ablauf / Lernen & Klausur /
+  Definitionen / Dateien / Formeln & Notizen), `module_tabs/` (Vorlesungs- und Übungsseiten, Lernen mit Reiter Klausuraufgaben (`exam_tasks_tab`: echte
+  Altklausur-Aufgaben nur zu den gewählten, schon gehörten Vorlesungen, Auswerten/Korrigieren/Tutor), Tutor …).
 
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als
@@ -39,7 +45,8 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Zahl, so wenige wie möglich, bei dichtem Stoff auch bis ~30), Antwort ≤ ~25 Wörter, Erklärung höchstens ~80 Wörter,
   keine Doppelungen, keine Theorie-Details/Herleitungen – Rechnen und
   Anwenden übt das Quiz (Typ „Übungsaufgaben“, Stil der Übungen/Altklausuren). Nachbereitung entscheidet: „Hinweis zur
-  Kartenerstellung“ hat Vorrang, „Sehr wichtig“ → high, „Nicht so wichtig“ → low oder keine Karte, „Streichen“ →
+  Kartenerstellung“ hat höchste Priorität (im Karten-Prompt ganz oben und als Erinnerung am Ende, auch beim
+  Nachholen, Ausdünnen und Umformulieren; Feld hervorgehoben), „Sehr wichtig“ → high, „Nicht so wichtig“ → low oder keine Karte, „Streichen“ →
   keine Karte, nicht Erwähntes ohne Klausurbezug → überspringen. Keine Karten,
   die Beispiele abfragen; jede Definitionskarte → auch Reiter Definitionen. Lehrbuch nur im Tutor. Jede Seite: Karte
   oder Grund fürs Überspringen. „Karten ausdünnen“ (`learning.propose_slim`/`apply_slim`) räumt bestehende Karten
@@ -70,6 +77,8 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Vorlesung floss ein. Legte Formel-Vorschläge in `formula_inbox` ab (Reiter Formeln & Notizen). Tests dafür setzen
   `PREP_ENABLED` per monkeypatch auf True.
 - Vermerke in den Notizen („nicht relevant“, „kommt dran“) und die Kategorien gelten für Karten, Ausdünnen und Quiz.
+- Quiz: Themenschwerpunkte nach Häufigkeit/Punkten in den Altklausuren (plus letzte Klausur-Analyse), aber nur Stoff
+  aus dem Kontext (bereits gehörte/gewählte Vorlesungen).
 - Keine erklärenden Hinweistexte in der Oberfläche ergänzen (Nutzerin hat sie bewusst entfernen lassen).
 - PDFs zuerst nur als Text lesen; Seiten mit Abbildungen vorschlagen, genau lesen nur nach Auswahl.
 

@@ -87,6 +87,18 @@ st.markdown("""
   [class*="st-key-row_"] { margin-bottom: -0.6rem; }
   [class*="st-key-nextbox_"] { background: rgba(28, 131, 225, 0.09); border-color: rgba(28, 131, 225, 0.35) !important; }
   [class*="st-key-nextbox_"] h4 { padding: 0.2rem 0 0 0; }
+  [class*="st-key-hintbox_"] { background: rgba(217, 130, 43, 0.08); border-color: rgba(217, 130, 43, 0.55) !important; }
+  /* Abhak-Knöpfe (erledigt / offen) */
+  [class*="st-key-doneon_"] button, [class*="st-key-doneoff_"] button { border-radius: 999px; min-height: 2.2rem;
+    justify-content: center; font-weight: 600; transition: all 0.15s ease; }
+  [class*="st-key-doneon_"] button div, [class*="st-key-doneoff_"] button div { justify-content: center; }
+  [class*="st-key-doneon_"] button { background: rgba(46, 160, 92, 0.16); border: 1px solid rgba(46, 160, 92, 0.6);
+    color: #2e9d5b; }
+  [class*="st-key-doneon_"] button span { color: #2e9d5b; }
+  [class*="st-key-doneon_"] button:hover { background: rgba(46, 160, 92, 0.26); border-color: #2e9d5b; color: #2e9d5b; }
+  [class*="st-key-doneoff_"] button { background: transparent; border: 1.5px dashed rgba(128, 128, 128, 0.55);
+    color: inherit; opacity: 0.85; }
+  [class*="st-key-doneoff_"] button:hover { border-style: solid; border-color: #2e9d5b; color: #2e9d5b; opacity: 1; }
   /* Handy: weniger Rand, kleinere Überschriften, Reiter horizontal scrollbar */
   @media (max-width: 640px) {
     .block-container { padding: 2.8rem 0.7rem 4rem 0.7rem !important; }

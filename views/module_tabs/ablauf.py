@@ -10,7 +10,7 @@ from utils.config import WEEKDAYS_SHORT
 from utils.storage import (CHAPTER_STATUS_FIELDS, chapter_label, get_schedule, lecture_breaks, load_module, load_todos,
                            new_id, save_module, today)
 from utils.units import session_text, short_label, unit_cards, unit_docs
-from views.common import open_unit, toggle_todo
+from views.common import done_button, open_unit
 
 
 def _mark(ok: bool) -> str:
@@ -22,8 +22,7 @@ def _due(d) -> str:
 
 
 def _check(col, label: str, todo: dict, state: dict, wkey: str) -> None:
-    st.session_state[wkey] = bool(state.get(todo["key"]))
-    col.checkbox(label, key=wkey, on_change=toggle_todo, args=(todo, wkey))
+    done_button(col, label, bool(state.get(todo["key"])), todo, wkey)
 
 
 def _lecture_row(module: dict, data: dict, lec: dict, state: dict, is_next: bool) -> None:

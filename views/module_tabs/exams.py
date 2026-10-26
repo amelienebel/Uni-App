@@ -35,6 +35,11 @@ Anforderungen:
 - Liegt im Kontext eine Nachbereitung bei, bestimmt sie die Auswahl: „Sehr wichtig“ bevorzugt und gründlich
   abfragen, „Nicht so wichtig“ höchstens selten, „Nicht klausurrelevant (gestrichen)“ NIE abfragen. Vermerke in den
   Notizen gelten genauso („nicht relevant“, „kommt nicht dran“ ⇒ nie abfragen; „wichtig“, „kommt dran“ ⇒ bevorzugt).
+- THEMENSCHWERPUNKTE nach den Klausuren: Verteile die Fragen auf die Themen so, wie sie in den Altklausuren
+  gewichtet sind – was dort häufig und mit vielen Punkten drankommt, öfter und gründlicher abfragen; Themen, die in
+  Klausuren kaum vorkommen, nur selten. ABER: Abgefragt wird NUR Stoff, der im <kontext> steht (die Vorlesungen,
+  die ich schon hatte). Klausurthemen, die im Kontext nicht behandelt werden, komplett weglassen – auch wenn sie in
+  den Altklausuren wichtig sind.
 - explanation: warum die Lösung richtig ist. points: realistische Punktzahl.
 - Formeln in LaTeX mit $...$.
 {exam_hint}
@@ -131,6 +136,11 @@ def build_quiz(cfg: dict, module_id: str, data: dict, n: int, types: str, diffic
     if style:
         exam_hint = ("\nOrientiere dich an Aufbau und Stil dieser Altklausuren und Übungsblätter:\n"
                      "<klausur_und_uebungen>\n" + style + "\n</klausur_und_uebungen>\n")
+    analysis = data.get("exam_analyses") or []
+    if use_exams and analysis and analysis[-1].get("topics"):
+        exam_hint += ("\nThemenhäufigkeit in den Altklausuren (laut Analyse; nur Themen aus dem Kontext abfragen):\n"
+                      + "\n".join(f"- {t['topic']}: {t['frequency']} – {t['typical_tasks']}"
+                                   for t in analysis[-1]["topics"]) + "\n")
     titles = scope_label or ", ".join(chapter_label(data, c) for c in chapter_ids) or "alle Kapitel"
     choice_type = {"mc_multi": "nur mc_multi", "sc4": "nur mc"}.get(fmt["type"], "mc und mc_multi gemischt")
     type_text = {QUIZ_TYPES[0]: EXAM_TYPE_TEXT[fmt["type"]],

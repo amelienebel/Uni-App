@@ -63,7 +63,7 @@
           "weekday": 0,
           "start": "14:00",
           "end": "16:00",
-          "room": "Amalienstraße 73a – Raum 220"
+          "room": "Geschw.-Scholl-Pl. 1 (M) – M 110 (Hauptgebäude)"
         }
       ],
       "chapters": [
@@ -574,8 +574,8 @@
       "color": "#D9822B",
       "ects": 6,
       "exam_format": {
-        "type": "mixed",
-        "label": "Noch unbekannt – Mix aus offenen Fragen und Multiple/Single Choice"
+        "type": "open",
+        "label": "Freie Aufgaben (offene Fragen und Rechenaufgaben mit Detaillösung)"
       },
       "exam_date": "2027-02-08",
       "keywords": [

@@ -127,6 +127,20 @@ def toggle_todo(todo: dict, widget_key: str) -> None:
         save_module(todo["module_id"])
 
 
+def _flip_done(todo: dict, widget_key: str, value: bool, callback, args: tuple) -> None:
+    st.session_state[widget_key] = value
+    (callback or toggle_todo)(*(args or (todo, widget_key)))
+
+
+def done_button(col, label: str, done: bool, todo: dict | None, widget_key: str, callback=None,
+                args: tuple | None = None) -> None:
+    """Abhak-Knopf statt Kästchen: grün mit Haken, wenn erledigt; Klick schaltet um (wie toggle_todo)."""
+    with col.container(key=f"{'doneon' if done else 'doneoff'}_{widget_key}"):
+        st.button(label, key=f"btn_{widget_key}", width="stretch",
+                  icon=":material/check_circle:" if done else ":material/radio_button_unchecked:",
+                  on_click=_flip_done, args=(todo, widget_key, not done, callback, args))
+
+
 # Eigene To-dos ohne Modul erscheinen unter diesem Pseudo-Modul
 FREE_MODULE = {"id": "frei", "name": "Eigene Aufgabe", "short": "Eigenes", "symbol": "edit_note", "color": "#7a7a7a"}
 

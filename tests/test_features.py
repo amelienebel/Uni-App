@@ -484,3 +484,113 @@ def test_review_steps_without_prep(monkeypatch):
     at.button(key=f"cvnext_{lec['id']}").click()
     _run(at)
     assert any("Karte 2 von 2" in m.value for m in at.markdown)
+
+
+def test_rooms_exam_format_and_exercise_page():
+    """Mathe-Tutorium in M 110, I&F mit freien Aufgaben; Übungsseite ohne eigene Lösung/Karten, Abhak-Knopf."""
+    from utils import storage, units
+    from utils.config import exam_format, get_module, load_config
+    from views.common import PAGES
+
+    cfg = load_config()
+    tut = next(e for e in get_module(cfg, "mathe")["schedule"] if e["type"] == "Tutorium")
+    assert "M 110" in tut["room"]
+    assert exam_format(get_module(cfg, "invfin"))["type"] == "open"
+    settings = storage.load_settings()
+    settings["schedule"] = [{"module_id": "mathe", "type": "Tutorium", "weekday": 0, "start": "14:00", "end": "16:00",
+                             "room": "Amalienstraße 73a – Raum 220"}]
+    assert "M 110" in storage.get_schedule(cfg)[0]["room"]
+    settings["schedule"] = []
+
+    data = storage.load_module("mathe")
+    _, exs = units.all_units(cfg, get_module(cfg, "mathe"), data)
+    ex = exs[1]
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["module"]
+    at.session_state["nav_module"] = "mathe"
+    at.session_state["unit_mathe"] = ex["id"]
+    _run(at)
+    assert not any("Meine Lösung" in m.value or "Karteikarten zu" in m.value for m in at.markdown)
+    wkey = f"exdone_mathe_{ex['id']}"
+    at.button(key=f"btn_{wkey}").click()
+    _run(at)
+    assert at.session_state["_todos"].get(ex["plan_key"]) is True
+    at.button(key=f"btn_{wkey}").click()
+    _run(at)
+    assert at.session_state["_todos"].get(ex["plan_key"]) is False
+
+
+def test_priority_picker_in_focus_mode():
+    from views.common import PAGES
+
+    cards = _add_cards(1)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["cards"]
+    _run(at)
+    _button(at, "Jetzt lernen").click()
+    _run(at)
+    picker = next(b for b in at.button_group if b.key and "_prio_" in b.key)
+    picker.set_value("low")
+    _run(at)
+    card = next(c for c in at.session_state["_module_mathe"]["cards"] if c["id"] == cards[0]["id"])
+    assert card["priority"] == "low"
+
+
+def test_exam_tasks_only_for_held_lectures(monkeypatch):
+    from utils import ai, exam_tasks, storage, units
+    from utils.config import get_module, load_config
+    from views.common import PAGES
+
+    cfg = load_config()
+    data = storage.load_module("invfin")
+    lecs, _ = units.all_units(cfg, get_module(cfg, "invfin"), data)
+    data["documents"].append({"id": "ak1", "filename": "Klausur WS24.pdf", "doc_type": "altklausur", "unit": None,
+                              "n_pages": 1, "n_chars": 10})
+    seen = {}
+
+    def fake_json(prompt, schema, **kw):
+        seen["prompt"] = prompt
+        return {"tasks": [
+            {"nr": "1", "question": "Berechnen Sie den Kapitalwert.", "points": 10, "operator": "Berechnen Sie",
+             "type": "freitext", "options": [], "correct_indices": [], "lectures": [lecs[0]["nr"]],
+             "sample_answer": "NPV = …", "explanation": "Abzinsen"},
+            {"nr": "2", "question": "Erläutern Sie das CAPM.", "points": 8, "operator": "Erläutern Sie",
+             "type": "freitext", "options": [], "correct_indices": [], "lectures": [lecs[-1]["nr"]],
+             "sample_answer": "…", "explanation": ""}]}
+
+    monkeypatch.setattr(ai, "complete_json", fake_json)
+    monkeypatch.setattr(exam_tasks, "get_document_text", lambda *a, **k: "Aufgabe 1 …")
+    assert exam_tasks.extract_tasks(cfg, "invfin", data["documents"][-1]) == 2
+    assert f"{lecs[0]['nr']}: {lecs[0]['topic']}" in seen["prompt"]
+    found = exam_tasks.tasks_for(storage.load_module("invfin"), {lecs[0]["nr"]})
+    assert [t["nr"] for _, _, t in found] == ["1"]
+
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["module"]
+    at.session_state["nav_module"] = "invfin"
+    at.session_state["learn_sel_invfin"] = [lecs[0]["id"]]
+    _run(at)
+    texts = [m.value for m in at.markdown]
+    assert "Berechnen Sie den Kapitalwert." in texts and "Erläutern Sie das CAPM." not in texts
+
+
+def test_card_hint_always_in_prompt(monkeypatch):
+    from datetime import date
+
+    from utils import ai, learning
+
+    data = {"cards": [], "chapters": [], "definitions": [], "lecture_notes": {},
+            "documents": [{"id": "d1", "filename": "VL.pdf", "doc_type": "folien", "unit": "u1"}]}
+    unit = {"id": "u1", "kind": "lecture", "nr": 1, "date": date(2026, 10, 20), "topic": "T", "chapter_id": None}
+    data["lecture_notes"]["u1"] = {"card_hint": "Nur Formeln abfragen", "text": "", "images": []}
+    monkeypatch.setattr(learning, "load_module", lambda _mid: data)
+    monkeypatch.setattr(learning, "save_module", lambda _mid: None)
+    monkeypatch.setattr(learning, "get_module", lambda _cfg, _mid: {"name": "F"})
+    monkeypatch.setattr(learning, "get_document_pages", lambda _doc: ["a", "b"])
+    monkeypatch.setattr(learning, "exam_style_material", lambda *a, **k: "")
+    monkeypatch.setattr(ai, "is_available", lambda: True)
+    seen = {}
+    monkeypatch.setattr(ai, "complete_json", lambda prompt, *a, **k: seen.update(prompt=prompt) or {"cards": []})
+    learning.generate_unit_cards({}, "m", unit, only={"d1": {2}})
+    assert seen["prompt"].startswith("<hinweis_zur_kartenerstellung>\nNur Formeln abfragen")
+    assert seen["prompt"].rstrip().endswith("Nur Formeln abfragen")

@@ -52,6 +52,25 @@ TYPE_LABELS = {"definition": "Definition", "list": "Aufzählung", "process": "Ab
 PRIORITY_LABELS = {"high": "hoch", "normal": "normal", "low": "niedrig"}
 
 
+def _set_priority(module_id: str, card_id: str, widget_key: str) -> None:
+    value = st.session_state.get(widget_key)
+    if value not in PRIORITY_LABELS:
+        return
+    data = load_module(module_id)
+    card = next((c for c in data["cards"] if c["id"] == card_id), None)
+    if card is not None:
+        card["priority"] = value
+        save_module(module_id)
+
+
+def priority_picker(col, module_id: str, card: dict, key: str) -> None:
+    """Priorität der Karte direkt umstellen (hoch / normal / niedrig), ohne Feedback."""
+    wkey = f"{key}_prio_{card['id']}"
+    st.session_state[wkey] = card.get("priority") if card.get("priority") in PRIORITY_LABELS else "normal"
+    col.segmented_control("Priorität", list(PRIORITY_LABELS), format_func=PRIORITY_LABELS.get, key=wkey,
+                          on_change=_set_priority, args=(module_id, card["id"], wkey))
+
+
 def _norm(text: str) -> str:
     return re.sub(r"[\s$\\{}^_]+", " ", text.lower())
 
@@ -361,6 +380,7 @@ def _card_view(module_id: str, data: dict, card: dict, key: str, full: bool) -> 
                         return
                 st.session_state[f"cvmsg_{key}"] = f"Auf {n} Karten aufgeteilt." if n > 1 else "Karte überarbeitet."
                 st.rerun()
+        priority_picker(st, module_id, card, f"cv_{key}")
         c1, c2, c3 = st.columns(3)
         if card.get("previous"):
             c1.button("Rückgängig", key=f"cvundo_{key}_{card['id']}", icon=":material/undo:", width="stretch",

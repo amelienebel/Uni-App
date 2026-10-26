@@ -15,7 +15,7 @@ from utils.pdf_parser import figure_pages
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
                            load_todos, now_iso, read_data_file, save_module, save_todos, save_upload)
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
-from views.common import LECTURE_TAB, ai_hint, lecture_tabs, open_unit, render_formula, toggle_todo
+from views.common import LECTURE_TAB, ai_hint, done_button, lecture_tabs, open_unit, render_formula, toggle_todo
 from views import quiz_center
 from views.formulas import in_sheet
 from views.module_tabs import exams, study, tutor
@@ -68,8 +68,8 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
               (c2, "nachbereitet", review_label)] if planner.PREP_ENABLED else [(c1, "nachbereitet", review_label)]
     for col, field, label in checks:
         wkey = f"lst_{field}_{module_id}_{lec['id']}"
-        st.session_state[wkey] = bool(state.get(planner.lecture_key(module_id, lec["date"], field)))
-        col.checkbox(label, key=wkey, on_change=_status_toggle, args=(module_id, lec, field, wkey))
+        done_button(col, label, bool(state.get(planner.lecture_key(module_id, lec["date"], field))), None, wkey,
+                    callback=_status_toggle, args=(module_id, lec, field, wkey))
 
     related = related_exercises(lec, exs)
     if related:
@@ -404,11 +404,13 @@ def _notes_step(cfg: dict, module_id: str, lec: dict) -> None:
     with st.form(f"lnotes_{module_id}_{lec['id']}"):
         text = st.text_area("Notizen", notes["text"], height=220,
                             placeholder="Was habe ich mitgeschrieben? Formeln gern in LaTeX: $C_0 = ...$")
+        with st.container(border=True, key=f"hintbox_{lec['id'].replace(':', '_')}"):
+            card_hint = st.text_area(":material/style: **Hinweis zur Kartenerstellung**", notes["card_hint"],
+                                     height=110)
         c1, c2, c3 = st.columns(3)
         emphasized = c1.text_area("Sehr wichtig", notes["emphasized"], height=130)
         briefly = c2.text_area("Nicht so wichtig", notes["briefly"], height=130)
         skip = c3.text_area("Streichen", notes["skip"], height=130)
-        card_hint = st.text_area("Hinweis zur Kartenerstellung", notes["card_hint"], height=80)
         save = st.form_submit_button("Speichern", width="stretch")
     if save:
         notes.update({"text": text, "emphasized": emphasized, "briefly": briefly, "skip": skip,
@@ -491,6 +493,10 @@ def _cards_step(cfg: dict, module_id: str, lec: dict) -> None:
         st.caption("Karten entstehen erst, wenn du auf „Karteikarten erstellen“ klickst – am besten nach der "
                    "Vorlesung, wenn du in der Nachbereitung eingetragen hast, was sehr wichtig oder nicht so wichtig "
                    "wurde.")
+    hint = (lecture_notes(data, lec["id"]).get("card_hint") or "").strip()
+    if hint:
+        with st.container(border=True, key=f"hintbox_show_{lec['id'].replace(':', '_')}"):
+            st.markdown(f":material/style: **Hinweis zur Kartenerstellung:** {hint}")
     if has_ai or cards or unit_docs(data, lec):
         study.generate_button(cfg, module_id, lec, cards, key=lec["id"])
     if generated:

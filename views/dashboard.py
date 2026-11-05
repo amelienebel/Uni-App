@@ -11,10 +11,10 @@ import streamlit as st
 from utils import planner
 from utils import spaced_repetition as sr
 from utils.config import WEEKDAYS, get_module
-from utils.storage import (days_until_exam, get_exam_date, get_schedule, lecture_breaks,
+from utils.storage import (in_timetable, days_until_exam, get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
 from views import cards_center
-from views.common import custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
+from views.common import is_mobile, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -242,7 +242,7 @@ def render(cfg: dict) -> None:
     st.markdown(f"#### Woche {monday:%d.%m.} – {monday + timedelta(days=6):%d.%m.%Y}"
                 + (" · vorlesungsfrei" if planner.is_break_week(monday, breaks)
                    else f" · Vorlesungswoche {week_no}" if 1 <= week_no and monday <= sem_end else ""))
-    c1, c2, c3, _ = st.columns([1, 1, 1, 4])
+    c1, c2, c3, _ = st.container(key="weeknav").columns([1, 1, 1, 4])
     if c1.button("◀ Vorwoche", width="stretch"):
         st.session_state["week_offset"] = offset - 1
         st.rerun()
@@ -255,7 +255,7 @@ def render(cfg: dict) -> None:
 
     schedule = get_schedule(cfg)
     events = [e for e in planner.week_events(schedule, monday)
-              if e.get("module_id") in modules_data and sem_start <= e["date"] <= sem_end
+              if e.get("module_id") in modules_data and sem_start <= e["date"] <= sem_end and in_timetable(e)
               and not planner.break_for(e["date"], breaks)]
     todos = planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end, settings["learning"], breaks)
     todo_state = load_todos()
@@ -275,6 +275,8 @@ def render(cfg: dict) -> None:
         except (KeyError, ValueError):
             continue
 
+    if "dash_list_view" not in st.session_state:  # auf dem Handy automatisch als Liste
+        st.session_state["dash_list_view"] = is_mobile()
     list_view = st.toggle("Listenansicht (fürs Handy)", key="dash_list_view")
 
     # --- Stundenplan-Raster ---------------------------------------------------

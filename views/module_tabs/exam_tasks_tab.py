@@ -20,13 +20,10 @@ def _extract(cfg: dict, module_id: str, docs: list[dict]) -> None:
                 return
 
 
-def _grade(module_id: str, data: dict, task: dict, answer: str) -> None:
+def _grade(module_id: str, data: dict, task: dict, answer: str, weak: str) -> None:
     with st.spinner("Korrigiere …"):
         try:
-            task["grading"] = ai.complete_json(exams.GRADING_PROMPT.format(
-                points=task.get("points", 5), operator=task.get("operator", ""), question=task["question"],
-                sample=task.get("sample_answer", ""), answer=answer), ai.GRADING_SCHEMA, max_tokens=4000,
-                effort="low")
+            task["grading"] = exams.grade_answer(task, answer, weak)
             save_module(module_id)
         except ai.AIError as exc:
             st.error(str(exc))
@@ -38,7 +35,8 @@ def _reset(module_id: str, task: dict) -> None:
     save_module(module_id)
 
 
-def _task_card(module_id: str, module_name: str, data: dict, filename: str, doc_id: str, i: int, task: dict) -> None:
+def _task_card(module_id: str, module_name: str, data: dict, filename: str, doc_id: str, i: int, task: dict,
+               weak: str = "") -> None:
     key = f"xt_{doc_id}_{i}"
     with st.container(border=True):
         meta = [filename, f"Aufgabe {task.get('nr') or i + 1}", f"{task.get('points', 0)} P.",
@@ -47,6 +45,7 @@ def _task_card(module_id: str, module_name: str, data: dict, filename: str, doc_
         st.markdown(task["question"])
         stored = task.get("result")
         answer = quiz_center.answer_input(task, key, stored)
+        quiz_center.hint_box(task, key, lambda: save_module(module_id))
         if stored is None:
             if st.button("Auswerten", key=f"{key}_check", type="primary"):
                 task["result"] = quiz_center.evaluate(task, answer)
@@ -57,12 +56,10 @@ def _task_card(module_id: str, module_name: str, data: dict, filename: str, doc_
         if not quiz_center.is_choice(task):
             grading = task.get("grading")
             if grading:
-                st.info(f"**{grading['score']}/{grading['max_score']} Punkte** – {grading['feedback']}")
-                for miss in grading.get("missing_points", []):
-                    st.markdown(f"- {miss}")
+                exams.show_grading(grading)
             elif ai.is_available() and stored.get("text", "").strip():
-                if st.button("Korrigieren lassen", key=f"{key}_grade"):
-                    _grade(module_id, data, task, stored["text"])
+                if st.button("Korrigieren lassen", key=f"{key}_grade", icon=":material/rate_review:"):
+                    _grade(module_id, data, task, stored["text"], weak)
                     st.rerun()
         if quiz_center.tutor_chat(task, module_name, key):
             save_module(module_id)
@@ -90,8 +87,9 @@ def render(cfg: dict, module: dict, data: dict, chosen: list[dict]) -> None:
     total = sum(len(e.get("tasks", [])) for e in done.values())
     st.caption(f"{len(tasks)} von {total} Klausuraufgaben passen zu den gewählten Vorlesungen.")
     names = {d["id"]: d["filename"] for d in docs}
+    weak = exams.weak_points(cfg, module_id, data, [lec.get("chapter_id") for lec in chosen])
     for doc_id, i, task in tasks:
-        _task_card(module_id, module["name"], data, names[doc_id], doc_id, i, task)
+        _task_card(module_id, module["name"], data, names[doc_id], doc_id, i, task, weak)
     if done and ai.is_available():
         with st.expander("Neu auslesen", icon=":material/refresh:"):
             for doc in (d for d in docs if d["id"] in done):

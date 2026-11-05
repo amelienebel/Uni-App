@@ -142,6 +142,15 @@ def get_schedule(cfg: dict | None = None) -> list[dict]:
     return schedule
 
 
+# Termine, die im Stundenplan (Heute, Wochenübersicht) nicht erscheinen – Übungsblätter, To-dos und Modulseite
+# bleiben trotzdem bestehen
+HIDDEN_FROM_TIMETABLE = {("vwl", "Übung"), ("vwl", "Tutorium")}
+
+
+def in_timetable(event: dict) -> bool:
+    return (event.get("module_id"), event.get("type")) not in HIDDEN_FROM_TIMETABLE
+
+
 # Umgezogene Räume: gilt auch für einen in den Einstellungen gespeicherten Stundenplan
 ROOM_MOVES = {"Amalienstraße 73a – Raum 220": "Geschw.-Scholl-Pl. 1 (M) – M 110 (Hauptgebäude)"}
 

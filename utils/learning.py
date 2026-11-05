@@ -11,7 +11,7 @@ from utils.config import exam_format, get_module
 from utils.pdf_parser import find_formula_candidates, heuristic_analysis
 from utils.storage import (chapter_label, documents_of, get_document_pages, get_document_text, load_module, now_iso,
                            read_data_file, save_module, set_document_pages, suggest_formulas, add_formulas)
-from utils.units import all_units, lecture_notes, short_label, unit_cards, unit_docs
+from utils.units import FEEDBACK_FIELDS, all_units, lecture_notes, short_label, unit_cards, unit_docs
 
 _PREP_TASKS = """Ich lese deine Vorbereitung auf dem Mac mit, während ich auf dem iPad durch die Folien scrolle.
 Darum: KEIN Fließtext, nur Stichpunkte und Tabellenzellen (Tabellen im Telegrammstil, je max. ~15 Wörter).
@@ -222,7 +222,7 @@ KAPITEL: {chapters}
 <klausur_und_uebungen>
 {exam_material}
 </klausur_und_uebungen>
-
+{feedback}
 <dokumente>
 {documents}
 </dokumente>{hint_reminder}"""
@@ -511,6 +511,48 @@ def exam_style_material(cfg: dict, module_id: str, data: dict, chapter_ids: list
     return "\n\n".join(parts)
 
 
+FEEDBACK_CHARS = 8000
+
+FEEDBACK_RULE = """RÜCKMELDUNG AUS DEN ÜBUNGEN (<rueckmeldung_uebungen>): Das hat die Nutzerin selbst nach dem Bearbeiten
+der Übungsblätter festgehalten. „Lief schlecht“ = Schwachstellen ⇒ diese Themen, Rechenschritte und typischen Fehler
+gezielt und bevorzugt abdecken (bei Karten: priority high, Fehlerfalle in der Erklärung). „Lief gut“ = sitzt schon ⇒
+seltener und nicht mehrfach abfragen. Nur Stoff aus den Unterlagen/dem Kontext – die Rückmeldung bestimmt nur die
+Gewichtung."""
+
+
+def exercise_feedback_material(cfg: dict, module_id: str, data: dict, chapter_ids: list[str] | None = None) -> str:
+    """Rückmeldungen der Nutzerin zu den Übungen (was gut/schlecht lief) – gewählte Kapitel zuerst."""
+    fb_all = {k: v for k, v in (data.get("exercise_feedback") or {}).items()
+              if any((v.get(f) or "").strip() for f, _ in FEEDBACK_FIELDS)}
+    if not fb_all:
+        return ""
+    exs = {ex["id"]: ex for ex in all_units(cfg, get_module(cfg, module_id), data)[1]}
+    chapter_ids = [c for c in (chapter_ids or []) if c]
+    items = sorted(fb_all.items(), key=lambda kv: (bool(chapter_ids) and (exs.get(kv[0]) or {}).get("chapter_id")
+                                                   not in chapter_ids, kv[0]))
+    parts, used = [], 0
+    for unit_id, fb in items:
+        ex = exs.get(unit_id) or {}
+        title = ex.get("title") or unit_id
+        if ex.get("chapter_id"):
+            title += f" ({chapter_label(data, ex['chapter_id'])})"
+        body = "\n".join(f"{label}: {fb[f].strip()}" for f, label in FEEDBACK_FIELDS if (fb.get(f) or "").strip())
+        block = f"<uebung name=\"{title}\">\n{body}\n</uebung>"
+        if used + len(block) > FEEDBACK_CHARS:
+            break
+        used += len(block)
+        parts.append(block)
+    return "\n".join(parts)
+
+
+def feedback_block(cfg: dict, module_id: str, data: dict, chapter_ids: list[str] | None = None) -> str:
+    """Fertiger Prompt-Baustein (Regel + Rückmeldungen) oder leer."""
+    material = exercise_feedback_material(cfg, module_id, data, chapter_ids)
+    if not material:
+        return ""
+    return f"\n{FEEDBACK_RULE}\n<rueckmeldung_uebungen>\n{material}\n</rueckmeldung_uebungen>\n"
+
+
 def answer_markdown(lines: list[str]) -> str:
     """Stichpunkte der KI als Markdown-Liste (Unterpunkte eingerückt, nummerierte Schritte bleiben nummeriert)."""
     out = []
@@ -587,6 +629,7 @@ def generate_unit_cards(cfg: dict, module_id: str, unit: dict, only: dict[str, s
         notes=notes or "keine", documents=documents or "keine",
         hint=HINT_BLOCK.format(hint=hint) if hint else "",
         hint_reminder=HINT_REMINDER.format(hint=hint) if hint else "",
+        feedback=feedback_block(cfg, module_id, data, [unit.get("chapter_id")]),
         exam_material=exam_style_material(cfg, module_id, data, [unit["chapter_id"]] if unit.get("chapter_id") else [],
                                           exclude={d["id"] for d in docs}) or "keine hochgeladen")
     result = ai.complete_json(prompt, ai.CARDS_SCHEMA, system=CARDS_SYSTEM, max_tokens=64000, task="cards")
@@ -713,7 +756,7 @@ weder gelöscht noch umgeschrieben werden, bleiben unverändert. Eine Karte nie 
 <klausur_und_uebungen>
 {exam_material}
 </klausur_und_uebungen>
-
+{feedback}
 <unterlagen>
 {material}
 </unterlagen>
@@ -764,6 +807,7 @@ def propose_slim(cfg: dict, module_id: str, unit: dict) -> dict:
         notes=_card_notes(data, unit) or "keine",
         exam_material=exam_style_material(cfg, module_id, data, [unit["chapter_id"]] if unit.get("chapter_id") else [],
                                           exclude={d["id"] for d in docs}) or "keine hochgeladen",
+        feedback=feedback_block(cfg, module_id, data, [unit.get("chapter_id")]),
         material=_card_documents(docs) or "keine", cards=listing)
     result = ai.complete_json(prompt, SLIM_SCHEMA, max_tokens=32000, task="cards")
     proposal = {"created_at": now_iso(), "delete": [], "rewrite": []}

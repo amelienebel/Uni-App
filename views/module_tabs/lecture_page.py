@@ -9,15 +9,14 @@ import streamlit as st
 
 from utils import ai, planner, script, textbook
 from utils.config import WEEKDAYS, get_module, load_config
-from utils.learning import (extract_unit_formulas, formulas_cost_estimate, page_cost_estimate, pending_figures,
-                            read_pages_visual, run_analysis, script_docs, unit_formulas, unit_material)
-from utils.pdf_parser import figure_pages
+from utils.learning import (page_cost_estimate, pending_figures, read_pages_visual, run_analysis, script_docs,
+                            unit_material)
+from utils.pdf_parser import figure_pages, render_page
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
                            load_todos, now_iso, read_data_file, save_module, save_todos, save_upload)
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
 from views.common import LECTURE_TAB, ai_hint, done_button, lecture_tabs, open_unit, render_formula, toggle_todo
 from views import quiz_center
-from views.formulas import in_sheet
 from views.module_tabs import exams, study, tutor
 from views.module_tabs.files import file_list, show_messages, uploader
 
@@ -173,6 +172,28 @@ def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
             _run(cfg, module_id, lambda: run_analysis(cfg, module_id, doc), "Erstelle Vorbereitung …")
 
 
+@st.cache_data(show_spinner=False, max_entries=60)
+def _page_png(path: str, page: int) -> bytes | None:
+    return render_page(read_data_file(path), page, scale=0.9)
+
+
+def _page_previews(doc: dict, pages: list[int]) -> None:
+    """Folien, deren Abbildungen ich nicht direkt lesen kann, als Bild zeigen."""
+    if not pages:
+        return
+    cols = st.columns(3)
+    for n, page in enumerate(pages):
+        with cols[n % 3]:
+            try:
+                png = _page_png(doc["path"], page)
+            except Exception:  # noqa: BLE001
+                png = None
+            if png:
+                st.image(png, caption=f"Seite {page}", width="stretch")
+            else:
+                st.caption(f"Seite {page} (Vorschau nicht möglich)")
+
+
 def _exact_read(cfg: dict, module_id: str, lec: dict) -> bool:
     """Seiten für Karten, Quiz und Übungsaufgaben genau lesen lassen – auch ohne Vorbereitung.
     Gibt zurück, ob es noch Seiten zur Auswahl gab."""
@@ -196,6 +217,7 @@ def _exact_read(cfg: dict, module_id: str, lec: dict) -> bool:
                             f"Abbildungen nicht sehen:** {', '.join(map(str, pending))}")
             if done:
                 st.caption(f"Genau gelesen: Seite(n) {', '.join(map(str, sorted(done)))}")
+            _page_previews(doc, pending)
             chosen = st.multiselect("Welche Seiten soll ich genau lesen?", options, default=pending,
                                     key=f"exsel_{doc['id']}", format_func=lambda p: f"Seite {p}")
             c1, c2 = st.columns([3, 2])
@@ -332,47 +354,6 @@ def _prep_tab(cfg: dict, module_id: str, lec: dict) -> None:
                     st.rerun()
 
 
-HANDWRITING_PROMPT = """Das sind Fotos meiner handschriftlichen Mitschrift aus der Vorlesung „{topic}“ im Modul
-„{module}“. Tippe sie vollständig und originalgetreu ab, in der Reihenfolge der Fotos. Behalte Überschriften,
-Aufzählungen und Pfeile/Zusammenhänge bei (als Markdown), Formeln in LaTeX mit $...$, Skizzen kurz in [eckigen
-Klammern] beschreiben. Unleserliches mit [?] markieren. Nichts hinzuerfinden, nichts zusammenfassen."""
-
-
-def _handwriting(module: dict, module_id: str, lec: dict, notes: dict) -> None:
-    """Fotos der Papier-Mitschrift → KI tippt ab → Text landet in den Notizen."""
-    with st.expander("Mitschrift auf Papier? Fotos abtippen lassen", icon=":material/photo_camera:"):
-        if not ai.is_available():
-            st.caption("Dafür wird ein API-Key benötigt.")
-            return
-        round_key = f"hw_round_{lec['id']}"
-        photos = st.file_uploader("Fotos der Mitschrift (am Handy direkt mit der Kamera)", type=list(IMAGE_TYPES),
-                                  accept_multiple_files=True, key=f"hw_{lec['id']}_{st.session_state.get(round_key, 0)}")
-        if photos and st.button("Abtippen & in meine Notizen übernehmen", key=f"hw_go_{lec['id']}", type="primary",
-                                icon=":material/edit_note:"):
-            content = []
-            for photo in photos:
-                ext = Path(photo.name).suffix.lower().lstrip(".")
-                content.append(ai.image_block(photo.getvalue(), IMAGE_TYPES.get(ext, "image/jpeg")))
-            content.append({"type": "text", "text": HANDWRITING_PROMPT.format(topic=lec["topic"], module=module["name"])})
-            with st.spinner(f"Tippe {len(photos)} Foto(s) ab …"):
-                try:
-                    text = ai.complete(content, max_tokens=16000)
-                except ai.AIError as exc:
-                    st.error(str(exc))
-                    return
-            notes["text"] = (notes["text"].rstrip() + "\n\n" if notes["text"].strip() else "") + \
-                f"### Mitschrift (abgetippt)\n\n{text.strip()}"
-            for photo in photos:
-                notes["images"].append({"path": save_upload(module_id, photo.name, photo.getvalue(), "images"),
-                                        "name": photo.name, "transcript": "", "in_notes": True})
-            notes["updated_at"] = now_iso()
-            save_module(module_id)
-            st.session_state[round_key] = st.session_state.get(round_key, 0) + 1
-            st.session_state[f"upmsg_{module_id}"] = [("success", "Mitschrift abgetippt und in deine Notizen "
-                                                                  "übernommen – bitte kurz drüberlesen.")]
-            st.rerun()
-
-
 def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     st.markdown("#### 1 · Notizen")
     _notes_step(cfg, module_id, lec)
@@ -387,8 +368,6 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     st.markdown("#### 4 · Karten durchsehen" + (f" ({len(cards)})" if cards else ""))
     study.browse_cards(module_id, cards, key=lec["id"])
     study.manual_card(module_id, data, lec, key=lec["id"])
-    st.markdown("#### 5 · Formeln für die Formelsammlung")
-    _formulas_step(cfg, module_id, lec)
     st.divider()
     if st.button("✓ Nachbereitung abschließen", key=f"revdone_{lec['id']}", type="primary", width="stretch"):
         _set_done(module_id, lec, "nachbereitet")
@@ -400,7 +379,6 @@ def _notes_step(cfg: dict, module_id: str, lec: dict) -> None:
     module = get_module(cfg, module_id)
     data = load_module(module_id)
     notes = lecture_notes(data, lec["id"])
-    _handwriting(module, module_id, lec, notes)
     with st.form(f"lnotes_{module_id}_{lec['id']}"):
         text = st.text_area("Notizen", notes["text"], height=220,
                             placeholder="Was habe ich mitgeschrieben? Formeln gern in LaTeX: $C_0 = ...$")
@@ -502,62 +480,6 @@ def _cards_step(cfg: dict, module_id: str, lec: dict) -> None:
     if generated:
         st.caption(f"Karten zuletzt erstellt am {datetime.fromisoformat(generated):%d.%m. um %H:%M}.")
     study.coverage_panel(cfg, module_id, lec, key=lec["id"])
-
-
-def _formulas_step(cfg: dict, module_id: str, lec: dict) -> None:
-    """Alle Formeln der Vorlesung anzeigen – angehakte kommen in die Formelsammlung."""
-    data = load_module(module_id)
-    formulas = unit_formulas(data, lec)
-    if msg := st.session_state.pop(f"fxmsg_{lec['id']}", None):
-        getattr(st, msg[0])(msg[1])
-    if unit_docs(data, lec) or has_notes(data, lec["id"]):
-        done = data.get("formulas_done", {}).get(lec["id"])
-        cost = formulas_cost_estimate(data, lec) if ai.is_available() else 0.0
-        label = ("Erneut nach Formeln suchen" if done else "Formeln suchen") + \
-            (f" (ca. {max(1, round(cost * 100))} Cent)" if cost else "")
-        if st.button(label, key=f"fxgo_{lec['id']}", type="secondary" if done else "primary",
-                     icon=":material/functions:"):
-            with st.spinner("Suche die Formeln …"):
-                try:
-                    added = extract_unit_formulas(cfg, module_id, lec)
-                    st.session_state[f"fxmsg_{lec['id']}"] = (
-                        ("success", f"{added} Formel(n) gefunden.") if added else ("info", "Keine neuen Formeln."))
-                except ai.AIError as exc:
-                    st.session_state[f"fxmsg_{lec['id']}"] = ("error", str(exc))
-            st.rerun()
-    if not formulas:
-        return
-    chosen = sum(in_sheet(f) for f in formulas)
-    st.caption(f"{chosen} von {len(formulas)} in der Formelsammlung")
-    for f in formulas:
-        wkey = f"fxsel_{f['id']}"
-        st.session_state[wkey] = in_sheet(f)
-        with st.container(border=True, key=f"fxbox_{f['id']}"):
-            c1, c2, c3 = st.columns([1, 12, 1.4], vertical_alignment="center")
-            c1.checkbox("In die Formelsammlung", key=wkey, on_change=_toggle_formula, args=(module_id, f, wkey),
-                        label_visibility="collapsed")
-            with c2:
-                render_formula(f)
-                if f.get("page"):
-                    st.caption(f"S. {f['page']}")
-            with c3.popover("", icon=":material/edit:", help="Bearbeiten"):
-                with st.form(f"fxedit_{f['id']}", border=False):
-                    name = st.text_input("Name", f["name"])
-                    latex = st.text_area("LaTeX", f["latex"], height=80)
-                    expl = st.text_area("Erklärung", f.get("explanation", ""), height=80)
-                    if st.form_submit_button("Speichern", type="primary") and name.strip() and latex.strip():
-                        f.update({"name": name.strip(), "latex": latex.strip(), "explanation": expl.strip()})
-                        save_module(module_id)
-                        st.rerun()
-                if st.button("Löschen", key=f"fxdel_{f['id']}", icon=":material/delete:"):
-                    data["formulas"].remove(f)
-                    save_module(module_id)
-                    st.rerun()
-
-
-def _toggle_formula(module_id: str, formula: dict, key: str) -> None:
-    formula["in_sheet"] = bool(st.session_state[key])
-    save_module(module_id)
 
 
 def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:

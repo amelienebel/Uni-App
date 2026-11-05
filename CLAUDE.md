@@ -15,10 +15,16 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
 - `app.py` – Login, Seitenleiste (Navigation als Buttons, darunter direkt die Module mit Farbe/Symbol – kein eigener
   Punkt „Module“), Routing über `PAGES` in `views/common.py`,
   Zurück-Button oben auf jeder Seite (Verlauf in `views/common.py`: `track_history`/`go_back`, Reiter mit `on_change="rerun"`).
+  Seite/Modul/Einheit stehen in der Adresse (`?seite=…&modul=…&einheit=…`); ein kleines Skript (`st.html`, Container
+  `watchdog`) lädt die Seite neu, wenn nach einer Pause „Verbindung verloren“ hängen bleibt (nur wenn `/_stcore/health`
+  antwortet) und setzt das Cookie `lernapp_mobile` (`common.is_mobile`: Wochenübersicht auf dem Handy als Liste).
+  `.streamlit/config.toml`: `disconnectedSessionTTL` 8 h, `websocketPingInterval` 25. Design-CSS in `app.py`
+  (Kacheln für Kennzahlen `kpis`, Pillen-Reiter, Handy: To-do-Zeilen und Wochen-Navigation `weeknav` kompakt).
 - `config.json` – Module (Farbe, Material-Symbol, Stundenplan, Kapitel inkl. `nr`, Vorlesungen, Übungen, Fristen-Wochentage `deadlines`,
   Klausurformat `exam_format`: mc_multi / sc4 / open / mixed, VWL und I&F = open (freie Aufgaben) → Karten-Prompt und Quiz), Kalender.
   Mathe-Tutorium: Raum M 110 (Hauptgebäude, Geschw.-Scholl-Pl. 1); `storage.ROOM_MOVES` korrigiert alte Räume auch im
-  gespeicherten Stundenplan.
+  gespeicherten Stundenplan. VWL-Übung und -Tutorium erscheinen nicht im Stundenplan (Heute, Wochenübersicht:
+  `storage.HIDDEN_FROM_TIMETABLE`/`in_timetable`), Übungsblätter, To-dos und Modulseite bleiben.
 - `utils/` – `storage.py` (JSON in `data/`, Cloud-Sync), `cloud_sync.py` (GitHub-Repo, PDFs werden erst bei Bedarf geladen),
   `units.py` (Vorlesungen/Übungen = Einheiten), `planner.py` (To-dos, Fristen), `learning.py` (Folienanalyse, Karten
   inkl. Abdeckung jeder Seite und Prüfdurchgang, Definitionen, Seiten mit Abbildungen genau lesen),
@@ -32,12 +38,16 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   zum Bearbeiten/Löschen, Focus Mode ohne Seitenleiste mit Zurück und Feedback-Button → KI formuliert um; Enter im
   Antwortfeld löst auf; „Lernen“ auf Heute/Wochenplan/Modulseiten öffnet direkt den Focus Mode via `start_focus`),
   `quiz_center.py` (Quiz: Fragen zu gewählten Vorlesungen, Focus Mode Frage für Frage, Mehr Infos, Tutor-Rückfragen),
-  `formulas.py` (Formelsammlung, Formeln einzeln auswählbar → `in_sheet`), `settings_view.py` (mit Reitern
+  Formelsammlung entfernt (keine Seite, Modul-Reiter heißt nur „Notizen“, kein Formel-Schritt; `formulas.py`/
+  `formulas_tab.py` und die Daten bleiben ungenutzt erhalten), `settings_view.py` (mit Reitern
   Export und Backup aus `export_view.py`), Abhak-Knöpfe statt Kästchen (`common.done_button`: grün mit Haken / gestrichelt offen; Ablauf, Vorlesungs- und
-  Übungsseite). Übungsseite nur Blatt, Musterlösung, Fragen (keine eigene Lösung, keine Karten). Priorität einer Karte
+  Übungsseite). Übungsseite nur Blatt, Musterlösung, „Rückmeldung aus dem Chat“ (Lief gut / Lief schlecht,
+  `units.exercise_feedback`, data["exercise_feedback"][unit_id]; Popover mit Frage zum Kopieren für den Claude-Chat),
+  Fragen (keine eigene Lösung, keine Karten). Die Rückmeldung fließt über `learning.feedback_block` in Karten,
+  Ausdünnen und Quiz ein und über `exams.weak_points` in die Korrektur (Quiz-Freitext, Klausuraufgaben). Priorität einer Karte
   direkt an der Karte umstellbar (`study.priority_picker`: Focus Mode und Durchsehen). `module_view.py` (Reiter Ablauf / Lernen & Klausur /
-  Definitionen / Dateien / Formeln & Notizen), `module_tabs/` (Vorlesungs- und Übungsseiten, Lernen mit Reiter Klausuraufgaben (`exam_tasks_tab`: echte
-  Altklausur-Aufgaben nur zu den gewählten, schon gehörten Vorlesungen, Auswerten/Korrigieren/Tutor), Tutor …).
+  Definitionen / Dateien / Notizen), `module_tabs/` (Vorlesungs- und Übungsseiten, Lernen mit Reiter Klausuraufgaben (`exam_tasks_tab`: echte
+  Altklausur-Aufgaben nur zu den gewählten, schon gehörten Vorlesungen, Auswerten/Korrigieren/Tipp/Tutor), Tutor …).
 
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als
@@ -53,17 +63,19 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   einer Einheit auf – erst Vorschlag, dann Übernehmen.
 - Karten entstehen nur auf Klick (nach der Nachbereitung), nie automatisch.
 - Modelle: Zusammenfassung Haiku 5.5, Karten Sonnet 5.5, Tutor Sonnet 5.5, Antwort-/Kartenprüfung Haiku 5.5
-  (änderbar in den Einstellungen).
+  (änderbar in den Einstellungen). Kein Opus (aus `ai.MODELS` entfernt, gespeicherte Opus-Wahl → Sonnet, models_version 3).
+- Quiz: jede Frage hat `hint` (Tipp zum Aufklappen: Zeichen/Notation, Ansatz, ohne Lösung; fehlt er, holt „Tipp
+  anzeigen“ ihn per Haiku) und `option_notes` (je Option richtig/falsch + warum, `quiz_center.option_breakdown`).
+  Freitext: „Korrigieren lassen“ → `exams.grade_answer`/`show_grading` mit errors (was falsch · warum · richtig).
 - Nachbereiten (Reiter der Vorlesung, Schritte in `lecture_page._review_tab`): 1 · Notizen mit „Sehr wichtig“,
   „Nicht so wichtig“, „Streichen“, „Hinweis zur Kartenerstellung“ (Felder in `units.NOTE_FIELDS`; Schlüssel
   emphasized/briefly/skip/card_hint – kein Feld für genannte Beispiele) · 2 · Seiten genau lesen
   (`_exact_read`, beliebige Seiten, Abbildungsseiten vorausgewählt, `read_pages_visual(update_prep=False)`) ·
   3 · Karteikarten erstellen (auf Klick, Abdeckung, prüfen, ausdünnen) · 4 · Karten durchsehen
   (`study.browse_cards`: einzeln durchblättern oder Liste; Feedback → `learning.rewrite_card`, kann auf 2–3 Karten
-  aufteilen, Rückgängig entfernt die Teilkarten; bearbeiten, löschen) · 5 · Formeln (`learning.extract_unit_formulas`
-  sammelt alle Formeln der Vorlesung mit `unit`, `in_sheet: False`; Häkchen = kommt in die Formelsammlung – wichtig für
-  Statistik, dort schreibt sie den Spickzettel selbst) · „Nachbereitung abschließen“ → Reiter Lernen (nur noch
-  Abfrage, Quiz, Tutor).
+  aufteilen, Rückgängig entfernt die Teilkarten; bearbeiten, löschen) · „Nachbereitung abschließen“ → Reiter Lernen
+  (nur noch Abfrage, Quiz, Tutor). Kein Abtippen der Papier-Mitschrift mehr; bei „Seiten genau lesen“ werden die
+  Folien mit Abbildungen als Bild gezeigt (`lecture_page._page_previews`).
 - Mathe: Einheit 3 (Selbststudium) ist eine eigene Einheit (`"self_study": true`, Datum 20.10.) mit eigener Seite.
 - **Vorbereiten (abgeschaltet, `planner.PREP_ENABLED = False`)** – auf Wunsch der Nutzerin vorerst entfernt, Code
   komplett erhalten; `True` stellt alles wieder her: Reiter „Vorbereiten“ (`lecture_page._prep_tab`,

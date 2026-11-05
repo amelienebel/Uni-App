@@ -57,21 +57,101 @@ def evaluate(q: dict, answer: list[int] | str) -> dict:
     return {"text": answer, "correct": None}
 
 
+HINT_PROMPT = """Gib einen Tipp zu dieser Klausuraufgabe (BWL, 1. Semester), der die Lösung NICHT verrät:
+erkläre die Zeichen, Symbole und Notation der Aufgabe (was bedeutet jedes Formelzeichen, jeder Index), nötige
+Fachbegriffe und den Lösungsansatz bzw. die passende Formel – ohne Ergebnis und ohne zu sagen, welche Option richtig
+ist. 1–4 kurze Stichpunkte, Formeln in LaTeX mit $...$.
+
+Aufgabe: {question}
+{options}
+(Nur für dich, nicht verraten – Lösung: {solution})"""
+
+
+def hint_box(q: dict, key: str, on_save=None) -> None:
+    """Aufklappbarer Tipp (Zeichen/Notation, Ansatz) – ohne die Lösung zu verraten."""
+    if not q.get("hint") and not (on_save and ai.is_available()):
+        return
+    with st.expander("Tipp", icon=":material/tips_and_updates:"):
+        if q.get("hint"):
+            st.markdown(q["hint"])
+        elif st.button("Tipp anzeigen", key=f"{key}_hint", icon=":material/tips_and_updates:"):
+            options = "\n".join(f"{chr(65 + j)}) {o}" for j, o in enumerate(q.get("options", [])))
+            solution = (", ".join(chr(65 + j) for j in exams.correct_indices(q)) if is_choice(q)
+                        else q.get("sample_answer", ""))
+            with st.spinner("Hole einen Tipp …"):
+                try:
+                    q["hint"] = ai.complete(HINT_PROMPT.format(question=q["question"], options=options,
+                                                               solution=solution), max_tokens=2000, effort="low",
+                                            task="check").strip()
+                    on_save()
+                except ai.AIError as exc:
+                    st.error(str(exc))
+                    return
+            st.rerun()
+
+
+def option_breakdown(q: dict, picked: list[int]) -> None:
+    """Jede Option einzeln: deine Wahl, richtig/falsch und warum."""
+    right = set(exams.correct_indices(q))
+    notes = q.get("option_notes") or []
+    lines = []
+    for j, opt in enumerate(q["options"]):
+        chosen, ok = j in picked, j in right
+        if chosen and ok:
+            mark = ":green[:material/check_circle:] **Deine Wahl – richtig**"
+        elif chosen:
+            mark = ":red[:material/cancel:] **Deine Wahl – falsch**"
+        elif ok:
+            mark = ":orange[:material/error:] **Richtig – nicht gewählt**"
+        else:
+            mark = ":gray[:material/remove:] nicht gewählt, falsch"
+        note = notes[j].strip() if j < len(notes) and notes[j] else ""
+        lines.append(f"{mark} · {chr(65 + j)}) {opt}" + (f"  \n  _{note}_" if note else ""))
+    st.markdown("\n\n".join(lines))
+
+
 def show_result(q: dict, result: dict) -> None:
     if is_choice(q):
-        right = exams.correct_indices(q)
         if result["correct"]:
             st.success("Richtig!", icon=":material/check_circle:")
         else:
-            st.error("Leider nicht ganz. Richtig ist: " + " · ".join(
-                q["options"][j] for j in right if 0 <= j < len(q["options"])), icon=":material/cancel:")
+            wrong = [j for j in result.get("picked", []) if j not in exams.correct_indices(q)]
+            missed = [j for j in exams.correct_indices(q) if j not in result.get("picked", [])]
+            parts = []
+            if wrong:
+                parts.append("falsch gewählt: " + ", ".join(chr(65 + j) for j in wrong))
+            if missed:
+                parts.append("fehlt: " + ", ".join(chr(65 + j) for j in missed))
+            st.error("Leider nicht ganz – " + " · ".join(parts), icon=":material/cancel:")
+        with st.container(border=True):
+            option_breakdown(q, result.get("picked", []))
     else:
         with st.container(border=True):
             st.markdown("**Musterlösung**")
             st.markdown(q.get("sample_answer") or "–")
+        if result.get("grading"):
+            exams.show_grading(result["grading"])
     if q.get("explanation"):
-        with st.expander("Mehr Infos – warum?", icon=":material/lightbulb:"):
+        with st.expander("Mehr Infos – Lösungsweg", icon=":material/lightbulb:", expanded=not result.get("correct")
+                         and is_choice(q)):
             st.markdown(q["explanation"] + (f"\n\n_Folie {q['slides']}_" if q.get("slides") else ""))
+
+
+def grade_button(q: dict, result: dict, key: str, weak: str = "", on_save=None) -> bool:
+    """Freitext: „Korrigieren lassen“ – KI sagt genau, was falsch war und warum. True = neu korrigiert."""
+    if is_choice(q) or result.get("grading") or not ai.is_available() or not (result.get("text") or "").strip():
+        return False
+    if not st.button("Korrigieren lassen", key=f"{key}_grade", icon=":material/rate_review:"):
+        return False
+    with st.spinner("Korrigiere …"):
+        try:
+            result["grading"] = exams.grade_answer(q, result["text"], weak)
+        except ai.AIError as exc:
+            st.error(str(exc))
+            return False
+    if on_save:
+        on_save()
+    return True
 
 
 def tutor_chat(q: dict, module_name: str, key: str) -> bool:
@@ -103,8 +183,8 @@ def tutor_chat(q: dict, module_name: str, key: str) -> bool:
         return True
 
 
-def question_card(q: dict, key: str, store: dict, title: str = "") -> bool:
-    """Frage mit Antwortfeld und „Auswerten“; Ergebnis landet in `store`. True = gerade ausgewertet."""
+def question_card(q: dict, key: str, store: dict, title: str = "", on_save=None, weak: str = "") -> bool:
+    """Frage mit Antwortfeld, Tipp und „Auswerten“; Ergebnis landet in `store`. True = gerade ausgewertet."""
     with st.container(border=True):
         badge = TYPE_LABELS.get(q.get("type") if is_choice(q) or q.get("type") == "freitext" else "freitext")
         meta = [m for m in (title, badge, q.get("operator"), f"Folie {q['slides']}" if q.get("slides") else "") if m]
@@ -112,11 +192,14 @@ def question_card(q: dict, key: str, store: dict, title: str = "") -> bool:
         st.markdown(f"#### {q['question']}")
         stored = store.get(key)
         answer = answer_input(q, key, stored)
+        hint_box(q, key, on_save)
         if stored is None:
             if st.button("Auswerten", key=f"{key}_check", type="primary", width="stretch"):
                 store[key] = evaluate(q, answer)
                 return True
             return False
+        if grade_button(q, stored, key, weak, on_save):
+            return True
         show_result(q, stored)
     return False
 
@@ -247,7 +330,8 @@ def _session(cfg: dict) -> None:
     q = quiz["questions"][sess["i"]]
     key = f"qz_{quiz['id']}_{sess['i']}"
     st.caption(f"{module['short']} · {quiz.get('label') or 'Quiz'}")
-    if question_card(q, key, sess["answers"]):
+    weak = sess.setdefault("weak", exams.weak_points(cfg, module_id, data, quiz.get("chapters")))
+    if question_card(q, key, sess["answers"], on_save=lambda: save_module(module_id), weak=weak):
         st.rerun()
     if key in sess["answers"]:
         if tutor_chat(q, module["name"], key):

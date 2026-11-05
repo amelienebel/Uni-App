@@ -18,7 +18,6 @@ PAGES = {
     "cards": ":material/style: Karteikarten",
     "quiz": ":material/quiz: Quiz",
     "examplan": ":material/event_note: Klausur-Lernplan",
-    "formulas": ":material/functions: Formelsammlung",
     "bulk": ":material/cloud_upload: Bulk-Upload",
     "settings": ":material/settings: Einstellungen",
     "module": ":material/school: Module",  # nicht in der Navigation – Module stehen direkt in der Seitenleiste
@@ -27,11 +26,19 @@ NAV_PAGES = list(PAGES.values())
 
 MODULE_TABS = [":material/view_timeline: Ablauf", ":material/school: Lernen & Klausur",
                ":material/library_books: Definitionen", ":material/folder_open: Dateien",
-               ":material/functions: Formeln & Notizen"]
+               ":material/sticky_note_2: Notizen"]
 LECTURE_TAB = {"files": ":material/folder_open: Dateien", "vorbereitet": ":material/menu_book: Vorbereiten",
                "nachbereitet": ":material/edit_note: Nachbereiten", "learn": ":material/style: Lernen"}
 def lecture_tabs() -> list[str]:
     return [t for k, t in LECTURE_TAB.items() if k != "vorbereitet" or planner.PREP_ENABLED]
+
+
+def is_mobile() -> bool:
+    """Schmaler Bildschirm (Cookie setzt das Skript in app.py beim ersten Laden)."""
+    try:
+        return st.context.cookies.get("lernapp_mobile") == "1"
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def micon(module: dict) -> str:

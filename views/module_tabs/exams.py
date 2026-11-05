@@ -40,9 +40,16 @@ Anforderungen:
   Klausuren kaum vorkommen, nur selten. ABER: Abgefragt wird NUR Stoff, der im <kontext> steht (die Vorlesungen,
   die ich schon hatte). Klausurthemen, die im Kontext nicht behandelt werden, komplett weglassen – auch wenn sie in
   den Altklausuren wichtig sind.
-- explanation: warum die Lösung richtig ist. points: realistische Punktzahl.
+- explanation: gründliche Lösungserklärung – warum die Lösung richtig ist, Rechenweg bzw. Kernargument Schritt für
+  Schritt und die typische Falle bei dieser Aufgabe. points: realistische Punktzahl.
+- option_notes (nur mc/mc_multi, sonst leer): für JEDE Option in derselben Reihenfolge wie options genau ein kurzer
+  Satz, ob sie richtig oder falsch ist und WARUM – bei falschen Optionen den konkreten Denkfehler benennen
+  (z. B. „Falsch: verwechselt Barwert mit Endwert – hier wird abgezinst, nicht aufgezinst“).
+- hint: Tipp zum Aufklappen, der die Lösung NICHT verrät: erklärt die Zeichen, Symbole und Notation der Aufgabe
+  (z. B. was $r_f$, $\\sigma$, $\\Delta$, $\\partial$ oder ein Index bedeutet), nötige Fachbegriffe und den
+  Lösungsansatz bzw. die passende Formel ohne Ergebnis. 1–4 Stichpunkte.
 - Formeln in LaTeX mit $...$.
-{exam_hint}
+{feedback}{exam_hint}
 <kontext>
 {context}
 </kontext>"""
@@ -66,12 +73,52 @@ def correct_indices(q: dict) -> list[int]:
     return [q["correct_index"]] if q.get("correct_index", -1) >= 0 else []
 
 
-GRADING_PROMPT = """Bewerte die Antwort eines Studierenden wie ein Klausurkorrektor.
+GRADING_PROMPT = """Korrigiere die Antwort einer Studentin (BWL, 1. Semester, LMU) wie ein genauer, hilfsbereiter
+Klausurkorrektor.
 Aufgabe ({points} Punkte, Operator: {operator}): {question}
 Musterlösung: {sample}
-Antwort des Studierenden: {answer}
-Vergib Punkte (score, max_score = {points}), gib kurzes, konstruktives Feedback und liste fehlende Punkte auf.
-Achte darauf, ob der Operator erfüllt wurde (z. B. Rechenweg bei „Berechnen Sie“, Begründung bei „Erläutern Sie“)."""
+Antwort der Studentin: {answer}
+
+- score / max_score (= {points}): realistische Punkte.
+- feedback: 1–3 Sätze Gesamturteil – was schon stimmt und was das Hauptproblem ist.
+- errors: JEDEN Fehler einzeln (leer, wenn alles richtig ist). what = was genau falsch ist (die betroffene Stelle,
+  der Rechenschritt oder die Aussage der Antwort, gern zitiert); why = warum das falsch ist (den Denkfehler
+  benennen, z. B. Vorzeichen, falsche Formel, Bedingung vergessen, Begriffe verwechselt); fix = wie es richtig
+  wäre (mit korrekter Rechnung/Formel in LaTeX $...$).
+- missing_points: Punkte der Musterlösung, die in der Antwort ganz fehlen.
+Achte darauf, ob der Operator erfüllt wurde (z. B. Rechenweg bei „Berechnen Sie“, Begründung bei „Erläutern Sie“).
+{feedback}"""
+
+GRADING_FEEDBACK = """
+Bekannte Schwächen der Studentin aus den Übungen (falls derselbe Fehler wieder auftritt, ausdrücklich darauf
+hinweisen):
+{weak}"""
+
+
+def weak_points(cfg: dict, module_id: str, data: dict, chapter_ids: list[str] | None = None) -> str:
+    """Was in den Übungen schlecht lief (für die Korrektur)."""
+    return learning.exercise_feedback_material(cfg, module_id, data, chapter_ids)
+
+
+def grade_answer(q: dict, answer: str, weak: str = "") -> dict:
+    """Freitext-Antwort korrigieren: Punkte, Gesamturteil, jeder Fehler mit Was/Warum/Richtig. Wirft ai.AIError."""
+    return ai.complete_json(GRADING_PROMPT.format(
+        points=q.get("points", 5), operator=q.get("operator", ""), question=q["question"],
+        sample=q.get("sample_answer", ""), answer=answer,
+        feedback=GRADING_FEEDBACK.format(weak=weak) if weak else ""), ai.GRADING_SCHEMA, max_tokens=6000,
+        effort="low")
+
+
+def show_grading(grading: dict) -> None:
+    """Korrektur anzeigen: Punkte, Urteil, jeder Fehler mit Begründung, fehlende Punkte."""
+    with st.container(border=True):
+        st.markdown(f"**{grading['score']}/{grading['max_score']} Punkte** – {grading['feedback']}")
+        for err in grading.get("errors", []):
+            st.markdown(f":red[:material/close:] **{err['what']}**  \n"
+                        f"_Warum falsch:_ {err['why']}  \n"
+                        f":green[:material/check:] _Richtig:_ {err['fix']}")
+        if grading.get("missing_points"):
+            st.markdown("**Fehlt noch:**\n" + "\n".join(f"- {m}" for m in grading["missing_points"]))
 
 EXAM_PROMPT = """Analysiere die folgenden Altklausuren des Moduls „{module}“ für meine Klausurvorbereitung.
 - overview: Aufbau der Klausuren (Dauer, Punkte, Aufgabentypen) in Markdown.
@@ -148,6 +195,7 @@ def build_quiz(cfg: dict, module_id: str, data: dict, n: int, types: str, diffic
                  QUIZ_TYPES[2]: choice_type, QUIZ_TYPES[3]: "nur freitext", QUIZ_TYPES[4]: EXERCISE_TYPE_TEXT}[types]
     result = ai.complete_json(QUIZ_PROMPT.format(module=module["name"], chapters=titles, n=n, types=type_text,
                                                  difficulty=difficulty, exam_format=fmt["label"],
+                                                 feedback=learning.feedback_block(cfg, module_id, data, chapter_ids),
                                                  exam_hint=exam_hint, context=context), ai.QUIZ_SCHEMA)
     return result.get("questions", [])
 
@@ -219,6 +267,8 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
                     else:
                         st.error("Richtig wäre: " + " · ".join(q["options"][j] for j in right
                                                                  if 0 <= j < len(q["options"])))
+                    from views.quiz_center import option_breakdown
+                    option_breakdown(q, picked)
                     if q.get("explanation"):
                         st.caption(q["explanation"])
             else:
@@ -233,17 +283,13 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
                     if grading:
                         total += grading["max_score"]
                         reached += grading["score"]
-                        st.info(f"**{grading['score']}/{grading['max_score']} Punkte** – {grading['feedback']}")
-                        for miss in grading.get("missing_points", []):
-                            st.markdown(f"- {miss}")
+                        show_grading(grading)
                     elif ai.is_available() and answer.strip():
                         if st.button("Korrigieren lassen", key=f"{qkey}_grade"):
                             with st.spinner("Korrigiere …"):
                                 try:
-                                    quiz["results"][str(i)] = ai.complete_json(GRADING_PROMPT.format(
-                                        points=q.get("points", 5), operator=q.get("operator", ""),
-                                        question=q["question"], sample=q.get("sample_answer", ""), answer=answer),
-                                        ai.GRADING_SCHEMA, max_tokens=4000, effort="low")
+                                    quiz["results"][str(i)] = grade_answer(
+                                        q, answer, weak_points(cfg, module_id, data, quiz.get("chapters")))
                                     save_module(module_id)
                                     st.rerun()
                                 except ai.AIError as exc:

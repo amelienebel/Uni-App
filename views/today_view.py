@@ -10,7 +10,7 @@ import streamlit as st
 from utils import exam_plan, notify, planner
 from utils import spaced_repetition as sr
 from utils.config import WEEKDAYS, get_module
-from utils.storage import (days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
+from utils.storage import (in_timetable, days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
                            load_todos, semester_dates, today)
 from views import cards_center
 from views.common import custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
@@ -73,8 +73,8 @@ def render(cfg: dict) -> None:
     new_min = int(load_settings()["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
     card_plan = {mid: sr.daily_plan(d["cards"], days_until_exam(mid), new_min) for mid, d in modules_data.items()}
     due_cards = {mid: p["reviews"] + p["new"] for mid, p in card_plan.items()}
-    c1, c2, _ = st.columns(3)
-    c1.metric("Offene To-dos (bis morgen)", len(open_todos),
+    c1, c2, _ = st.container(key="kpis").columns(3)
+    c1.metric("Offene To-dos", len(open_todos),
               help="Überfällig, heute und morgen fällig")
     c2.metric("Karteikarten heute", sum(due_cards.values()),
               help=f"{sum(p['reviews'] for p in card_plan.values())} Wiederholungen + "
@@ -84,7 +84,7 @@ def render(cfg: dict) -> None:
     with left:
         # --- Termine ---------------------------------------------------------------
         st.subheader(":material/event: Termine heute")
-        events = [e for e in planner.week_events(schedule, monday) if e["date"] == now
+        events = [e for e in planner.week_events(schedule, monday) if e["date"] == now and in_timetable(e)
                   and sem_start <= now <= sem_end and not planner.break_for(now, breaks)]
         if not events:
             st.caption("Heute keine Veranstaltungen.")

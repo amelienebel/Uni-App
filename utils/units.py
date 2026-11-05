@@ -148,6 +148,22 @@ def has_notes(data: dict, unit_id: str) -> bool:
         or any(img.get("transcript") for img in notes.get("images", []))
 
 
+# Rückmeldung zu einer Übung (aus dem Claude-Chat): was gut und was schlecht lief
+FEEDBACK_FIELDS = (("good", "Lief gut"), ("bad", "Lief schlecht / Schwierigkeiten"))
+
+
+def exercise_feedback(data: dict, unit_id: str) -> dict:
+    fb = data.setdefault("exercise_feedback", {}).setdefault(unit_id, {})
+    for field, _ in FEEDBACK_FIELDS:
+        fb.setdefault(field, "")
+    return fb
+
+
+def has_feedback(data: dict, unit_id: str) -> bool:
+    fb = data.get("exercise_feedback", {}).get(unit_id) or {}
+    return any((fb.get(k) or "").strip() for k, _ in FEEDBACK_FIELDS)
+
+
 def unit_cards(data: dict, unit: dict) -> list[dict]:
     """Lernkarten einer Einheit (ältere Karten ohne Einheit zählen über ihr Kapitel zur Vorlesung)."""
     return [c for c in data["cards"] if c.get("unit") == unit["id"]

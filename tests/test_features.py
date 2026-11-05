@@ -355,28 +355,11 @@ def test_quiz_center_focus_session():
     assert at.sidebar.button
 
 
-def test_formula_sheet_selection():
-    from utils import storage
-    from views.common import PAGES
+def test_no_formula_sheet():
+    """Formelsammlung ist entfernt: keine Seite in der Navigation, kein Formel-Schritt in der Nachbereitung."""
+    from views.common import MODULE_TABS, PAGES
 
-    storage.add_formulas("invfin", [{"name": "Barwert", "latex": "PV = \\frac{C}{(1+r)^t}", "explanation": ""},
-                                    {"name": "Kapitalwert", "latex": "NPV = -I_0 + PV", "explanation": ""}], "manuell")
-    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
-    at.session_state["nav"] = PAGES["formulas"]
-    _run(at)
-    assert at.title[0].value.endswith(": Formelsammlung")
-    at.toggle(key="fs_choose").set_value(True)
-    _run(at)
-    barwert = next(f for f in at.session_state["_module_invfin"]["formulas"] if f["name"] == "Barwert")
-    at.checkbox(key=f"fs_sel_{barwert['id']}").uncheck()
-    _run(at)
-    assert barwert["in_sheet"] is False or not next(
-        f for f in at.session_state["_module_invfin"]["formulas"] if f["name"] == "Barwert")["in_sheet"]
-    at.toggle(key="fs_choose").set_value(False)
-    _run(at)
-    shown = [m.value for m in at.markdown]
-    assert any("Kapitalwert" in v for v in shown) and not any("Barwert" in v for v in shown)
-
+    assert "formulas" not in PAGES and not any("Formel" in t for t in MODULE_TABS)
 
 def _script_pdf() -> bytes:
     import io
@@ -443,10 +426,10 @@ def test_script_split_and_prep(monkeypatch):
 
 
 def test_review_steps_without_prep(monkeypatch):
-    """Ohne Vorbereitung: kein Reiter/To-do „vorbereiten“; Nachbereitung mit Karten durchsehen und Formelauswahl."""
+    """Ohne Vorbereitung: kein Reiter/To-do „vorbereiten“; Nachbereitung mit Karten durchsehen, ohne Formelschritt."""
     from datetime import date
 
-    from utils import ai, learning, planner, storage, units
+    from utils import planner, storage, units
     from utils.config import get_module, load_config
     from views.common import PAGES, lecture_tabs
 
@@ -464,13 +447,6 @@ def test_review_steps_without_prep(monkeypatch):
     _add_cards(2)
     units.lecture_notes(data, lec["id"])["text"] = "Formel $a^2+b^2=c^2$"
     storage.save_module("mathe")
-    monkeypatch.setattr(ai, "is_available", lambda: True)
-    monkeypatch.setattr(ai, "complete_json", lambda *a, **k: {"formulas": [
-        {"name": "Pythagoras", "latex": "a^2+b^2=c^2", "explanation": "Seiten im rechtwinkligen Dreieck", "page": 0}]})
-    monkeypatch.setattr(learning, "unit_material", lambda *a, **k: "Formel a^2+b^2=c^2")
-    assert learning.extract_unit_formulas(cfg, "mathe", lec) == 1
-    formula = learning.unit_formulas(storage.load_module("mathe"), lec)[0]
-    assert formula["in_sheet"] is False
 
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
     at.session_state["nav"] = PAGES["module"]
@@ -478,9 +454,8 @@ def test_review_steps_without_prep(monkeypatch):
     at.session_state["unit_mathe"] = lec["id"]
     _run(at)
     assert any("Karte 1 von 2" in m.value for m in at.markdown)
-    at.checkbox(key=f"fxsel_{formula['id']}").check()
-    _run(at)
-    assert at.session_state["_module_mathe"]["formulas"][0]["in_sheet"] is True
+    assert not any("Formelsammlung" in m.value for m in at.markdown)
+    assert not any("Mitschrift auf Papier" in e.label for e in at.expander)
     at.button(key=f"cvnext_{lec['id']}").click()
     _run(at)
     assert any("Karte 2 von 2" in m.value for m in at.markdown)
@@ -594,3 +569,89 @@ def test_card_hint_always_in_prompt(monkeypatch):
     learning.generate_unit_cards({}, "m", unit, only={"d1": {2}})
     assert seen["prompt"].startswith("<hinweis_zur_kartenerstellung>\nNur Formeln abfragen")
     assert seen["prompt"].rstrip().endswith("Nur Formeln abfragen")
+
+
+def test_exercise_feedback_flows_into_cards_quiz_and_grading(monkeypatch):
+    """Rückmeldung aus dem Chat: Feld auf der Übungsseite, fließt in Karten-, Quiz- und Korrektur-Prompt ein."""
+    from utils import ai, learning, storage, units
+    from utils.config import get_module, load_config
+    from views.common import PAGES
+    from views.module_tabs import exams
+
+    cfg = load_config()
+    data = storage.load_module("invfin")
+    lecs, exs = units.all_units(cfg, get_module(cfg, "invfin"), data)
+    ex = exs[0]
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["module"]
+    at.session_state["nav_module"] = "invfin"
+    at.session_state["unit_invfin"] = ex["id"]
+    _run(at)
+    at.text_area[0].input("Barwert sicher")
+    at.text_area[1].input("Annuität: Rentenbarwertfaktor falsch abgezinst")
+    _button(at, "Speichern").click()
+    _run(at)
+    fb = at.session_state["_module_invfin"]["exercise_feedback"][ex["id"]]
+    assert fb["bad"].startswith("Annuität") and fb["good"] == "Barwert sicher"
+    assert units.has_feedback(at.session_state["_module_invfin"], ex["id"])
+
+    data = storage.load_module("invfin")
+    data["exercise_feedback"] = {ex["id"]: dict(fb)}
+    block = learning.feedback_block(cfg, "invfin", data, [ex.get("chapter_id")])
+    assert "<rueckmeldung_uebungen>" in block and "Rentenbarwertfaktor" in block and "Lief gut: Barwert" in block
+
+    monkeypatch.setattr(ai, "is_available", lambda: True)
+    seen = {}
+    monkeypatch.setattr(ai, "complete_json", lambda prompt, *a, **k: seen.update(prompt=prompt) or {"questions": []})
+    exams.build_quiz(cfg, "invfin", data, 3, exams.QUIZ_TYPES[0], "mittel", False, "Kontext", "Test", [])
+    assert "Rentenbarwertfaktor" in seen["prompt"] and "option_notes" in seen["prompt"] and "hint" in seen["prompt"]
+    exams.grade_answer({"question": "Berechne", "sample_answer": "42"}, "41", exams.weak_points(cfg, "invfin", data))
+    assert "Rentenbarwertfaktor" in seen["prompt"] and "errors" in seen["prompt"]
+
+
+def test_vwl_sessions_hidden_from_timetable_but_kept():
+    from utils import storage, units
+    from utils.config import get_module, load_config
+
+    cfg = load_config()
+    assert not storage.in_timetable({"module_id": "vwl", "type": "Übung"})
+    assert not storage.in_timetable({"module_id": "vwl", "type": "Tutorium"})
+    assert storage.in_timetable({"module_id": "vwl", "type": "Vorlesung"})
+    assert storage.in_timetable({"module_id": "mathe", "type": "Tutorium"})
+    _, exs = units.all_units(cfg, get_module(cfg, "vwl"), storage.load_module("vwl"))
+    assert exs  # Übungen (und ihre To-dos) bleiben bestehen
+
+
+def test_no_opus_models():
+    from utils import ai, storage
+
+    settings = storage.load_settings()
+    settings["ai"] = {"models": {"tutor": "claude-opus-5-5", "cards": "claude-opus-5-5"}, "models_version": 2}
+    assert ai._settings("tutor")[0] == "claude-sonnet-5-5"
+    assert all("opus" not in m for m in storage.load_settings()["ai"]["models"].values())
+    assert not any("opus" in m for m in ai.MODELS)
+
+
+def test_quiz_option_breakdown_and_hint(monkeypatch):
+    """Quiz: Tipp zum Aufklappen, nach dem Auswerten jede Option mit richtig/falsch und Begründung."""
+    from utils import storage
+    from views.common import PAGES
+    from views.module_tabs import exams
+
+    data = storage.load_module("invfin")
+    q = {"type": "mc", "operator": "", "question": "Was ist $r_f$?", "options": ["Zins", "Risiko", "Beta", "Rendite"],
+         "correct_indices": [0], "option_notes": ["Richtig: risikoloser Zins", "Falsch: verwechselt mit sigma",
+                                                  "Falsch: Beta misst Risiko", "Falsch: zu allgemein"],
+         "hint": "$r_f$ steht für den risikolosen Zinssatz.", "explanation": "Weil.", "sample_answer": "",
+         "points": 1}
+    quiz = exams.save_quiz("invfin", data, [q], [], "center", "Test")
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["quiz"]
+    at.session_state["qz_session"] = {"mid": "invfin", "qid": quiz["id"], "i": 0, "answers": {}}
+    _run(at)
+    assert any(e.label == "Tipp" for e in at.expander)
+    at.radio[0].set_value(1)
+    _button(at, "Auswerten").click()
+    _run(at)
+    text = " ".join(m.value for m in at.markdown)
+    assert "Deine Wahl – falsch" in text and "verwechselt mit sigma" in text and "Richtig – nicht gewählt" in text

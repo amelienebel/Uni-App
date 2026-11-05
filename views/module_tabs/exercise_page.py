@@ -7,7 +7,8 @@ import streamlit as st
 from utils import planner
 from utils.config import WEEKDAYS_SHORT, get_module
 from utils.storage import chapter_label, get_schedule, lecture_breaks, load_module, load_todos, save_module
-from utils.units import related_lectures, session_text, short_label, unit_docs
+from utils.storage import now_iso
+from utils.units import exercise_feedback, related_lectures, session_text, short_label, unit_docs
 from views.common import done_button, open_unit
 from views.module_tabs.files import file_list, show_messages, uploader
 from views.module_tabs.notes import question_list
@@ -16,6 +17,33 @@ def _set_chapter(module_id: str, unit_id: str, widget_key: str) -> None:
     data = load_module(module_id)
     data.setdefault("exercise_chapters", {})[unit_id] = st.session_state[widget_key]
     save_module(module_id)
+
+
+CHAT_PROMPT = ("Fasse kurz für meine Lern-App zusammen, wie diese Übung gelaufen ist – in zwei Teilen:\n"
+               "Lief gut: welche Aufgaben/Themen/Rechenschritte ich sicher konnte (Stichpunkte).\n"
+               "Lief schlecht: wo ich Fehler gemacht habe oder Hilfe brauchte – jeweils Thema, konkreter Fehler "
+               "und warum (Stichpunkte, mit Aufgabennummer).")
+
+
+def _feedback(module_id: str, ex: dict) -> None:
+    """Rückmeldung aus dem Claude-Chat: was gut und was schlecht lief → fließt in Karten, Quiz und Korrektur ein."""
+    data = load_module(module_id)
+    fb = exercise_feedback(data, ex["id"])
+    with st.container(border=True, key=f"fbbox_{ex['id'].replace(':', '_')}"):
+        h1, h2 = st.columns([4, 1], vertical_alignment="center")
+        h1.markdown("#### :material/forum: Rückmeldung aus dem Chat")
+        with h2.popover("Frage für den Chat", icon=":material/content_copy:", width="stretch"):
+            st.code(CHAT_PROMPT, language=None, wrap_lines=True)
+        with st.form(f"exfb_{module_id}_{ex['id']}", border=False):
+            c1, c2 = st.columns(2)
+            good = c1.text_area(":green[:material/thumb_up:] Lief gut", fb["good"], height=150)
+            bad = c2.text_area(":red[:material/thumb_down:] Lief schlecht", fb["bad"], height=150)
+            if st.form_submit_button("Speichern", type="primary", width="stretch"):
+                fb.update({"good": good.strip(), "bad": bad.strip(), "updated_at": now_iso()})
+                save_module(module_id)
+                st.toast("Rückmeldung gespeichert", icon=":material/check:")
+        if fb.get("updated_at"):
+            st.caption(f"Gespeichert am {fb['updated_at'][:16].replace('T', ' um ')}")
 
 
 def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict]) -> None:
@@ -68,6 +96,8 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
                       all_units=all_units, empty="Noch nichts hochgeladen.")
             uploader(cfg, module_id, ex, doc_type, "Hochladen (PDF oder Foto)", key=f"{ex['id']}_{doc_type}",
                      allow_images=True)
+
+    _feedback(module_id, ex)
 
     st.markdown("#### Fragen fürs Tutorium / die Übung")
     question_list(module_id, data, key_prefix=f"exq_{ex['id']}", unit=ex["id"])

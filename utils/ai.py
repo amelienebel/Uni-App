@@ -2,7 +2,7 @@
 
 - Der API-Key wird über python-dotenv aus der .env-Datei geladen (online: aus den Streamlit-Secrets).
 - Alle Aufrufe laufen gestreamt (keine Timeouts bei langen Antworten).
-- Für Opus/Sonnet ist der serverseitige Refusal-Fallback aktiviert (fallbacks="default").
+- Für Sonnet ist der serverseitige Refusal-Fallback aktiviert (fallbacks="default"). Opus wird nicht genutzt.
 - Ohne API-Key bleibt die App nutzbar: Die Views greifen dann auf heuristische Verfahren zurück.
 """
 
@@ -17,9 +17,8 @@ import streamlit as st
 from utils.config import get_secret
 
 MODELS = {
-    "claude-opus-5-5": "Claude Opus 5.5 – beste Qualität, doppelter Preis",
-    "claude-sonnet-5-5": "Claude Sonnet 5.5 – fast so gut, halber Preis (empfohlen)",
-    "claude-haiku-5-5": "Claude Haiku 5.5 – sehr günstig (1/40 von Opus), für einfache Aufgaben",
+    "claude-sonnet-5-5": "Claude Sonnet 5.5 – sehr gute Qualität (empfohlen)",
+    "claude-haiku-5-5": "Claude Haiku 5.5 – sehr günstig, für einfache Aufgaben",
 }
 DEFAULT_MODEL = "claude-sonnet-5-5"
 EFFORTS = {
@@ -29,7 +28,7 @@ EFFORTS = {
     "xhigh": "Sehr hoch",
 }
 # Modelle, für die der serverseitige Fallback bei Ablehnungen verfügbar ist
-_FALLBACK_MODELS = {"claude-opus-5-5", "claude-sonnet-5-5"}
+_FALLBACK_MODELS = {"claude-sonnet-5-5"}
 _FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 BASE_SYSTEM = (
@@ -86,10 +85,11 @@ def _settings(task: str | None = None) -> tuple[str, str]:
         ai_settings.pop("model", None)
         ai_settings.pop("model_cards", None)
         save_settings()
-    if ai_settings.get("models_version", 1) < 2:  # Tutor von Opus auf Sonnet (spart etwa die Hälfte)
-        if ai_settings["models"].get("tutor") == "claude-opus-5-5":
-            ai_settings["models"]["tutor"] = "claude-sonnet-5-5"
-        ai_settings["models_version"] = 2
+    if ai_settings.get("models_version", 1) < 3:  # Opus wird nicht mehr genutzt: überall Sonnet
+        for key, value in list(ai_settings["models"].items()):
+            if value not in MODELS:
+                ai_settings["models"][key] = "claude-sonnet-5-5"
+        ai_settings["models_version"] = 3
         save_settings()
     models = ai_settings["models"]
     task = task if task in TASKS else "default"
@@ -99,7 +99,7 @@ def _settings(task: str | None = None) -> tuple[str, str]:
 
 
 def model_overview() -> str:
-    """Kurzfassung für die Seitenleiste, z. B. „Haiku (Zusammenf.) · Sonnet (Karten) · Opus (Tutor)“."""
+    """Kurzfassung für die Seitenleiste, z. B. „Haiku (Zusammenf.) · Sonnet (Karten) · Sonnet (Tutor)“."""
     short = {"summary": "Zusammenf.", "cards": "Karten", "tutor": "Tutor"}
     return " · ".join(f"{MODELS.get(_settings(t)[0], _settings(t)[0]).split(' –')[0].replace('Claude ', '')} ({label})"
                       for t, label in short.items())
@@ -309,13 +309,17 @@ QUIZ_SCHEMA = _obj({
         "question": _STR,
         "options": {"type": "array", "items": _STR},
         "correct_indices": {"type": "array", "items": _INT},
+        "option_notes": {"type": "array", "items": _STR},
+        "hint": _STR,
         "explanation": _STR,
         "sample_answer": _STR,
         "points": _INT,
     })},
 })
 
-GRADING_SCHEMA = _obj({"score": _INT, "max_score": _INT, "feedback": _STR, "missing_points": {"type": "array", "items": _STR}})
+GRADING_SCHEMA = _obj({"score": _INT, "max_score": _INT, "feedback": _STR,
+                       "errors": {"type": "array", "items": _obj({"what": _STR, "why": _STR, "fix": _STR})},
+                       "missing_points": {"type": "array", "items": _STR}})
 
 EXAM_ANALYSIS_SCHEMA = _obj({
     "overview": _STR,

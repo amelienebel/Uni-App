@@ -1,6 +1,6 @@
 # Umsetzungsplan: Neues Lernsystem (Vorlesungs-Check + Wochentraining)
 
-Stand: 07.11.2026 · Status: **wartet auf Freigabe** – es ist noch nichts umgesetzt.
+Stand: 07.11.2026 · Status: **Antworten eingearbeitet, wartet auf das endgültige Go** – es ist noch nichts umgesetzt.
 
 ---
 
@@ -107,27 +107,45 @@ sessions:    [ { "id", "kind": "check" | "training", "lecture_id" (beim Check), 
 
 ## 3. Nacharbeiten (Reiter der Vorlesung)
 
-Die Schritte bleiben wie bisher. Neu sind nur diese Punkte:
+Die Schritte nach dem Hochladen der Folien:
 
-1. **Notizen** wie bisher. „Streichen“ ist die ausdrückliche Ausschluss-Liste. „Nicht so wichtig“ wird weiter
-   abgefragt, nur seltener (siehe offene Frage 2).
-2. **Folien durchsehen und genau lesen:** Alle Folien erscheinen als Bilderraster (am Handy eine Spalte).
-   Direkt an jedem Bild gibt es einen Knopf **„Ausblenden“**. Die Folie wird dann grau und als „ausgeschlossen“
-   gespeichert (`excluded_slides` am Dokument). Ein zweiter Klick holt sie zurück. Folien mit Abbildungen haben
-   zusätzlich „Genau lesen“ als Auswahl. Du musst also nicht erst nach unten scrollen.
-3. **Themen & Minithemen** (ersetzt „Karteikarten erstellen“ und „Karten durchsehen“): Ein Klick auf
-   „Nacharbeiten abschließen“ lässt Claude die Vorlesung in Themen und Minithemen zerlegen. Grundlage sind die
-   Folien (ohne ausgeblendete), die genau gelesenen Seiten, der Skript-Teil und deine Notizen. Du siehst danach
-   den Themenbaum mit den zugehörigen Folien und kannst einzelne Minithemen ausschließen. Das zählt ebenfalls als
-   ausdrücklicher Ausschluss.
-   - Regel für Claude: **Jeder Inhalt** wird ein Minithema. Ausgelassen werden nur ausgeblendete Folien,
-     „Streichen“-Notizen und ausdrückliche Vermerke wie „nicht relevant“ in deinen Notizen.
-     Titelfolie, Gliederung und Organisatorisches sind kein Stoff und ergeben kein Minithema. Sie erscheinen aber
-     in einer Liste „Ohne Minithema“, damit du siehst, dass nichts heimlich fehlt.
-   - Danach wird das To-do „Nacharbeiten“ abgehakt, und der Vorlesungs-Check wird freigeschaltet.
-4. „Seiten genau lesen“ und die Kosten-Anzeige bleiben wie heute.
+1. **Folien sichten (automatisch, kostenlos):** Die App vergleicht jede Folie mit den Folien aller früheren
+   Vorlesungen des Moduls (Textvergleich auf dem Gerät, keine KI-Kosten) und erkennt:
+   - **schon dagewesen:** Die Folie war fast wortgleich schon in Vorlesung X, z. B. eine Wiederholung zu Beginn.
+   - **Titel / Gliederung / Organisatorisches:** sehr wenig Text oder typische Wörter wie „Agenda“, „Gliederung“,
+     „Klausur“, „Termine“, „Literatur“, „Kontakt“.
 
----
+   Diese Folien werden **vorab als „nicht relevant“ markiert** (grau, mit Grund-Etikett wie „schon in VL 2“ oder
+   „Organisatorisches“). Du kannst jede Markierung mit einem Klick zurücknehmen. Erst wenn du den Schritt
+   bestätigst, gilt sie als dein Ausschluss.
+2. **Folienraster:** Alle Folien erscheinen als Bilder (Handy: eine Spalte, Tablet/Mac: drei Spalten).
+   **Ein Klick auf das Bild** (bzw. den Knopf direkt darunter) schaltet um: „wichtig“ ↔ „nicht relevant“.
+   Nicht relevante Folien werden grau. Gespeichert wird das am Dokument (`excluded_slides` mit Grund
+   „von dir“, „schon in VL x“, „Organisatorisches“).
+3. **Alles genau lesen:** Danach werden **alle nicht ausgeschlossenen Folien genau gelesen**, inklusive
+   Grafiken, Tabellen und Formeln. Die Auswahl „welche Seiten genau lesen“ fällt weg. Kosten mit Haiku:
+   ca. 0,04 Cent pro Folie, also **ca. 1–2 Cent pro Vorlesung** bei 30–50 Folien.
+4. **Hinweise zur Quiz-Erstellung** (ersetzt die bisherigen Notizfelder „Sehr wichtig / Nicht so wichtig /
+   Streichen / Hinweis zur Kartenerstellung“):
+   - **Umfang:** Auswahl „Ganze Vorlesung“ oder „Folie [von] bis [bis]“ (zwei Zahlenfelder), z. B. wenn ihr nur
+     bis Folie 34 gekommen seid. Folien außerhalb des Umfangs werden wie „nicht relevant“ behandelt. Kommen sie
+     in der nächsten Vorlesung dran, gehören sie dort dazu (siehe offene Frage A).
+   - **Wichtig:** wird gründlich und öfter abgefragt.
+   - **Streichen:** wird nie abgefragt (z. B. „Herleitung von … nicht relevant“).
+   - **Sonstiger Hinweis:** wird bei jeder Fragen-Erstellung zu dieser Vorlesung ganz oben mitgegeben und am
+     Ende noch einmal erinnert (wie heute der Kartenhinweis).
+   - Das freie Notizfeld für deine eigenen Mitschriften bleibt. Bisherige Einträge in „Nicht so wichtig“ und
+     „Hinweis zur Kartenerstellung“ bleiben gespeichert und werden weiter berücksichtigt (als „seltener“ bzw.
+     als sonstiger Hinweis), das Feld „Nicht so wichtig“ erscheint aber nicht mehr.
+   - **Feste Regel:** Beispiele aus der Vorlesung werden **nie** als auswendig zu lernender Stoff abgefragt.
+     Sie dürfen höchstens als Vorlage für eigene Anwendungsaufgaben dienen. Ausnahme: Du schreibst unter
+     „Wichtig“ oder „Sonstiger Hinweis“, dass ein Beispiel gelernt werden soll.
+5. **Themen & Minithemen:** „Nacharbeiten abschließen“ lässt Claude (Sonnet) die Vorlesung in Themen und
+   Minithemen zerlegen. Grundlage sind die nicht ausgeschlossenen, genau gelesenen Folien im Umfang, der
+   Skript-Teil und deine Hinweise. Danach siehst du den Themenbaum und kannst einzelne Minithemen ausschließen.
+   - Ausgelassen wird nur: ausgeschlossene Folien, Folien außerhalb des Umfangs, „Streichen“ und von dir
+     ausgeschlossene Minithemen. Alles andere wird ein Minithema.
+   - Danach ist „Nacharbeiten“ abgehakt, und der Vorlesungs-Check ist frei.
 
 ## 4. Wissensstand und Schwierigkeit je Minithema
 
@@ -142,7 +160,8 @@ zu einer FSRS-Bewertung kombiniert:
 | richtig | mittel (orange) | „Gut“ |
 | richtig | einfach (grün) | „Leicht“ |
 
-**Schwierigkeitsleiter je Minithema:** Single Choice → Multiple Choice → Freitext.
+**Schwierigkeitsleiter je Minithema** (in **allen** Modulen, auch Mathe und ExRW):
+Single Choice → Multiple Choice → Freitext.
 - Hochstufen: richtig mit „mittel“ oder „einfach“ → eine Stufe höher. Richtig mit „einfach“ bei schon stabilem
   Minithema darf eine Stufe überspringen. Damit kann ein sicheres Thema direkt auf Freitext abgefragt werden.
 - Zurückstufen: falsch → eine Stufe runter (nie unter Single Choice). Zweimal hintereinander „schwer“ → bleibt
@@ -163,9 +182,13 @@ zu einer FSRS-Bewertung kombiniert:
 - **Genau 15 Fragen**, geplant auf höchstens etwa 30 Minuten: Jede Frage bekommt eine geschätzte Dauer
   (Single Choice ca. 1 Minute, Multiple Choice ca. 1,5, Kopfrechnen/Anwendung ca. 2–3, Freitext ca. 3–4), und
   die Auswahl bleibt unter 30 Minuten. Die Zeit wird oben angezeigt, ist aber kein Zwang.
-- Auswahl der Minithemen: zuerst „Sehr wichtig“, dann so viele verschiedene Minithemen wie möglich (jedes
+- Vor dem Start fragt die App wie beim Wochentraining: **Taschenrechner ja / nein**, **Notizblatt ja / nein**
+  (die Anzahl ist fest 15).
+- Auswahl der Minithemen: zuerst „Wichtig“, dann so viele verschiedene Minithemen wie möglich (jedes
   höchstens einmal), Mischung aus Wissensfragen und kleinen Anwendungsaufgaben. Stil nach Klausurformat und
   Altklausuren des Moduls.
+- Schon im ersten Check dürfen einige Freitext-Fragen dabei sein (Erklärfragen in Worten), auch in Mathe und
+  ExRW. Der Großteil startet aber bei Single bzw. Multiple Choice.
 - Hat die Vorlesung mehr als 15 Minithemen, bleiben die übrigen in der Abdeckungsliste als **offen**. Sie haben
   im nächsten Wochentraining Vorrang (siehe 6).
 - Ein Check kann wiederholt werden. Gezählt wird für die To-dos der erste abgeschlossene Durchgang.
@@ -204,7 +227,6 @@ Aufwand je nach Auswahl:
 | nein | ja | Kopfrechnen in **2–3 Schritten** mit glatten Zwischenergebnissen |
 | ja | egal | auch krummere Zahlen, dann aber als Single/Multiple Choice mit Zahlen-Optionen statt Eingabefeld |
 
-Der Vorlesungs-Check verwendet „kein Taschenrechner, kein Notizblatt“ (siehe offene Frage 5).
 Freitext gibt es nur für Erklärfragen in Worten.
 
 ## 8. Archiv der alten Karteikarten („Ausgeblendet“)
@@ -241,14 +263,14 @@ Freitext gibt es nur für Erklärfragen in Worten.
 - **Freitext:** Claude (Haiku) bewertet anhand der gespeicherten Musterlösung und Bewertungspunkte, mit Fehlern
   „was falsch · warum · richtig“.
 - **Selbstbewertung:** drei große farbige Knöpfe ohne Emojis: „Schwer“ rot, „Mittel“ orange, „Einfach“ grün.
-  Am Handy stehen sie unten nebeneinander.
-- Tutor-Rückfrage zur Frage bleibt (wie im Quiz).
+  Am Handy stehen sie unten nebeneinander. Sie erscheinen **auch nach einer falschen Antwort**.
+- **Kein Tutor** mehr (auch nicht als Rückfrage zur Frage). Das machst du in deinem eigenen Claude-Chat.
 - Eine Session kann unterbrochen und später fortgesetzt werden (Zwischenstand wird gespeichert).
 
 ## 10. Kosten sparen (API)
 
-1. **Fragenspeicher:** Jede Frage wird gespeichert und wiederverwendet, höchstens 3-mal insgesamt und nur, wenn
-   sie in den letzten 2 Sessions des Moduls nicht dran war. Danach wird sie stillgelegt, und für dieses
+1. **Fragenspeicher:** Jede Frage wird gespeichert und wiederverwendet, **höchstens 3-mal insgesamt** und frühestens,
+   wenn **mindestens 1 andere Session** des Moduls dazwischen lag. Danach wird sie stillgelegt, und für dieses
    Minithema entsteht eine neue Frage.
 2. **Klausurstil-Profil je Modul:** Altklausuren und Übungsblätter werden einmal zu einem kompakten Stilprofil
    zusammengefasst (Aufgabentypen, Operatoren, Schwierigkeit, typische Fallen, 3 Beispielaufgaben, ca. 1.500
@@ -278,27 +300,36 @@ Wochentraining mit Wiederverwendung ca. 2–6 Cent, Freitext-Bewertung unter 0,1
   oder überfällig (rot umrandet). Dazu ein Abdeckungsbalken („9 von 12 Minithemen abgefragt“) und ein farbiger
   Wissensstand. Ein Klick öffnet den passenden Schritt.
 - **Reiter „Lernen & Klausur“** wird zu **„Wissensstand“**: Themenbaum aller Vorlesungen mit Farbe je Minithema,
-  Abdeckung je Vorlesung, Start Wochentraining. Die Unterreiter Tutor, Klausuraufgaben und Altklausuren bleiben,
-  Karteikarten, Quiz und Schwachstellen fallen weg.
+  Abdeckung je Vorlesung, Start Wochentraining, darunter **Altklausuren** (Hochladen und Speichern wie bisher).
+  **Tutor** wird ganz entfernt (auch auf der Vorlesungsseite). **Klausuraufgaben** werden vorerst ausgeblendet
+  (Code und ausgelesene Aufgaben bleiben gespeichert). Karteikarten, Quiz und Schwachstellen fallen weg.
+- **Definitionen:** Neue Einträge entstehen aus den Minithemen der Art „Definition“. Alle bisherigen
+  Definitionen bleiben erhalten.
 - **To-dos pro Vorlesung, immer in dieser Reihenfolge:**
   1. „Vorlesung X nacharbeiten (Folien hochladen, kommentieren, genau lesen)“: Frist wie bisher
   2. „Vorlesung X [Modul] Check“: gleiche Frist (direkt danach)
   3. „Übungsblatt …“: das Blatt zum Kapitel dieser Vorlesung, Frist wie bisher
-  4. „Wochentraining [Modul] (inkl. Übungen und früherer Vorlesungen)“: einmal pro Woche und Modul, fällig am Tag
-     nach der Übungsblatt-Frist (sonst Sonntag). Erledigt, sobald in dieser Woche ein Training abgeschlossen ist.
+  4. „Wochentraining [Modul] (inkl. Übungen und früherer Vorlesungen)“: einmal pro Woche und Modul. Möglich ab
+     der Übungsblatt-Frist, **spätestens am Tag vor der nächsten Vorlesung des Moduls**. Erledigt, sobald im
+     Zeitraum ein Training abgeschlossen ist.
 
   Ein Übungsblatt gehört zu einem Kapitel, also oft zu mehreren Vorlesungen. Es erscheint deshalb bei der
   **letzten** Vorlesung dieses Kapitels.
 - **Rückstand erkennen und aufholen:** Heute bekommt oben einen Kasten **„Aufholplan“**, sobald etwas überfällig
-  ist. Reihenfolge-Regeln:
-  1. Übungsblätter, deren Besprechung in den nächsten 2 Tagen ist (feste Termine), mit dem nötigen
-     Nacharbeiten bzw. Check der zugehörigen Vorlesungen davor.
-  2. Danach je Modul die **älteste** offene Vorlesung zuerst (Stoff baut aufeinander auf). Zwischen den Modulen
-     zuerst das mit der nächsten Klausur.
-  3. Wochentraining je Modul mindestens einmal pro Woche, auch im Rückstand (kurz, 5 Fragen).
-
-  Die App verteilt den Rückstand mit geschätzten Zeiten (Nacharbeiten 60, Check 30, Blatt 90, Training 10–30
-  Minuten) auf die nächsten Tage, passend zu deinem Tagesbudget (neue Einstellung, siehe offene Frage 7).
+  ist.
+  - **Modul-Rangfolge:** 1. ExRW und I&F · 2. Statistik und Mathe · 3. VWL (in den Einstellungen änderbar).
+  - **Reihenfolge:**
+    1. Übungsblätter, deren Besprechung in den nächsten 2 Tagen ist (feste Termine), mit dem nötigen
+       Nacharbeiten bzw. Check der zugehörigen Vorlesungen davor.
+    2. Je Modul die **älteste** offene Vorlesung zuerst (Stoff baut aufeinander auf), Module nach Rangfolge.
+    3. Je Modul ein kurzes Wochentraining (5 Fragen) pro Woche, auch im Rückstand.
+  - **Zeitbudget** (in den Einstellungen änderbar): Mo 2 h · Di 4 h · Mi 6 h · Do 2 h · Fr–So zusammen 12 h
+    (als Start 4 h pro Tag, pro Woche anpassbar, weil das je nach Terminen schwankt).
+  - **Geschätzte Dauer:** Übungsblatt 3 h · Nacharbeiten 1 h · Vorlesungs-Check 30 min · Wochentraining
+    10–30 min. Die App lernt aus deinen tatsächlichen Zeiten nicht dazu (bewusst einfach gehalten), du kannst die
+    Werte aber in den Einstellungen anpassen.
+  - Die App verteilt Rückstand und laufende Aufgaben auf die Tage. Passt etwas nicht mehr in die Woche, zeigt sie
+    ehrlich an, wann du voraussichtlich aufgeholt hast.
 - Push-Benachrichtigungen erinnern an fällige Checks und Trainings statt an Karten.
 
 ## 12. Design
@@ -348,31 +379,26 @@ Jeder Schritt wird getestet und hochgeladen. Bis Schritt E bleibt die App für d
 Du kannst nach D/E schon testen. Ich würde A–E zusammen ausliefern (dann funktioniert der neue Ablauf
 vollständig) und F–H direkt danach.
 
-## 15. Offene Fragen (bitte beantworten, bevor ich anfange)
+## 15. Deine Entscheidungen (07.11.)
 
-1. **„Ausblenden“ am Folienbild:** Heißt das „diese Folie kommt nicht dran“ (Ausschluss), oder nur „muss ich
-   nicht genau lesen lassen“? Mein Vorschlag: zwei getrennte Knöpfe, „Nicht genau lesen“ und „Ausschließen“.
-2. **„Nicht so wichtig“:** Wird weiter abgefragt (seltener), richtig? Nur „Streichen“, „nicht relevant“-Vermerke,
-   ausgeblendete Folien und von Hand ausgeschlossene Minithemen werden ausgelassen.
-3. **Stufenleiter vs. Klausurformat:** Die ExRW-Klausur ist nur Single Choice, Mathe nur Multiple Choice. Soll
-   die Leiter dort trotzdem bis Freitext gehen, oder lieber Single Choice → Multiple Choice → schwierige
-   Klausuraufgabe im echten Format? Mein Vorschlag: Freitext nur bei Modulen mit offenen Fragen (I&F, VWL,
-   Statistik). Bei Mathe und ExRW ist die oberste Stufe eine klausurnahe Auswahlfrage.
-4. **Fristen:** Check am selben Tag wie das Nacharbeiten fällig, Wochentraining am Tag nach der
-   Übungsblatt-Frist (sonst Sonntag), einmal pro Woche und Modul (also bis zu 5 Trainings pro Woche). Passt das?
-5. **Taschenrechner/Notizblatt im Check:** Soll der Vorlesungs-Check fest „ohne Taschenrechner, ohne
-   Notizblatt“ sein, oder soll ich auch dort vor dem Start fragen?
-6. **Archiv-Hinweis „sicher“:** Darf ein Minithema, dessen alte Karten du sicher konntest, bei der ersten Frage
-   gleich mit Multiple Choice statt Single Choice starten? Oder sollen alle alten Vorlesungen streng bei Single
-   Choice beginnen?
-7. **Aufholplan:** Wie viel Lernzeit hast du ungefähr pro Tag (Wochentag / Wochenende)? Und soll das Modul mit
-   der nächsten Klausur Vorrang haben, oder sollen alle Module gleichmäßig aufholen?
-8. **Frühere Vorlesungen:** Für bereits nachbereitete Vorlesungen gibt es keinen Vorlesungs-Check als To-do.
-   Sie werden nur im Wochentraining abgefragt. Ihre Minithemen lege ich einmal gesammelt an (Knopf mit
-   Kostenanzeige, ca. 5–10 Cent pro Vorlesung). Einverstanden? Oder möchtest du für sie auch einen Check?
-9. **Definitionen-Reiter:** Er wird heute aus Definitionskarten gefüllt und bleibt mit allen Einträgen. Sollen
-   neue Definitionen künftig aus den Minithemen der Art „Definition“ entstehen?
-10. **Tutor, Klausuraufgaben, Altklausuren** bleiben im Modul (Reiter „Wissensstand“). Einverstanden?
-11. **Wiederverwendung:** höchstens 3-mal pro Frage, frühestens nach 2 anderen Sessions. Passt das?
-12. **Selbstbewertung nach falscher Antwort:** Soll ich die drei Knöpfe dann trotzdem zeigen (eine falsche
-    Antwort zählt sowieso als „Nochmal“), oder sie dort weglassen, damit es schneller geht?
+1. Alle Folien werden genau gelesen. Ein Klick aufs Bild schließt eine Folie aus. Wiederholte Folien aus früheren
+   Vorlesungen sowie Titel-/Orga-Folien werden automatisch vorgeschlagen.
+2. Hinweise zur Quiz-Erstellung: Umfang (ganze Vorlesung oder Folie x bis y), Wichtig, Streichen, Sonstiger
+   Hinweis. Beispiele werden nie abgefragt, außer du sagst es.
+3. Freitext auch in Mathe und ExRW, schon im ersten Check.
+4. Fristen wie vorgeschlagen. Wochentraining spätestens am Tag vor der nächsten Vorlesung des Moduls.
+5. Taschenrechner/Notizblatt auch beim Check vorher abfragen.
+6. Archiv-Einstieg: egal → Minithemen mit Archiv-Hinweis „sicher“ starten mit Multiple Choice, alle anderen mit
+   Single Choice.
+7. Rangfolge ExRW, I&F > Statistik, Mathe > VWL. Zeitbudget siehe 11. Übungsblätter mit 3 h eingeplant.
+8. Frühere Vorlesungen: kein Check, nur Wochentraining. Minithemen per Knopf gesammelt anlegen.
+9. Definitionen aus Minithemen.
+10. Tutor komplett raus, Klausuraufgaben vorerst raus, Altklausuren bleiben.
+11. Wiederverwendung: frühestens nach 1 anderen Session, höchstens 3-mal.
+12. Bewertungsknöpfe auch nach falscher Antwort.
+
+## 16. Noch offen (kurz)
+
+A. **Umfang „bis Folie x“:** Sollen die restlichen Folien automatisch der nächsten Vorlesung zugeschlagen werden
+   (dann werden sie dort abgefragt), oder trägst du das in der nächsten Vorlesung selbst ein? Mein Vorschlag:
+   automatisch vormerken. Die nächste Vorlesung zeigt sie dann als „noch offen aus VL x“, und du bestätigst.

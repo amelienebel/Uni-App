@@ -29,8 +29,9 @@ def _has_card(data: dict, term: str) -> bool:
 
 
 def add_definition(data: dict, term: str, text: str, unit_id: str | None, chapter_id: str | None,
-                   source: str = "KI") -> bool:
-    """Neue Definition (Duplikate nach Begriff werden übersprungen) – samt passender Karteikarte."""
+                   source: str = "KI", with_card: bool = True) -> bool:
+    """Neue Definition (Duplikate nach Begriff werden übersprungen) – samt passender Karteikarte
+    (im neuen Lernsystem ohne Karte: with_card=False)."""
     term, text = (term or "").strip(), (text or "").strip()
     if not term or not text:
         return False
@@ -38,7 +39,8 @@ def add_definition(data: dict, term: str, text: str, unit_id: str | None, chapte
         return False
     definitions(data).append({"id": new_id(), "term": term, "definition": text, "unit": unit_id,
                               "chapter_id": chapter_id, "source": source, "created_at": now_iso()})
-    ensure_card(data, term, text, unit_id, chapter_id)
+    if with_card:
+        ensure_card(data, term, text, unit_id, chapter_id)
     return True
 
 

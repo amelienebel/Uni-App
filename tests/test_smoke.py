@@ -50,6 +50,7 @@ def test_all_pages_and_modules_open():
         assert at.title, f"Modulseite {mid} ohne Titel"
 
 
+@pytest.mark.usefixtures("old_system")
 def test_learn_button_opens_focus_mode_and_enter_reveals():
     import json
 

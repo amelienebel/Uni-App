@@ -33,7 +33,7 @@ API = "https://api.github.com"
 DEBOUNCE_SECONDS = 15
 MAX_WAIT_SECONDS = 60
 MAX_FAILURES = 5
-LAZY_PREFIXES = ("uploads/",)  # erst bei Bedarf herunterladen
+LAZY_PREFIXES = ("uploads/", "backups/")  # erst bei Bedarf herunterladen (Backups nie beim Start)
 
 
 class CloudSyncError(Exception):

@@ -69,17 +69,27 @@ def render(cfg: dict) -> None:
         seen.add(t["key"])
         if not planner.todo_done(t, modules_data, state) and t["due"] <= now + timedelta(days=1):
             open_todos.append(t)
-    open_todos.sort(key=lambda t: (t["due"], t["module_id"] or ""))
+    open_todos.sort(key=lambda t: (t["due"], t["module_id"] or "", t.get("step", 9)))
     new_min = int(load_settings()["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
     card_plan = {mid: sr.daily_plan(d["cards"], days_until_exam(mid), new_min) for mid, d in modules_data.items()}
     due_cards = {mid: p["reviews"] + p["new"] for mid, p in card_plan.items()}
     c1, c2, _ = st.container(key="kpis").columns(3)
     c1.metric("Offene To-dos", len(open_todos),
               help="Überfällig, heute und morgen fällig")
-    c2.metric("Karteikarten heute", sum(due_cards.values()),
-              help=f"{sum(p['reviews'] for p in card_plan.values())} Wiederholungen + "
-              f"{sum(p['new'] for p in card_plan.values())} neue Karten")
+    if planner.LEARNING_V2:
+        from utils import catchup
 
+        plan = catchup.build(cfg, modules_data, state, now)
+        c2.metric("Rückstand", f"{plan['overdue_minutes'] / 60:.1f} h" if plan["overdue"] else "keiner",
+                  help="Geschätzte Zeit für alles Überfällige")
+    else:
+        plan = None
+        c2.metric("Karteikarten heute", sum(due_cards.values()),
+                  help=f"{sum(p['reviews'] for p in card_plan.values())} Wiederholungen + "
+                  f"{sum(p['new'] for p in card_plan.values())} neue Karten")
+
+    if plan and plan["overdue"]:
+        _catchup_box(cfg, plan, now)
     left, right = st.columns([3, 2], gap="large")
     with left:
         # --- Termine ---------------------------------------------------------------
@@ -131,6 +141,9 @@ def render(cfg: dict) -> None:
                       on_click=goto, args=("examplan",))
 
     with right:
+        if planner.LEARNING_V2:
+            _learning_status(cfg, modules_data)
+            return
         # --- Karteikarten ------------------------------------------------------------
         st.subheader(":material/style: Karteikarten")
         if not any(due_cards.values()):
@@ -145,3 +158,68 @@ def render(cfg: dict) -> None:
                                 + (f" + {p['new']} neu" if p["new"] else ""))
                     c2.button("Lernen", key=f"learn_{module['id']}", on_click=cards_center.learn_due, args=(cfg, module["id"]),
                               width="stretch")
+
+
+def _open_task(module_id: str, t: dict) -> None:
+    from views.common import LECTURE_TAB, open_training
+
+    if t["tab"] == "training":
+        open_training(module_id)
+        return
+    if t["tab"]:
+        st.session_state[f"ltab_next_{t['unit']['id']}"] = LECTURE_TAB[t["tab"]]
+    open_unit(module_id, t["unit"]["id"])
+
+
+def _catchup_box(cfg: dict, plan: dict, now) -> None:
+    """Aufholplan: Rückstand, voraussichtliches Aufholdatum, was heute (und danach) dran ist."""
+    with st.container(border=True, key="nextbox_catchup"):
+        when = plan["caught_up"]
+        st.markdown(f"#### :material/trending_up: Aufholplan · {len(plan['overdue'])} überfällig")
+        if when:
+            st.caption(f"Mit deinem Zeitbudget voraussichtlich aufgeholt am {WEEKDAYS[when.weekday()]}, "
+                       f"{when:%d.%m.}")
+        today_items = plan["plan"][0]["items"]
+        for i, t in enumerate(today_items):
+            module = get_module(cfg, t["module_id"])
+            late = " · überfällig" if t["due"] < now else ""
+            st.button(f"**{module['short']}** · {t['label']} – {t['about'][:50]} ({t['minutes']} min{late})",
+                      key=f"cu_{i}", type="tertiary", icon=micon(module), on_click=_open_task,
+                      args=(t["module_id"], t))
+        if not today_items:
+            st.caption("Heute ist kein Lernblock eingeplant.")
+        with st.expander("Die nächsten Tage"):
+            for day in plan["plan"][1:8]:
+                if not day["items"]:
+                    continue
+                st.markdown(f"**{WEEKDAYS[day['date'].weekday()]}, {day['date']:%d.%m.}** · "
+                            f"{day['used'] / 60:.1f} von {day['capacity'] / 60:.0f} h")
+                for t in day["items"]:
+                    st.caption(f"{get_module(cfg, t['module_id'])['short']} · {t['label']} – {t['about'][:50]}")
+
+
+def _learning_status(cfg: dict, modules_data: dict) -> None:
+    """Rechte Spalte im neuen System: je Modul offene Checks, Abdeckung und Start Wochentraining."""
+    from utils import sessions, topics
+    from views import progress
+    from views.common import open_training
+
+    st.subheader(":material/insights: Lernstand")
+    for module in cfg["modules"]:
+        data = modules_data[module["id"]]
+        held = sessions.held_lectures(cfg, module["id"], data)
+        open_checks = [lec for lec in held if topics.minitopics(data, lec["id"])
+                       and not sessions.is_legacy(data, lec["id"]) and not sessions.check_done(data, lec["id"])]
+        stats = progress.module_stats(data, {lec["id"] for lec in held})
+        with st.container(key=f"tdrow_{module['id']}_learn"):
+            c1, c2 = st.columns([3, 2], vertical_alignment="center")
+            c1.markdown(f"{micon(module)} **{module['short']}** · {stats['asked']}/{stats['total']} abgedeckt"
+                        + (f" · {len(open_checks)} Check offen" if open_checks else ""))
+            if stats["total"]:
+                c1.markdown(progress.status_bar_html(stats["counts"]), unsafe_allow_html=True)
+            if open_checks:
+                c2.button("Check", key=f"tdcheck_{module['id']}", icon=":material/fact_check:", width="stretch",
+                          on_click=goto, args=("cards",))
+            else:
+                c2.button("Training", key=f"tdtrain_{module['id']}", icon=":material/fitness_center:",
+                          width="stretch", on_click=open_training, args=(module["id"],))

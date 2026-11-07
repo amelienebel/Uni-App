@@ -41,9 +41,24 @@ def _feedback(module_id: str, ex: dict) -> None:
             if st.form_submit_button("Speichern", type="primary", width="stretch"):
                 fb.update({"good": good.strip(), "bad": bad.strip(), "updated_at": now_iso()})
                 save_module(module_id)
+                _map_feedback(module_id, ex)
                 st.toast("Rückmeldung gespeichert", icon=":material/check:")
         if fb.get("updated_at"):
             st.caption(f"Gespeichert am {fb['updated_at'][:16].replace('T', ' um ')}")
+
+
+def _map_feedback(module_id: str, ex: dict) -> None:
+    """Rückmeldung gleich den Minithemen zuordnen (fürs Wochentraining); klappt es nicht, beim Trainingsstart."""
+    from utils import ai, planner, sessions
+    from utils.config import load_config
+
+    if not planner.LEARNING_V2 or not ai.is_available():
+        return
+    try:
+        with st.spinner("Ordne die Rückmeldung den Minithemen zu …"):
+            sessions.map_feedback(load_config(), module_id, ex)
+    except ai.AIError:
+        pass
 
 
 def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict]) -> None:

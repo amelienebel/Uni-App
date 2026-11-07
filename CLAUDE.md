@@ -49,6 +49,46 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Definitionen / Dateien / Notizen), `module_tabs/` (Vorlesungs- und Übungsseiten, Lernen mit Reiter Klausuraufgaben (`exam_tasks_tab`: echte
   Altklausur-Aufgaben nur zu den gewählten, schon gehörten Vorlesungen, Auswerten/Korrigieren/Tipp/Tutor), Tutor …).
 
+## Neues Lernsystem (`planner.LEARNING_V2 = True`, seit 07.11.2026; Plan: `UMSETZUNGSPLAN.md`)
+Pro Vorlesung: Nacharbeiten → Vorlesungs-Check → Übungsblatt → Wochentraining. `False` stellt das alte
+Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests dafür mit Fixture `old_system`).
+- **Daten bleiben:** `utils/migration.py` läuft einmal pro Modul (`learning_version = 2`): Backup aller JSONs nach
+  `data/backups/vor-lernsystem-2_<Zeit>/` (Cloud-Sync lädt `backups/` nur bei Bedarf), Karten bleiben Byte für Byte in
+  `cards` (nur Markierung `cards_archived` mit Prüfsumme), Gegenprobe, sonst nichts speichern. Vorher schon
+  nachbereitete Vorlesungen → `legacy_lectures` (kein Check-To-do, nur Wochentraining). Alte Karten nur noch unter
+  Einstellungen → Ausgeblendet (`views/archive_view.py`); Umrechnung Gar nicht/Etwas → schwer, Gut → mittel,
+  Perfekt → einfach (`mastery.ARCHIVE_GRADE`). Karten nie löschen.
+- **Nacharbeiten** (`views/module_tabs/nacharbeiten.py`): 1 Folien sichten (Raster, Klick aufs Bild = nicht relevant,
+  `doc.excluded_slides`; `topics.suggest_exclusions` schlägt Wiederholungen aus früheren VL und Titel/Orga-Folien
+  ohne KI vor) · 2 alle zählenden Folien genau lesen (Haiku, `topics.read_all`) · 3 Hinweise zur Quiz-Erstellung:
+  Umfang ganze VL / Folie x–y (`notes.scope`; Rest wird der nächsten VL angeboten: `offered_carry`), Wichtig
+  (`emphasized`), Streichen (`skip`), Sonstiger Hinweis (`card_hint`, Vorrang), eigene Notizen · 4 Minithemen
+  (`topics.create_topics`, Sonnet; ordnet alte Karten zu → `archive_map`; Definitionen → Reiter Definitionen ohne
+  Karte) = Nacharbeiten erledigt. Ausgelassen wird NUR, was sie ausgeschlossen hat; Beispiele nie abfragen, außer
+  sie sagt es. Kein Tutor, kein Lehrbuch, keine Klausuraufgaben im neuen System.
+- **Wissensstand je Minithema** (`utils/mastery.py`): FSRS je Minithema, Leiter Single → Multiple Choice → Freitext
+  (Rechen-Minithemen enden bei MC/Zahl), falsch → Stufe runter, Tipp benutzt → zählt wie schwer, Übungs-Rückmeldung
+  „schlecht“ → sofort fällig (`sessions.map_feedback`, Haiku). Archiv nur Hinweis (Reihenfolge, Einstieg MC bei
+  „sicher“), gilt nicht als abgefragt.
+- **Fragenspeicher** (`utils/question_bank.py`): Frage höchstens 3-mal, mind. 1 andere Session dazwischen; Klausurstil-
+  Profil je Modul (einmal erzeugt) + Regeln im gecachten Systemprompt; nur Folien der benötigten Minithemen; alle
+  neuen Fragen einer Session in einer Anfrage, inkl. 3 Tipps, Begründung je Option, Musterlösung. Kein Formel-Tippen:
+  Rechnen nur als Rechenweg-Auswahl oder Kopfrechnen mit glattem Ergebnis (Zahlfeld, exakt); Taschenrechner/Notizblatt
+  bestimmen den Aufwand. Freitext bewertet Haiku (`grade_text`).
+- **Sessions** (`utils/sessions.py`, Ansicht `views/session_ui.py`, Fokus-Modus): Vorlesungs-Check genau 15 Fragen,
+  ≤ 30 Min, alle Minithemen der VL so weit möglich; Wochentraining 5/10/15 Fragen, fortlaufend nummeriert, Auswahl:
+  offen aus Checks → Übungs-Schwächen → fällig → nie gefragt aus alten VL → Rest. Selbstbewertung Schwer (rot) /
+  Mittel (orange) / Einfach (grün), auch nach falscher Antwort. Seiten: `views/check_center.py` (PAGES["cards"]),
+  `views/training_center.py` (PAGES["quiz"]).
+- **To-dos** (`planner.generate_todos`, `units.open_tasks`): je VL in fester Reihenfolge Nacharbeiten (step 1),
+  „Vorlesung X [Modul] Check“ (2, gleiche Frist, Schlüssel `…:check`), Übungsblatt (3), Wochentraining (4,
+  `planner.training_windows`: nach dem Blatt, spätestens Tag vor der nächsten VL; erst ab Umstellung; ein Training
+  hakt alle offenen Trainings-To-dos des Moduls ab). Aufholplan auf Heute (`utils/catchup.py`): dringende Blätter
+  zuerst, dann Rangfolge ExRW/I&F > Statistik/Mathe > VWL, älteste VL zuerst; Zeitbudget Mo 2 h, Di 4 h, Mi 6 h,
+  Do 2 h, Fr–So je 4 h (Einstellungen), Blatt 3 h.
+- Modul: Ablauf mit Schritt-Pillen je VL (`views/progress.py`), Reiter „Wissensstand“ (statt Lernen & Klausur, mit
+  Altklausuren). Keine Emojis in der Oberfläche (Material-Symbole statt ✓ ○ ↩ ↔).
+
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als
   Maßstab ein (`learning.exam_style_material`), was relevant ist. Kurze Karten, Anzahl nach Ermessen (keine feste

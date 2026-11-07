@@ -14,20 +14,27 @@ from utils.storage import (get_exam_date, get_schedule, load_settings, save_sett
                            semester_dates)
 from views import export_view
 
-SETTINGS_TABS = [":material/tune: Allgemein", ":material/download: Export", ":material/backup: Backup"]
+SETTINGS_TABS = [":material/tune: Allgemein", ":material/download: Export", ":material/backup: Backup",
+                 ":material/inventory_2: Ausgeblendet"]
 
 
 def render(cfg: dict) -> None:
     st.title(":material/settings: Einstellungen")
     if st.session_state.get("settings_tabs") not in SETTINGS_TABS:
         st.session_state.pop("settings_tabs", None)
-    general, export, backup = st.tabs(SETTINGS_TABS, key="settings_tabs", on_change="rerun")
+    tabs = SETTINGS_TABS if planner.LEARNING_V2 else SETTINGS_TABS[:3]
+    general, export, backup, *rest = st.tabs(tabs, key="settings_tabs", on_change="rerun")
     with general:
         _general(cfg)
     with export:
         export_view.export_section(cfg)
     with backup:
         export_view.backup_section()
+    if rest:
+        from views import archive_view
+
+        with rest[0]:
+            archive_view.render(cfg)
 
 
 def _general(cfg: dict) -> None:
@@ -102,7 +109,7 @@ def _general(cfg: dict) -> None:
         settings["schedule"] = schedule
         save_settings()
         st.success("Stundenplan gespeichert.")
-    if c2.button("↩ Auf config.json zurücksetzen"):
+    if c2.button("Auf config.json zurücksetzen", icon=":material/undo:"):
         settings["schedule"] = None
         save_settings()
         st.rerun()
@@ -110,27 +117,12 @@ def _general(cfg: dict) -> None:
     # --- Lernparameter ----------------------------------------------------------
     st.subheader("Lernparameter")
     learning = settings["learning"]
-    with st.form("learning_form"):
-        limit = st.number_input("Max. Wiederholungen pro Modul und Sitzung", 10, 500,
-                                int(learning["daily_review_limit"]), step=10)
-        new_min = st.number_input("Neue Karteikarten pro Modul und Tag (mindestens)", 0, 200,
-                                  int(learning.get("new_per_day", 15)), step=5,
-                                  help="Steht die Klausur näher, erhöht die App die Zahl automatisch, damit alle "
-                                  "Karten eine Woche vor der Klausur eingeführt sind.")
-        days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-        lines = []
-        for m in cfg["modules"]:
-            dl = m.get("deadlines", {})
-            if dl:
-                lines.append(f"- **{m['short']}**: "
-                             + (f"vorbereiten {days[dl['prep_weekday']]} · " if planner.PREP_ENABLED else "")
-                             + "nachbereiten "
-                             f"{days[dl['review_weekday']]} · Übungsblatt {days[dl['exercise_weekday']]}")
-        st.caption("Feste Fristen (in config.json → deadlines):\n" + "\n".join(lines))
-        if st.form_submit_button("Speichern"):
-            learning.update({"daily_review_limit": int(limit), "new_per_day": int(new_min)})
-            save_settings()
-            st.success("Gespeichert.")
+    if planner.LEARNING_V2:
+        _time_budget(cfg, learning)
+    if planner.LEARNING_V2:
+        _deadlines_caption(cfg)
+    else:
+        _card_params(cfg, learning)
 
     # --- Push-Erinnerungen & Podcast ----------------------------------------------
     st.subheader(":material/notifications: Push-Erinnerungen")
@@ -191,3 +183,60 @@ def _general(cfg: dict) -> None:
             st.success("Gespeichert.")
 
     st.caption(f"Stand: {date.today():%d.%m.%Y} · Daten liegen lokal im Ordner `data/`.")
+
+
+def _card_params(cfg: dict, learning: dict) -> None:
+    with st.form("learning_form"):
+        limit = st.number_input("Max. Wiederholungen pro Modul und Sitzung", 10, 500,
+                                int(learning["daily_review_limit"]), step=10)
+        new_min = st.number_input("Neue Karteikarten pro Modul und Tag (mindestens)", 0, 200,
+                                  int(learning.get("new_per_day", 15)), step=5,
+                                  help="Steht die Klausur näher, erhöht die App die Zahl automatisch, damit alle "
+                                  "Karten eine Woche vor der Klausur eingeführt sind.")
+        days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+        lines = []
+        for m in cfg["modules"]:
+            dl = m.get("deadlines", {})
+            if dl:
+                lines.append(f"- **{m['short']}**: "
+                             + (f"vorbereiten {days[dl['prep_weekday']]} · " if planner.PREP_ENABLED else "")
+                             + "nachbereiten "
+                             f"{days[dl['review_weekday']]} · Übungsblatt {days[dl['exercise_weekday']]}")
+        st.caption("Feste Fristen (in config.json → deadlines):\n" + "\n".join(lines))
+        if st.form_submit_button("Speichern"):
+            learning.update({"daily_review_limit": int(limit), "new_per_day": int(new_min)})
+            save_settings()
+            st.success("Gespeichert.")
+
+
+def _time_budget(cfg: dict, learning: dict) -> None:
+    """Zeitbudget je Wochentag, Dauer je Schritt und Modul-Rangfolge für den Aufholplan."""
+    from utils import catchup
+
+    budget, durations, ranks = catchup.budget(), catchup.minutes(), catchup.ranks()
+    with st.form("budget_form"):
+        st.markdown("**Lernzeit pro Tag (Stunden)**")
+        cols = st.columns(7)
+        hours = [cols[d].number_input(WEEKDAYS[d][:2], 0.0, 16.0, budget[d] / 60, step=0.5, key=f"bud_{d}")
+                 for d in range(7)]
+        st.markdown("**Geschätzte Dauer (Minuten)**")
+        cols = st.columns(4)
+        mins = {step: cols[i].number_input(catchup.STEP_LABELS[step], 5, 600, durations[step], step=5,
+                                           key=f"dur_{step}") for i, step in enumerate(catchup.STEP_LABELS)}
+        st.markdown("**Rangfolge beim Aufholen** (1 = zuerst)")
+        cols = st.columns(len(cfg["modules"]))
+        new_ranks = {m["id"]: cols[i].selectbox(m["short"], [1, 2, 3], index=min(2, ranks.get(m["id"], 2)),
+                                                key=f"rank_{m['id']}") - 1 for i, m in enumerate(cfg["modules"])}
+        if st.form_submit_button("Speichern"):
+            learning["budget"] = {str(d): int(h * 60) for d, h in enumerate(hours)}
+            learning["task_minutes"] = {str(k): int(v) for k, v in mins.items()}
+            learning["module_rank"] = new_ranks
+            save_settings()
+            st.success("Gespeichert.")
+
+
+def _deadlines_caption(cfg: dict) -> None:
+    days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    lines = [f"- **{m['short']}**: nacharbeiten {days[m['deadlines']['review_weekday']]} · Übungsblatt "
+             f"{days[m['deadlines']['exercise_weekday']]}" for m in cfg["modules"] if m.get("deadlines")]
+    st.caption("Feste Fristen (in config.json → deadlines):\n" + "\n".join(lines))

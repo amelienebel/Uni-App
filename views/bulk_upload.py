@@ -46,7 +46,7 @@ def _upload_tab(cfg: dict) -> None:
         "passenden **Vorlesung bzw. Übung**. Du kannst die Zuordnung vor dem Import korrigieren. "
         "Von Folien wird direkt die Zusammenfassung erstellt.")
     if result := st.session_state.pop("bulk_result", None):
-        st.success(f"✓ {result[0]} Datei(en) importiert"
+        st.success(f"{result[0]} Datei(en) importiert"
                    + (f", {result[1]} Duplikat(e) übersprungen." if result[1] else "."))
         for err in result[2]:
             st.error(err)

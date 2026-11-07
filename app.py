@@ -15,8 +15,9 @@ st.set_page_config(page_title="Amelies Lern-App", page_icon=":material/school:",
 
 from utils import ai, cloud_sync, storage  # noqa: E402  (set_page_config muss zuerst kommen)
 from utils.config import WEEKDAYS, get_module, get_secret, load_config, module_ids, module_label  # noqa: E402
-from views import (bulk_upload, cards_center, dashboard, exam_plan_view, module_view,  # noqa: E402
-                   quiz_center, settings_view, today_view)
+from views import (bulk_upload, cards_center, check_center, dashboard, exam_plan_view, module_view,  # noqa: E402
+                   quiz_center, session_ui, settings_view, today_view, training_center)
+from utils import migration, planner  # noqa: E402
 from views.common import NAV_PAGES, PAGES, back_button, goto, micon, open_unit, track_history  # noqa: E402
 from utils import upload_debug  # noqa: E402
 
@@ -60,6 +61,10 @@ if cloud_sync.is_configured():
         cloud_sync.ensure_started(storage.DATA_DIR)
 cfg = load_config()
 ids = module_ids(cfg)
+if planner.LEARNING_V2 and not st.session_state.get("_migrated"):
+    for _err in migration.ensure_all(cfg):  # einmalig: Backup + Karten archivieren (ohne Datenverlust)
+        st.error(_err)
+    st.session_state["_migrated"] = True
 # Nach einem Neuladen (z. B. nach längerer Pause) wieder auf derselben Seite landen: Seite/Modul/Einheit in der Adresse
 if st.session_state.get("nav") not in NAV_PAGES:
     st.session_state["nav"] = PAGES.get(st.query_params.get("seite", ""), PAGES["today"])
@@ -116,7 +121,11 @@ with st.container(key="watchdog"):
 page = st.session_state["nav"]
 module_id = st.session_state["nav_module"]
 # Ablenkungsfreier Lernmodus: aktive Karten- oder Quiz-Session blendet Seitenleiste und Kopfzeile aus
-focus = (page == PAGES["cards"] and cards_center.session_active()) or (page == PAGES["quiz"] and quiz_center.session_active())
+if planner.LEARNING_V2:
+    focus = page in (PAGES["cards"], PAGES["quiz"]) and session_ui.active() is not None
+else:
+    focus = (page == PAGES["cards"] and cards_center.session_active()) or \
+        (page == PAGES["quiz"] and quiz_center.session_active())
 
 st.markdown("""
 <style>
@@ -133,6 +142,8 @@ st.markdown("""
     text-align: left; }
   [class*="st-key-row_"] button { justify-content: flex-start; text-align: left; }
   [class*="st-key-row_"] { margin-bottom: -0.6rem; }
+  [class*="st-key-row_"]:has(.step-row) { margin-bottom: 0.3rem; }
+  [class*="st-key-row_"] .step-row { margin-top: -0.4rem; padding-left: 2rem; }
   [class*="st-key-nextbox_"] { background: rgba(28, 131, 225, 0.09); border-color: rgba(28, 131, 225, 0.35) !important; }
   [class*="st-key-nextbox_"] h4 { padding: 0.2rem 0 0 0; }
   [class*="st-key-hintbox_"] { background: rgba(217, 130, 43, 0.08); border-color: rgba(217, 130, 43, 0.55) !important; }
@@ -168,6 +179,42 @@ st.markdown("""
   [class*="st-key-navpage_"] button, [class*="st-key-navmod_"] button { border-radius: 0.6rem; }
   [class*="st-key-fbbox_"] { background: rgba(91, 127, 204, 0.06); border-color: rgba(91, 127, 204, 0.4) !important; }
   [data-testid="stAlert"] { border-radius: 0.7rem; }
+  /* Neues Lernsystem: Schritte je Vorlesung, Wissensstand, Folienraster, Selbstbewertung */
+  .step-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.25rem 0 0.4rem 0; }
+  .step-pill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.12rem 0.6rem 0.12rem 0.45rem;
+    border-radius: 999px; font-size: 0.8rem; font-weight: 600; border: 1px solid transparent; }
+  .step-pill .material-symbols-rounded { font-family: "Material Symbols Rounded"; font-size: 1rem; font-weight: 400;
+    line-height: 1; }
+  .step-done { background: rgba(46, 157, 91, 0.14); color: #2e9d5b; border-color: rgba(46, 157, 91, 0.45); }
+  .step-open { border: 1.5px dashed rgba(128, 128, 128, 0.55); opacity: 0.85; }
+  .step-late { background: rgba(214, 69, 93, 0.10); color: #d6455d; border-color: rgba(214, 69, 93, 0.55); }
+  .step-na { opacity: 0.4; text-decoration: line-through; border: 1px solid rgba(128, 128, 128, 0.3); }
+  .mt-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.2rem 0 0.5rem 0; }
+  .mt-chip { border: 1px solid; border-radius: 999px; padding: 0.08rem 0.55rem; font-size: 0.8rem; }
+  .mt-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.45rem; }
+  .mt-legend { display: flex; flex-wrap: wrap; gap: 0.8rem; font-size: 0.78rem; opacity: 0.8; margin-bottom: 0.6rem; }
+  .mt-legend i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.3rem; }
+  .status-bar { display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; margin: 0.3rem 0;
+    background: rgba(127, 127, 127, 0.12); }
+  .status-bar i { display: block; height: 100%; }
+  [class*="st-key-slide_"] { position: relative; }
+  [class*="st-key-slide_"] .stElementContainer:has(.stButton) { position: absolute; inset: 0; z-index: 2;
+    margin: 0 !important; }
+  [class*="st-key-slide_"] .stButton, [class*="st-key-slide_"] .stButton button { width: 100%; height: 100%; }
+  [class*="st-key-slide_"] .stButton button { opacity: 0; cursor: pointer; }
+  [class*="st-key-slide_"] img { border-radius: 0.4rem; border: 1px solid rgba(127, 127, 127, 0.25);
+    transition: opacity 0.15s ease, filter 0.15s ease; }
+  [class*="st-key-slide_off_"] img { opacity: 0.25; filter: grayscale(1); }
+  [class*="st-key-slide_scope_"] img { opacity: 0.45; }
+  [class*="st-key-slide_on_"]:hover img { box-shadow: 0 0 0 2px rgba(91, 127, 204, 0.6); }
+  [class*="st-key-sg_schwer_"] button { background: #D6455D; border-color: #D6455D; color: #fff; }
+  [class*="st-key-sg_mittel_"] button { background: #E08A1E; border-color: #E08A1E; color: #fff; }
+  [class*="st-key-sg_einfach_"] button { background: #2E9D5B; border-color: #2E9D5B; color: #fff; }
+  [class*="st-key-sg_"] button { min-height: 3rem; font-weight: 700; }
+  [class*="st-key-sg_"] button:hover { filter: brightness(1.08); color: #fff; }
+  [class*="st-key-sg_"] button p { color: #fff; }
+  [class*="st-key-explain_"] { background: rgba(91, 127, 204, 0.06); }
+  [class*="st-key-qcard_"] h4 { line-height: 1.45; }
   /* Handy: weniger Rand, kleinere Überschriften, Reiter horizontal scrollbar, Zeilen kompakt nebeneinander */
   @media (max-width: 640px) {
     .block-container { padding: 2.8rem 0.7rem 4rem 0.7rem !important; }
@@ -192,6 +239,9 @@ st.markdown("""
       padding-left: 2rem; margin-top: -0.6rem; }
     [class*="st-key-tdrow_"][class*="_today_"] [data-testid="stColumn"]:nth-child(4) { flex: 0 0 auto !important; }
     button[kind="primary"], button[kind="secondary"] { min-height: 2.6rem; }
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-sg_"]) { flex-wrap: nowrap !important; gap: 0.4rem; }
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-sg_"]) [data-testid="stColumn"] { min-width: 0 !important;
+      flex: 1 1 0 !important; width: auto !important; }
   }
 </style>
 """, unsafe_allow_html=True)
@@ -306,8 +356,8 @@ elif page == PAGES["examplan"]:
 elif page == PAGES["bulk"]:
     bulk_upload.render(cfg)
 elif page == PAGES["cards"]:
-    cards_center.render(cfg)
+    (check_center if planner.LEARNING_V2 else cards_center).render(cfg)
 elif page == PAGES["quiz"]:
-    quiz_center.render(cfg)
+    (training_center if planner.LEARNING_V2 else quiz_center).render(cfg)
 else:
     settings_view.render(cfg)

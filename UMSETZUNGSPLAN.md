@@ -1,6 +1,6 @@
 # Umsetzungsplan: Neues Lernsystem (Vorlesungs-Check + Wochentraining)
 
-Stand: 07.11.2026 · Status: **Antworten eingearbeitet, wartet auf das endgültige Go** – es ist noch nichts umgesetzt.
+Stand: 07.11.2026 · Status: **freigegeben und umgesetzt (Schritte A–H)** – Details zum Code in CLAUDE.md.
 
 ---
 

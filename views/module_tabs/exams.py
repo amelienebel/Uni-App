@@ -100,13 +100,13 @@ def weak_points(cfg: dict, module_id: str, data: dict, chapter_ids: list[str] | 
     return learning.exercise_feedback_material(cfg, module_id, data, chapter_ids)
 
 
-def grade_answer(q: dict, answer: str, weak: str = "") -> dict:
+def grade_answer(q: dict, answer: str, weak: str = "", task: str | None = None) -> dict:
     """Freitext-Antwort korrigieren: Punkte, Gesamturteil, jeder Fehler mit Was/Warum/Richtig. Wirft ai.AIError."""
     return ai.complete_json(GRADING_PROMPT.format(
         points=q.get("points", 5), operator=q.get("operator", ""), question=q["question"],
         sample=q.get("sample_answer", ""), answer=answer,
         feedback=GRADING_FEEDBACK.format(weak=weak) if weak else ""), ai.GRADING_SCHEMA, max_tokens=6000,
-        effort="low")
+        effort="low", task=task)
 
 
 def show_grading(grading: dict) -> None:
@@ -263,7 +263,7 @@ def quiz_section(cfg: dict, module_id: str, data: dict, scope_key: str = "main",
                     total += q.get("points", 1)
                     if picked == right:
                         reached += q.get("points", 1)
-                        st.success("✓ Richtig!")
+                        st.success("Richtig!", icon=":material/check_circle:")
                     else:
                         st.error("Richtig wäre: " + " · ".join(q["options"][j] for j in right
                                                                  if 0 <= j < len(q["options"])))

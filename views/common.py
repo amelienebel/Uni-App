@@ -12,11 +12,12 @@ from utils import ai, planner
 from utils.config import get_module, load_config
 from utils.storage import chapter_label, documents_of, get_document_text, get_notes, load_module
 
+_V2 = planner.LEARNING_V2
 PAGES = {
     "today": ":material/today: Heute",
     "week": ":material/calendar_month: Wochenübersicht",
-    "cards": ":material/style: Karteikarten",
-    "quiz": ":material/quiz: Quiz",
+    "cards": ":material/fact_check: Vorlesungs-Check" if _V2 else ":material/style: Karteikarten",
+    "quiz": ":material/fitness_center: Wochentraining" if _V2 else ":material/quiz: Quiz",
     "examplan": ":material/event_note: Klausur-Lernplan",
     "bulk": ":material/cloud_upload: Bulk-Upload",
     "settings": ":material/settings: Einstellungen",
@@ -24,13 +25,25 @@ PAGES = {
 }
 NAV_PAGES = list(PAGES.values())
 
-MODULE_TABS = [":material/view_timeline: Ablauf", ":material/school: Lernen & Klausur",
+MODULE_TABS = [":material/view_timeline: Ablauf",
+               ":material/insights: Wissensstand" if _V2 else ":material/school: Lernen & Klausur",
                ":material/library_books: Definitionen", ":material/folder_open: Dateien",
                ":material/sticky_note_2: Notizen"]
 LECTURE_TAB = {"files": ":material/folder_open: Dateien", "vorbereitet": ":material/menu_book: Vorbereiten",
-               "nachbereitet": ":material/edit_note: Nachbereiten", "learn": ":material/style: Lernen"}
+               "nachbereitet": ":material/edit_note: " + ("Nacharbeiten" if _V2 else "Nachbereiten"),
+               "check": ":material/fact_check: Vorlesungs-Check", "learn": ":material/style: Lernen"}
+
+
 def lecture_tabs() -> list[str]:
-    return [t for k, t in LECTURE_TAB.items() if k != "vorbereitet" or planner.PREP_ENABLED]
+    hidden = {"vorbereitet"} if not planner.PREP_ENABLED else set()
+    hidden.add("learn" if planner.LEARNING_V2 else "check")
+    return [t for k, t in LECTURE_TAB.items() if k not in hidden]
+
+
+def open_training(module_id: str) -> None:
+    """Callback: Wochentraining-Seite mit diesem Modul öffnen."""
+    st.session_state["tr_module"] = module_id
+    st.session_state["nav"] = PAGES["quiz"]
 
 
 def is_mobile() -> bool:
@@ -206,6 +219,9 @@ def open_todo(todo: dict) -> None:
             open_unit(module_id, None)
         return
     unit_id = None
+    if todo.get("kind") == "Wochentraining":
+        open_training(module_id)
+        return
     if len(parts) >= 4 and parts[1] == "vl":
         unit_id = f"vl:{parts[2]}"
         st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TAB.get(parts[3], LECTURE_TAB["nachbereitet"])

@@ -14,7 +14,7 @@ from views.common import done_button, open_unit
 
 
 def _mark(ok: bool) -> str:
-    return "✓" if ok else "○"
+    return ":material/check_circle:" if ok else ":material/radio_button_unchecked:"
 
 
 def _due(d) -> str:
@@ -23,6 +23,29 @@ def _due(d) -> str:
 
 def _check(col, label: str, todo: dict, state: dict, wkey: str) -> None:
     done_button(col, label, bool(state.get(todo["key"])), todo, wkey)
+
+
+def _lecture_row_v2(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict], state: dict,
+                    is_next: bool) -> None:
+    """Vorlesung mit ihren vier Schritten (Nacharbeiten · Check · Übungsblatt · Wochentraining) und Abdeckung."""
+    from utils import mastery, topics
+    from views import progress
+
+    module_id = module["id"]
+    mts = topics.minitopics(data, lec["id"])
+    asked, total = mastery.coverage(data, mts)
+    with st.container(key=f"row_{module_id}_{lec['id'].replace(':', '_')}"):
+        c1, c2 = st.columns([7, 2], vertical_alignment="center")
+        c1.button(f"{short_label(lec)} – {lec['topic']}" + ("  als Nächstes" if is_next else ""),
+                  key=f"open_{module_id}_{lec['id']}", type="tertiary", on_click=open_unit, icon=":material/co_present:",
+                  args=(module_id, lec["id"]))
+        if lec["date"] <= today() and not lec["is_break"]:
+            c1.markdown(progress.steps_html(progress.lecture_steps(cfg, module, data, lec, exs, state)),
+                        unsafe_allow_html=True)
+        else:
+            c1.caption(f"nacharbeiten bis {_due(planner.review_due(module, lec['date']))}")
+        if total:
+            c2.progress(asked / total, text=f"{asked}/{total}")
 
 
 def _lecture_row(module: dict, data: dict, lec: dict, state: dict, is_next: bool) -> None:
@@ -113,7 +136,9 @@ def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
             st.markdown(f"**{label}**")
             items = sorted(ch_lecs + ch_exs, key=lambda u: u["date"] if u["kind"] == "lecture" else u["session"])
             for u in items:
-                if u["kind"] == "lecture":
+                if u["kind"] == "lecture" and planner.LEARNING_V2:
+                    _lecture_row_v2(cfg, module, data, u, exs, state, u["id"] == next_id)
+                elif u["kind"] == "lecture":
                     _lecture_row(module, data, u, state, u["id"] == next_id)
                 else:
                     _exercise_row(module, data, u, state, u["id"] == next_id,

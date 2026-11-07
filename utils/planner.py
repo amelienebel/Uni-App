@@ -78,6 +78,9 @@ PREP_DAYS_BEFORE = 1      # Vorlesung vorbereiten: 1 Tag vorher
 # „Vorbereiten“ vorerst abgeschaltet (Reiter, To-dos, Häkchen, Zusammenfassung beim Upload). Der Code bleibt
 # vollständig erhalten – True setzt alles wieder in Gang (Ablauf siehe CLAUDE.md → „Vorbereiten (abgeschaltet)“).
 PREP_ENABLED = False
+# Neues Lernsystem: Nacharbeiten → Vorlesungs-Check → Übungsblatt → Wochentraining (statt Karteikarten/Quiz).
+# False stellt das alte Karteikartensystem mit allen Lernständen wieder her (die Karten bleiben immer erhalten).
+LEARNING_V2 = True
 REVIEW_DAYS_AFTER = 2     # Vorlesung nachbereiten: 2 Tage danach
 EXERCISE_DAYS_BEFORE = 2  # Übungsblatt lösen: 2 Tage vor der Übung/dem Tutorium
 
@@ -297,11 +300,25 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
         module_id = module["id"]
         if module_id not in planned:
             continue
-        for lec in lectures_of(module):
+        legacy = set(modules_data[module_id].get("legacy_lectures", []))
+        for nr, lec in enumerate(lectures_of(module), start=1):
             if break_for(lec["date"], breaks):
                 continue
             # Maßgeblich ist die Frist: z. B. Montagsvorlesung → Vorbereitung am Sonntag der Vorwoche
             label = f"{lec['date']:%d.%m.}: {lec['topic']}"
+            if LEARNING_V2:
+                due = review_due(module, lec["date"])
+                if not monday <= due <= sunday:
+                    continue
+                add({"key": lecture_key(module_id, lec["date"], "nachbereitet"), "module_id": module_id,
+                     "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "nachbereitet", "step": 1,
+                     "kind": "Nacharbeiten", "due": due,
+                     "title": f"Vorlesung {nr} nacharbeiten (Folien hochladen, kommentieren, genau lesen) – {label}"})
+                if f"vl:{lec['date'].isoformat()}" not in legacy:
+                    add({"key": lecture_key(module_id, lec["date"], "check"), "module_id": module_id,
+                         "chapter_id": lec.get("chapter_id"), "status_field": None, "step": 2,
+                         "kind": "Vorlesungs-Check", "due": due, "title": f"Vorlesung {nr} {module['short']} Check"})
+                continue
             for field, kind, verb, due in (("vorbereitet", "Vorbereitung", "vorbereiten", prep_due(module, lec["date"])),
                                            ("nachbereitet", "Nachbereitung", "nachbereiten",
                                             review_due(module, lec["date"]))):
@@ -314,8 +331,15 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             if not (monday <= due <= sunday):
                 continue
             add({"key": exercise_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),
-                 "status_field": None, "sync": "uebung", "kind": "Übungsblatt",
-                 "title": f"Übungsblatt lösen – {ex['title']}", "due": due})
+                 "status_field": None, "sync": "uebung", "kind": "Übungsblatt", "step": 3,
+                 "title": f"Übungsblatt {'– ' if LEARNING_V2 else 'lösen – '}{ex['title']}", "due": due})
+        if LEARNING_V2:
+            since = v2_start(modules_data[module_id])
+            for w in training_windows(cfg, module, schedule, breaks):
+                if monday <= w["due"] <= sunday and (since is None or w["due"] >= since):
+                    add({"key": w["key"], "module_id": module_id, "chapter_id": None, "status_field": None,
+                         "kind": "Wochentraining", "step": 4, "due": w["due"], "start": w["start"],
+                         "title": f"Wochentraining {module['short']} (inkl. Übungen und früherer Vorlesungen)"})
 
     # Zusätzliche Termine mit Zeitraum (Klausuranmeldung, Quizze, Extra-Sessions) – für alle Module
     for module in cfg["modules"]:
@@ -329,7 +353,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
         module_id = module["id"]
         data = modules_data[module_id]
         days = days_until_exam(module_id, monday)
-        due_cards = len(sr.due_queue(data["cards"], days, today=monday + timedelta(days=6)))
+        due_cards = 0 if LEARNING_V2 else len(sr.due_queue(data["cards"], days, today=monday + timedelta(days=6)))
         if due_cards:
             add({
                 "key": f"{module_id}:sr:{iso_week}",
@@ -347,8 +371,33 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                 "due": monday + timedelta(days=5),
             })
 
-    todos.sort(key=lambda t: (t["due"], t["module_id"]))
+    todos.sort(key=lambda t: (t["due"], t["module_id"], t.get("step", 9)))
     return todos
+
+
+def v2_start(module_data: dict) -> date | None:
+    """Tag der Umstellung auf das neue Lernsystem (Wochentrainings davor gab es nicht → kein Rückstand)."""
+    at = (module_data.get("cards_archived") or {}).get("at")
+    return date.fromisoformat(at[:10]) if at else None
+
+
+def training_windows(cfg: dict, module: dict, schedule: list[dict], breaks=()) -> list[dict]:
+    """Wochentraining je Modul: einmal pro Woche, nach dem Übungsblatt, spätestens am Tag vor der nächsten
+    Vorlesung des Moduls. start = ab wann ein abgeschlossenes Training dafür zählt."""
+    lectures = [lec["date"] for lec in lectures_of(module) if not break_for(lec["date"], breaks)]
+    by_week: dict[date, dict] = {}
+    for ex in exercises_of(module):
+        due = exercise_due(module, ex, schedule, breaks)
+        by_week[monday_of(due)] = {"ex": ex, "ex_due": due}
+    windows = []
+    for info in by_week.values():
+        ex_due = info["ex_due"]
+        nxt = next((d for d in lectures if d > ex_due), None)
+        due = max(ex_due, nxt - timedelta(days=1)) if nxt else ex_due + timedelta(days=3)
+        windows.append({"key": exercise_key(module["id"], info["ex"]) + ":training", "start": ex_due - timedelta(days=3),
+                        "due": due, "ex_due": ex_due})
+    windows.sort(key=lambda w: w["due"])
+    return windows
 
 
 def custom_todos(todo_state: dict, start: date | None = None, end: date | None = None) -> list[dict]:

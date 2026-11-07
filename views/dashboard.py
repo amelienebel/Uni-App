@@ -83,7 +83,7 @@ def _short_label(t: dict) -> str:
 
 
 def _move_popover(t: dict, monday: date, place: str) -> None:
-    with st.popover("↔", help="Verschieben", type="tertiary"):
+    with st.popover("", icon=":material/swap_horiz:", help="Verschieben", type="tertiary"):
         st.markdown(f"**{t['title']}**")
         days = [monday + timedelta(days=i) for i in range(7)]
         current_day, current_slot = _placement(t, monday)
@@ -131,7 +131,7 @@ def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: da
     module = todo_module(cfg, t)
     done = planner.todo_done(t, modules_data, todo_state)
     overdue = not done and t["due"] < now
-    mark = "✓ " if done else ("! " if overdue else "")
+    mark = ":material/check: " if done else (":material/schedule: " if overdue else "")
     state = "done" if done else "open"
     with st.container(key=f"chip_{state}_{module['id']}_{key}"):
         st.button(f"{mark}**{module['short']}**  \n{_short_label(t)}", key=f"chipbtn_{key}", type="tertiary",
@@ -262,7 +262,7 @@ def render(cfg: dict) -> None:
     todos += planner.custom_todos(todo_state, monday, monday + timedelta(days=6))
     todos = [t for t in todos if t["kind"] != "Wiederholung"]  # Karteikarten haben eine eigene Zeile
     new_min = int(settings["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
-    card_counts = {day: _card_counts(modules_data, day, now, new_min) for day in
+    card_counts = {day: ({} if planner.LEARNING_V2 else _card_counts(modules_data, day, now, new_min)) for day in
                    (monday + timedelta(days=i) for i in range(7))}
     placed: dict[tuple[date, int | None], list[dict]] = {}
     for t in todos:
@@ -295,7 +295,7 @@ def render(cfg: dict) -> None:
                             st.error(f"Klausur {get_module(cfg, mid)['short']}")
                     for entry in calendar.get(day, []):
                         st.warning(entry)
-        for slot in SLOTS + [None, "cards"]:
+        for slot in SLOTS + [None] + ([] if planner.LEARNING_V2 else ["cards"]):
             row = st.columns(widths)
             row[0].markdown("**Karteikarten**" if slot == "cards" else f"**{SLOT_LABELS[slot]}**" if slot is not None
                             else "**To-dos**")

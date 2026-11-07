@@ -17,7 +17,7 @@ from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_dat
 from utils.units import has_notes, lecture_notes, related_exercises, short_label, unit_cards, unit_docs
 from views.common import LECTURE_TAB, ai_hint, done_button, lecture_tabs, open_unit, render_formula, toggle_todo
 from views import quiz_center
-from views.module_tabs import exams, study, tutor
+from views.module_tabs import exams, nacharbeiten, study, tutor
 from views.module_tabs.files import file_list, show_messages, uploader
 
 
@@ -62,7 +62,8 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
     state = load_todos()
     c1, c2 = st.columns(2)
     prep, review = planner.prep_due(module, lec["date"]), planner.review_due(module, lec["date"])
-    review_label = f"Nachbereitet (bis {WEEKDAYS[review.weekday()][:2]} {review:%d.%m.})"
+    review_label = (f"{'Nachgearbeitet' if planner.LEARNING_V2 else 'Nachbereitet'} "
+                    f"(bis {WEEKDAYS[review.weekday()][:2]} {review:%d.%m.})")
     checks = [(c1, "vorbereitet", f"Vorbereitet (bis {WEEKDAYS[prep.weekday()][:2]} {prep:%d.%m.})"),
               (c2, "nachbereitet", review_label)] if planner.PREP_ENABLED else [(c1, "nachbereitet", review_label)]
     for col, field, label in checks:
@@ -70,12 +71,18 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
         done_button(col, label, bool(state.get(planner.lecture_key(module_id, lec["date"], field))), None, wkey,
                     callback=_status_toggle, args=(module_id, lec, field, wkey))
 
+    if planner.LEARNING_V2:
+        from views import progress
+
+        st.markdown(progress.steps_html(progress.lecture_steps(cfg, module, data, lec, exs, state)),
+                    unsafe_allow_html=True)
     related = related_exercises(lec, exs)
     if related:
         st.markdown("**Zugehörige Übungen:**")
         for ex in related:
-            done = "✓" if state.get(ex["plan_key"]) else "○"
-            st.button(f"{done} {short_label(ex)} – {ex['title']}", key=f"toex_{lec['id']}_{ex['id']}",
+            done = bool(state.get(ex["plan_key"]))
+            st.button(f"{short_label(ex)} – {ex['title']}", key=f"toex_{lec['id']}_{ex['id']}",
+                      icon=":material/check_circle:" if done else ":material/radio_button_unchecked:",
                       type="tertiary", on_click=open_unit, args=(module_id, ex["id"]))
 
 
@@ -92,7 +99,8 @@ def _files_tab(cfg: dict, module_id: str, lec: dict, exs: list[dict], all_units:
         ex_docs = unit_docs(data, ex)
         st.markdown(f"**{short_label(ex)} – {ex['title']}**")
         file_list(module_id, ex_docs, key=f"{lec['id']}_{ex['id']}", empty="Noch keine Dateien zur Übung.")
-    _book_chapters(module_id, data, lec)
+    if not planner.LEARNING_V2:  # Lehrbuch ergänzt nur Karten und Tutor (beides gibt es im neuen System nicht)
+        _book_chapters(module_id, data, lec)
 
 
 def _save_book(module_id: str, lec_id: str, widget_key: str) -> None:
@@ -369,7 +377,8 @@ def _review_tab(cfg: dict, module_id: str, lec: dict) -> None:
     study.browse_cards(module_id, cards, key=lec["id"])
     study.manual_card(module_id, data, lec, key=lec["id"])
     st.divider()
-    if st.button("✓ Nachbereitung abschließen", key=f"revdone_{lec['id']}", type="primary", width="stretch"):
+    if st.button("Nachbereitung abschließen", key=f"revdone_{lec['id']}", type="primary", width="stretch",
+                 icon=":material/check:"):
         _set_done(module_id, lec, "nachbereitet")
         st.session_state[f"ltab_next_{lec['id']}"] = LECTURE_TAB["learn"]
         st.rerun()
@@ -399,6 +408,20 @@ def _notes_step(cfg: dict, module_id: str, lec: dict) -> None:
         with st.expander("Vorschau der Notizen (mit Formeln)"):
             st.markdown(notes["text"])
 
+    _board_images(module, module_id, lec, notes)
+
+    old = data["notes"].get(lec.get("chapter_id") or "")
+    if old and any((old.get(k) or "").strip() for k in ("text", "emphasized", "briefly", "examples")):
+        with st.expander("Ältere Notizen zu diesem Kapitel"):
+            old = get_notes(data, lec["chapter_id"])
+            for field, label in (("text", "Notizen"), ("emphasized", "Sehr wichtig"), ("briefly", "Nicht so wichtig"),
+                                 ("examples", "Beispiele")):
+                if old[field].strip():
+                    st.markdown(f"**{label}:**\n\n{old[field]}")
+
+
+def _board_images(module: dict, module_id: str, lec: dict, notes: dict) -> None:
+    """Tafelbilder & Screenshots zur Vorlesung (mit Abtippen)."""
     st.markdown("**Tafelbilder & Screenshots**")
     images = st.file_uploader("Bilder hochladen", type=list(IMAGE_TYPES), accept_multiple_files=True,
                               key=f"img_up_{lec['id']}_{len(notes['images'])}")
@@ -444,15 +467,6 @@ def _notes_step(cfg: dict, module_id: str, lec: dict) -> None:
             if img.get("transcript"):
                 with st.expander("Abgetippt"):
                     st.markdown(img["transcript"])
-
-    old = data["notes"].get(lec.get("chapter_id") or "")
-    if old and any((old.get(k) or "").strip() for k in ("text", "emphasized", "briefly", "examples")):
-        with st.expander("Ältere Notizen zu diesem Kapitel"):
-            old = get_notes(data, lec["chapter_id"])
-            for field, label in (("text", "Notizen"), ("emphasized", "Sehr wichtig"), ("briefly", "Nicht so wichtig"),
-                                 ("examples", "Beispiele")):
-                if old[field].strip():
-                    st.markdown(f"**{label}:**\n\n{old[field]}")
 
 
 def _cards_step(cfg: dict, module_id: str, lec: dict) -> None:
@@ -502,7 +516,10 @@ def _learn_tab(cfg: dict, module_id: str, lec: dict) -> None:
 
 _TAB_VIEWS = {"files": lambda cfg, module_id, lec, lecs, exs: _files_tab(cfg, module_id, lec, exs, lecs + exs),
               "vorbereitet": lambda cfg, module_id, lec, lecs, exs: _prep_tab(cfg, module_id, lec),
-              "nachbereitet": lambda cfg, module_id, lec, lecs, exs: _review_tab(cfg, module_id, lec),
+              "nachbereitet": lambda cfg, module_id, lec, lecs, exs: (
+                  nacharbeiten.render(cfg, module_id, lec, lecs) if planner.LEARNING_V2
+                  else _review_tab(cfg, module_id, lec)),
+              "check": lambda cfg, module_id, lec, lecs, exs: nacharbeiten.check_tab(cfg, module_id, lec),
               "learn": lambda cfg, module_id, lec, lecs, exs: _learn_tab(cfg, module_id, lec)}
 
 

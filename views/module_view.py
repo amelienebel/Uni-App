@@ -19,6 +19,19 @@ TABS = MODULE_TABS
 def _stats(module: dict, data: dict) -> None:
     """Fortschritt, Kapitel, Karten und Klausurtage – am Ende der Modulseite."""
     module_id = module["id"]
+    if planner.LEARNING_V2:
+        from views import progress
+
+        stats = progress.module_stats(data)
+        days = days_until_exam(module_id)
+        st.divider()
+        with st.container(key=f"kpis_{module_id}"):
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Abgedeckt", f"{stats['asked']}/{stats['total']}", help="Minithemen, die schon abgefragt wurden")
+            c2.metric("Sicher", stats["counts"]["sicher"])
+            c3.metric("Klausur", f"{days} Tage" if days is not None and days >= 0 else "–")
+        progress.render_status(data)
+        return
     progress = planner.module_progress(data)
     days = days_until_exam(module_id)
     st.divider()
@@ -32,7 +45,12 @@ def _stats(module: dict, data: dict) -> None:
     st.progress(progress["overall"])
 
 
-def _go_task(module_id: str, unit_id: str, tab: str | None) -> None:
+def _go_task(module_id: str, unit_id: str | None, tab: str | None) -> None:
+    if tab == "training":
+        from views.common import open_training
+
+        open_training(module_id)
+        return
     if tab:
         st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TAB[tab]
     open_unit(module_id, unit_id)
@@ -48,7 +66,7 @@ def _header(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dic
     with st.container(key=f"modhead_{module_id}"):
         st.title(f"{micon(module)} {module['name']}")
     sem_start, _ = semester_dates(cfg)
-    tasks = units.open_tasks(cfg, module, lecs, exs, load_todos(), sem_start)
+    tasks = units.open_tasks(cfg, module, lecs, exs, load_todos(), sem_start, data)
     nxt = planner.next_session(cfg, module, get_schedule(cfg), now)
 
     with st.container(border=True, key=f"nextbox_{module_id}"):
@@ -63,7 +81,7 @@ def _header(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dic
                 st.markdown(("**überfällig** – war fällig " if overdue else "fällig ") + f"**{when}**")
                 st.caption(t["about"])
                 st.button("Jetzt öffnen →", key=f"gotask_{module_id}", type="primary",
-                          on_click=_go_task, args=(module_id, t["unit"]["id"], t["tab"]))
+                          on_click=_go_task, args=(module_id, t["unit"]["id"] if t["unit"] else None, t["tab"]))
                 more = [x for x in tasks[1:] if x["due"] < now]
                 if more:
                     st.caption(f"Außerdem überfällig: {len(more)} weitere Aufgabe(n)")

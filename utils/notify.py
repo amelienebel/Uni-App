@@ -41,6 +41,10 @@ def send(topic: str, title: str, message: str, at: datetime | None = None, tags:
 
 def reminder_text(cfg: dict, day: date) -> str | None:
     """Text der Erinnerung für einen Tag: fällige Karteikarten pro Modul (None = nichts fällig)."""
+    from utils import planner
+
+    if planner.LEARNING_V2:
+        return _v2_text(cfg, day)
     parts, total = [], 0
     for module in cfg["modules"]:
         cards = load_module(module["id"])["cards"]
@@ -71,7 +75,7 @@ def ensure_scheduled(cfg: dict, today: date) -> str | None:
         if not text:
             continue  # (noch) nichts fällig – beim nächsten Öffnen erneut prüfen
         try:
-            send(conf["topic"], "Zeit für Spaced Repetition", text, at=when)
+            send(conf["topic"], "Zeit zum Lernen", text, at=when)
         except requests.RequestException as exc:
             return f"Erinnerungen konnten nicht eingeplant werden: {exc}"
         conf["scheduled"][key] = True
@@ -82,3 +86,23 @@ def ensure_scheduled(cfg: dict, today: date) -> str | None:
     if changed:
         save_settings()
     return None
+
+
+def _v2_text(cfg: dict, day: date) -> str | None:
+    """Neues Lernsystem: offene Vorlesungs-Checks und fällige Minithemen fürs Wochentraining."""
+    from utils import mastery, sessions, topics
+
+    parts = []
+    for module in cfg["modules"]:
+        data = load_module(module["id"])
+        held = [lec for lec in sessions.held_lectures(cfg, module["id"], data) if lec["date"] <= day]
+        checks = sum(1 for lec in held if topics.minitopics(data, lec["id"]) and not sessions.is_legacy(data, lec["id"])
+                     and not sessions.check_done(data, lec["id"]))
+        due = len(mastery.next_due(data, topics.minitopics(data), day))
+        bits = ([f"{checks} Check" + ("s" if checks > 1 else "")] if checks else []) + \
+            ([f"{due} Minithemen fällig"] if due else [])
+        if bits:
+            parts.append(f"{module['short']}: " + ", ".join(bits))
+    if not parts:
+        return None
+    return "Heute dran – " + " · ".join(parts) + ". Ein kurzes Wochentraining reicht schon!"

@@ -216,24 +216,42 @@ def guess_unit(path: str, doc_type: str, chapter_id: str | None, lecture_list: l
 
 
 def open_tasks(cfg: dict, module_cfg: dict, lecture_list: list[dict], exercise_list: list[dict], state: dict,
-               sem_start: date) -> list[dict]:
-    """Offene Aufgaben eines Moduls (vor-/nachbereiten, Blatt lösen), nach Frist sortiert."""
+               sem_start: date, data: dict | None = None) -> list[dict]:
+    """Offene Aufgaben eines Moduls (nacharbeiten, Check, Blatt lösen, Wochentraining), nach Frist sortiert."""
+    from utils.storage import today
+
     module_id = module_cfg["id"]
     schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
+    legacy = set((data or {}).get("legacy_lectures", []))
     tasks = []
     for lec in lecture_list:
         if lec["is_break"]:
             continue
         for field, verb, due in (("vorbereitet", "vorbereiten", planner.prep_due(module_cfg, lec["date"])),
-                                 ("nachbereitet", "nachbereiten", planner.review_due(module_cfg, lec["date"]))):
+                                 ("nachbereitet", "nacharbeiten" if planner.LEARNING_V2 else "nachbereiten",
+                                  planner.review_due(module_cfg, lec["date"]))):
             if field == "vorbereitet" and not planner.PREP_ENABLED:
                 continue
             if due >= sem_start and not state.get(planner.lecture_key(module_id, lec["date"], field)):
                 tasks.append({"due": due, "unit": lec, "label": f"Vorlesung {lec['nr']} {verb}",
-                              "about": lec["topic"], "tab": field})
+                              "about": lec["topic"], "tab": field, "step": 1})
+        if planner.LEARNING_V2 and lec["id"] not in legacy:
+            due = planner.review_due(module_cfg, lec["date"])
+            if due >= sem_start and not state.get(planner.lecture_key(module_id, lec["date"], "check")):
+                tasks.append({"due": due, "unit": lec, "label": f"Vorlesung {lec['nr']} {module_cfg['short']} Check",
+                              "about": lec["topic"], "tab": "check", "step": 2})
     for ex in exercise_list:
         due = planner.exercise_due(module_cfg, ex, schedule, breaks)
         if due >= sem_start and not state.get(ex["plan_key"]):
-            tasks.append({"due": due, "unit": ex, "label": "Übungsblatt lösen", "about": ex["title"], "tab": None})
-    tasks.sort(key=lambda t: t["due"])
+            tasks.append({"due": due, "unit": ex, "label": "Übungsblatt lösen", "about": ex["title"], "tab": None,
+                          "step": 3})
+    if planner.LEARNING_V2:
+        since = planner.v2_start(data or {})
+        for w in planner.training_windows(cfg, module_cfg, schedule, breaks):
+            if w["due"] >= sem_start and w["start"] <= today() and not state.get(w["key"]) \
+                    and (since is None or w["due"] >= since):
+                tasks.append({"due": w["due"], "unit": None, "label": f"Wochentraining {module_cfg['short']}",
+                              "about": "inkl. Übungen und früherer Vorlesungen", "tab": "training", "step": 4,
+                              "key": w["key"]})
+    tasks.sort(key=lambda t: (t["due"], t["step"]))
     return tasks

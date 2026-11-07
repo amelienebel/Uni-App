@@ -55,6 +55,7 @@ def _add_cards(n: int = 3) -> list[dict]:
     return cards
 
 
+@pytest.mark.usefixtures("old_system")
 def test_cards_center_focus_session_and_back():
     from views.common import PAGES
 
@@ -177,6 +178,7 @@ def test_prep_and_quiz_formats(monkeypatch):
     assert any("Was ist eine Matrix?" in m.value for m in at.markdown)  # Quiz in der Vorbereitung
 
 
+@pytest.mark.usefixtures("old_system")
 def test_figures_first_then_prep(monkeypatch):
     """Mit Abbildungen entsteht die Vorbereitung erst, wenn entschieden ist, welche Seiten genau gelesen werden."""
     from utils import learning, planner, storage, units
@@ -208,6 +210,7 @@ def test_figures_first_then_prep(monkeypatch):
     assert at.session_state["_module_mathe"]["documents"][-1]["skipped_figures"] == [2, 5]
 
 
+@pytest.mark.usefixtures("old_system")
 def test_exact_read_after_lecture_without_prep(monkeypatch):
     """Nach der Vorlesung im Reiter Lernen Seiten genau lesen – ohne dass eine Vorbereitung entsteht."""
     from utils import ai, learning, storage, units
@@ -275,6 +278,7 @@ def test_sidebar_without_module_page_and_custom_todos():
     assert not at.session_state["_todos"]["_custom"]
 
 
+@pytest.mark.usefixtures("old_system")
 def test_cards_browse_filter_delete_and_feedback(monkeypatch):
     from utils import ai, learning
     from views.cards_center import is_weak
@@ -320,6 +324,7 @@ def test_cards_browse_filter_delete_and_feedback(monkeypatch):
     assert "Teil 2?" not in [c["front"] for c in storage.load_module("mathe")["cards"]]
 
 
+@pytest.mark.usefixtures("old_system")
 def test_quiz_center_focus_session():
     from utils import storage
     from views.common import PAGES
@@ -425,6 +430,7 @@ def test_script_split_and_prep(monkeypatch):
     assert "keine Folien" in seen["prompt"]
 
 
+@pytest.mark.usefixtures("old_system")
 def test_review_steps_without_prep(monkeypatch):
     """Ohne Vorbereitung: kein Reiter/To-do „vorbereiten“; Nachbereitung mit Karten durchsehen, ohne Formelschritt."""
     from datetime import date
@@ -495,6 +501,7 @@ def test_rooms_exam_format_and_exercise_page():
     assert at.session_state["_todos"].get(ex["plan_key"]) is False
 
 
+@pytest.mark.usefixtures("old_system")
 def test_priority_picker_in_focus_mode():
     from views.common import PAGES
 
@@ -511,6 +518,7 @@ def test_priority_picker_in_focus_mode():
     assert card["priority"] == "low"
 
 
+@pytest.mark.usefixtures("old_system")
 def test_exam_tasks_only_for_held_lectures(monkeypatch):
     from utils import ai, exam_tasks, storage, units
     from utils.config import get_module, load_config
@@ -632,6 +640,7 @@ def test_no_opus_models():
     assert not any("opus" in m for m in ai.MODELS)
 
 
+@pytest.mark.usefixtures("old_system")
 def test_quiz_option_breakdown_and_hint(monkeypatch):
     """Quiz: Tipp zum Aufklappen, nach dem Auswerten jede Option mit richtig/falsch und Begründung."""
     from utils import storage

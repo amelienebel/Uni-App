@@ -18,6 +18,11 @@ def _select_all(key: str, ids: list[str]) -> None:
 
 
 def render(cfg: dict, module: dict, lecs: list[dict], exs: list[dict]) -> None:
+    from utils import planner
+
+    if planner.LEARNING_V2:
+        _render_v2(cfg, module, lecs)
+        return
     module_id = module["id"]
     data = load_module(module_id)
     held = [lec["id"] for lec in lecs if lec["date"] <= today()]
@@ -98,3 +103,38 @@ def _weak_tab(cfg: dict, module_id: str, data: dict) -> None:
         study.review_session(cfg, module_id, weak_cards, key=f"weak_{module_id}", default_all=True)
     else:
         st.caption("Keine schwachen Karten – alles im grünen Bereich.")
+
+
+def _render_v2(cfg: dict, module: dict, lecs: list[dict]) -> None:
+    """Reiter „Wissensstand“: Abdeckung und Wissensstand je Vorlesung und Thema, Start Wochentraining, Altklausuren."""
+    from utils import mastery, sessions, topics
+    from views import progress
+    from views.common import open_training, open_unit
+
+    module_id = module["id"]
+    data = load_module(module_id)
+    held = [lec for lec in lecs if lec["date"] <= today() and not lec["is_break"]]
+    stats = progress.module_stats(data, {lec["id"] for lec in held})
+    c1, c2 = st.columns([3, 1], vertical_alignment="center")
+    c1.progress(stats["asked"] / stats["total"] if stats["total"] else 0.0,
+                text=f"{stats['asked']} von {stats['total']} Minithemen abgefragt · {stats['counts']['sicher']} sicher")
+    c2.button("Wochentraining", key=f"ws_train_{module_id}", type="primary", icon=":material/fitness_center:",
+              width="stretch", on_click=open_training, args=(module_id,))
+    progress.render_status(data, {lec["id"] for lec in held})
+    for lec in reversed(held):
+        mts = topics.minitopics(data, lec["id"])
+        asked, total = mastery.coverage(data, mts)
+        label = f"VL {lec['nr']} – {lec['topic'][:60]}" + (f" · {asked}/{total}" if total else " · noch keine Minithemen")
+        with st.expander(label):
+            entry = topics.lecture_topics(data, lec["id"]) or {}
+            for t in entry.get("topics", []):
+                active = [{**m, "lecture_id": lec["id"]} for m in t["minitopics"] if not m.get("excluded")]
+                st.markdown(f"**{t['title']}**")
+                st.markdown(progress.chips_html(data, active), unsafe_allow_html=True)
+            if not entry:
+                st.button("Nacharbeiten", key=f"ws_open_{lec['id']}", on_click=open_unit, args=(module_id, lec["id"]))
+            elif not sessions.is_legacy(data, lec["id"]) and not sessions.check_done(data, lec["id"]):
+                st.caption("Vorlesungs-Check noch offen")
+    st.divider()
+    st.markdown("#### :material/history_edu: Altklausuren")
+    exams.altklausuren(cfg, module_id)

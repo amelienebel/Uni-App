@@ -317,7 +317,7 @@ def rate(cfg: dict, module_id: str, session: dict, idx: int, self_grade: str) ->
     item = session["items"][idx]
     item["self"] = self_grade
     mt = topics.find_minitopic(data, item["minitopic_id"])
-    if mt:
+    if mt and not item.get("void"):  # wegen eines bestätigten Fehlers nicht gewertet
         item["status_before"] = mastery.status(data, mt)
         mastery.record(data, mt, item.get("correct"), self_grade, source=session["kind"],
                        question_id=item["question_id"], level_asked=item["level"],
@@ -422,3 +422,87 @@ def ensure_feedback_mapped(cfg: dict, module_id: str) -> None:
             map_feedback(cfg, module_id, ex)
         except ai.AIError:
             continue
+
+
+# ---------------------------------------------------------------------------
+# Feedback der Nutzerin zu einer Frage
+# ---------------------------------------------------------------------------
+
+FEEDBACK_KINDS = ("Fehler in Frage oder Lösung", "Unklar formuliert", "Sonstiges")
+
+QUESTION_CHECK_PROMPT = """Die Studentin meldet zu dieser Übungsfrage: „{kind}“ – {text}
+Prüfe die Frage sorgfältig gegen die Folien. Ist Frage, Lösung oder Begründung wirklich falsch (oder mehrdeutig),
+setze error_confirmed = true und liefere die korrigierte Fassung (correct_indices bei Auswahlfragen mit 0-basierten
+Indizes, number_answer bei Zahl-Aufgaben, sample_answer bei Freitext, explanation und option_notes neu – sonst
+unverändert übernehmen). reply: kurze, freundliche Antwort an die Studentin (2–4 Sätze), was stimmt und warum.
+
+<frage typ="{qtype}">
+{question}
+{options}
+Bisher als richtig gewertet: {solution}
+Begründung: {explanation}
+</frage>
+
+<folien>
+{slides}
+</folien>"""
+
+QUESTION_CHECK_SCHEMA = ai._obj({
+    "error_confirmed": {"type": "boolean"}, "reply": ai._STR,
+    "correct_indices": {"type": "array", "items": ai._INT}, "number_answer": ai._STR, "sample_answer": ai._STR,
+    "explanation": ai._STR, "option_notes": {"type": "array", "items": ai._STR}})
+
+
+def question_feedback(cfg: dict, module_id: str, session: dict, idx: int, kind: str, text: str) -> dict:
+    """Feedback speichern; bei gemeldetem Fehler prüft Claude die Frage und korrigiert sie ggf. (Antwort wird neu
+    gewertet). Gemeldete Fragen werden nicht wiederverwendet; der Hinweis fließt in neue Fragen zum Minithema ein."""
+    data = load_module(module_id)
+    item = session["items"][idx]
+    q = question(data, item["question_id"])
+    entry = {"kind": kind, "text": text.strip(), "at": now_iso(), "session": session["id"]}
+    q.setdefault("feedback", []).append(entry)
+    if kind != "Sonstiges":
+        q["retired"] = True
+    if kind == FEEDBACK_KINDS[0] and ai.is_available():
+        options = "\n".join(f"{j}) {o}" for j, o in enumerate(q.get("options", [])))
+        solution = (q.get("correct_indices") if q["type"] in ("sc", "mc") else
+                    q.get("number_answer") if q["type"] == "zahl" else q.get("sample_answer"))
+        slides = qb._material(data, [{"slides": q.get("slides", [])}])
+        result = ai.complete_json(QUESTION_CHECK_PROMPT.format(
+            kind=kind, text=text or "(kein Kommentar)", qtype=q["type"], question=q["question"], options=options,
+            solution=solution, explanation=q.get("explanation", ""), slides=slides),
+            QUESTION_CHECK_SCHEMA, max_tokens=6000, effort="low", task="cards")
+        entry["reply"] = result["reply"].strip()
+        entry["confirmed"] = bool(result["error_confirmed"])
+        if result["error_confirmed"]:
+            q["original"] = {k: q.get(k) for k in ("correct_indices", "number_answer", "sample_answer", "explanation",
+                                                    "option_notes")}
+            if q["type"] in ("sc", "mc") and result["correct_indices"]:
+                q["correct_indices"] = sorted(set(i for i in result["correct_indices"]
+                                                  if 0 <= i < len(q.get("options", []))))
+            if q["type"] == "zahl" and qb.parse_number(result["number_answer"]) is not None:
+                q["number_answer"] = result["number_answer"].strip()
+            if q["type"] == "freitext" and result["sample_answer"].strip():
+                q["sample_answer"] = result["sample_answer"].strip()
+            if result["explanation"].strip():
+                q["explanation"] = result["explanation"].strip()
+            if len(result["option_notes"]) == len(q.get("options", [])):
+                q["option_notes"] = result["option_notes"]
+            q["corrected"] = True
+            if "answer" in item:  # Antwort mit der korrigierten Lösung neu werten
+                if q["type"] in ("sc", "mc"):
+                    item["correct"] = qb.check_choice(q, item["answer"] or [])
+                elif q["type"] == "zahl":
+                    item["correct"] = qb.check_number(q, item["answer"] or "")
+                else:
+                    item.update({"void": True, "correct": None})
+    item.setdefault("feedback", []).append(entry)
+    save_module(module_id)
+    return entry
+
+
+def feedback_notes(data: dict, mt_id: str) -> list[str]:
+    """Hinweise der Nutzerin zu früheren Fragen dieses Minithemas (fließen in neue Fragen ein)."""
+    return [f"{f['kind']}: {f['text']}" + (f" (bestätigt: {f.get('reply', '')})" if f.get("confirmed") else "")
+            for q in data.get("questions", []) if q["minitopic_id"] == mt_id for f in q.get("feedback", [])
+            if f.get("text") or f.get("confirmed")][-4:]

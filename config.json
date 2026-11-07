@@ -274,7 +274,8 @@
       "deadlines": {
         "prep_weekday": 6,
         "review_weekday": 2,
-        "exercise_weekday": 5
+        "exercise_weekday": 5,
+        "exercise_shift_days": -7
       },
       "symbol": "calculate",
       "exercise_chapters_version": 1

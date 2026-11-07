@@ -71,6 +71,60 @@ def kind_icon(kind: str) -> str:
     return f":material/{KIND_STYLE.get(kind, ('task_alt',))[0]}:"
 
 
+# Gruppen an einem Tag (Reihenfolge) und Priorität 1–3 je Aufgabe (todos.json → _prio)
+GROUPS = [("Nacharbeiten", ("Nacharbeiten", "Nachbereitung", "Vorbereitung")), ("Vorlesungs-Check", ("Vorlesungs-Check",)),
+          ("Übungsblatt", ("Übungsblatt",)), ("Wochentraining", ("Wochentraining",))]
+
+
+def group_of(t: dict) -> int:
+    return next((i for i, (_, kinds) in enumerate(GROUPS) if t["kind"] in kinds), len(GROUPS))
+
+
+def prio_of(key: str) -> int | None:
+    from utils.storage import load_todos
+
+    return (load_todos().get("_prio") or {}).get(key)
+
+
+def _cycle_prio(key: str) -> None:
+    from utils.storage import load_todos, save_todos
+
+    prios = load_todos().setdefault("_prio", {})
+    nxt = {None: 1, 1: 2, 2: 3, 3: None}[prios.get(key)]
+    if nxt is None:
+        prios.pop(key, None)
+    else:
+        prios[key] = nxt
+    save_todos()
+
+
+def prio_button(container, todo_key: str, widget_key: str) -> None:
+    """Kleiner Knopf: tippen schaltet Priorität 1 → 2 → 3 → keine."""
+    p = prio_of(todo_key)
+    container.button(str(p) if p else "", key=f"prio_{p or 0}_{widget_key}", icon=None if p else ":material/flag:",
+                     help="Priorität (1 = am wichtigsten) – tippen zum Ändern", on_click=_cycle_prio, args=(todo_key,))
+
+
+def sort_todos(todos: list[dict]) -> list[dict]:
+    """Nach Kategorie, dann Priorität (1 zuerst, ohne zuletzt), dann Frist."""
+    return sorted(todos, key=lambda t: (group_of(t), prio_of(t["key"]) or 9, t["due"], t.get("module_id") or ""))
+
+
+def grouped(todos: list[dict]) -> list[tuple[str, list[dict]]]:
+    out = []
+    for i, (name, _) in enumerate(GROUPS + [("Sonstiges", ())]):
+        items = [t for t in sort_todos(todos) if group_of(t) == i]
+        if items:
+            out.append((name, items))
+    return out
+
+
+def group_header(name: str, n: int) -> None:
+    badge = kind_badge(name) if name in KIND_STYLE else ":gray-badge[:material/more_horiz: Sonstiges]"
+    st.markdown(f"<div class='grp-head'></div>\n\n{badge} <span class='small-muted'>{n}</span>",
+                unsafe_allow_html=True)
+
+
 def todo_text(t: dict) -> str:
     """Kurzer Text eines To-dos (ohne die Aufgabenart, die das Etikett zeigt)."""
     return t.get("short") or t["title"]

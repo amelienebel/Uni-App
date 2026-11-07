@@ -97,8 +97,7 @@ def _result(q: dict, item: dict) -> None:
     if q["type"] in ("sc", "mc"):
         from views.quiz_center import option_breakdown
 
-        with st.container(border=True):
-            option_breakdown(q, item.get("answer") or [])
+        option_breakdown(q, item.get("answer") or [], key=item["question_id"])
     elif q["type"] == "zahl":
         st.markdown(f"Richtiges Ergebnis: **{q['number_answer']}**"
                     + (f" · deine Eingabe: {item.get('answer')}" if item.get("answer") else ""))
@@ -110,7 +109,9 @@ def _result(q: dict, item: dict) -> None:
     if q.get("explanation"):
         with st.container(border=True, key=f"explain_{item['question_id']}"):
             st.markdown(":material/lightbulb: **Warum?**")
-            st.markdown(q["explanation"])
+            from views.quiz_center import paragraphs
+
+            st.markdown(paragraphs(q["explanation"]))
 
 
 def _hints(module_id: str, session: dict, idx: int, q: dict, key: str, answered: bool) -> None:
@@ -205,12 +206,38 @@ def render(cfg: dict) -> None:
                 st.rerun()
     if st.toggle("Passende Folien anzeigen", key=f"{key}_slides"):
         slides(data, q.get("slides") or mt.get("slides") or [], key)
+    _feedback(cfg, module_id, session, idx, key)
     if "answer" in item:
         _result(q, item)
         _self_grade(cfg, module_id, session, idx, key)
     else:
         st.button("Weiß ich nicht – auflösen", key=f"{key}_skip", type="tertiary", icon=":material/help:",
                   on_click=_give_up, args=(cfg, module_id, session, idx))
+
+
+def _feedback(cfg: dict, module_id: str, session: dict, idx: int, key: str) -> None:
+    """Fehler oder Anmerkung zur Frage melden – bei Fehlern prüft Claude die Frage gegen die Folien."""
+    item = session["items"][idx]
+    for f in item.get("feedback", []):
+        if f.get("confirmed"):
+            st.success(f"**Fehler bestätigt und korrigiert.** {f.get('reply', '')}", icon=":material/verified:")
+        elif f.get("reply"):
+            st.info(f"**Antwort auf dein Feedback:** {f['reply']}", icon=":material/forum:")
+        else:
+            st.caption(f"Feedback gespeichert: {f['kind']}" + (f" – {f['text']}" if f.get("text") else ""))
+    with st.popover("Feedback zur Frage", icon=":material/flag:"):
+        kind = st.radio("Was möchtest du melden?", sessions.FEEDBACK_KINDS, key=f"{key}_fbk")
+        text = st.text_area("Kommentar", key=f"{key}_fbt", height=100,
+                            placeholder="z. B. Antwort C ist auch richtig, weil …")
+        if st.button("Senden", key=f"{key}_fbs", type="primary", width="stretch"):
+            check = kind == sessions.FEEDBACK_KINDS[0] and ai.is_available()
+            with st.spinner("Claude prüft die Frage anhand der Folien …" if check else "Speichere …"):
+                try:
+                    sessions.question_feedback(cfg, module_id, session, idx, kind, text)
+                except ai.AIError as exc:
+                    st.error(str(exc))
+                    return
+            st.rerun()
 
 
 def _give_up(cfg: dict, module_id: str, session: dict, idx: int) -> None:

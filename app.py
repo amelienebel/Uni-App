@@ -225,6 +225,25 @@ st.markdown("""
   [class*="st-key-sg_"] button:hover { filter: brightness(1.08); color: #fff; }
   [class*="st-key-sg_"] button p { color: #fff; }
   [class*="st-key-explain_"] { background: rgba(91, 127, 204, 0.06); }
+  [class*="st-key-explain_"] p { margin-bottom: 0.6rem; line-height: 1.55; }
+  /* Priorität 1–3 je Aufgabe und Kategorien je Tag */
+  [class*="st-key-prio_"] button { min-height: 1.8rem !important; min-width: 1.8rem; padding: 0 0.45rem;
+    border-radius: 999px; font-weight: 700; }
+  [class*="st-key-prio_0_"] button { border: 1.5px dashed rgba(128, 128, 128, 0.45); background: transparent;
+    opacity: 0.6; }
+  [class*="st-key-prio_1_"] button { background: #D6455D; border-color: #D6455D; color: #fff; }
+  [class*="st-key-prio_2_"] button { background: #E08A1E; border-color: #E08A1E; color: #fff; }
+  [class*="st-key-prio_3_"] button { background: #5B7FCC; border-color: #5B7FCC; color: #fff; }
+  [class*="st-key-prio_"] button p { color: inherit; font-weight: 700; }
+  .grp-head { height: 0.35rem; }
+  /* Antwortmöglichkeiten nach dem Auswerten: je ein Block mit farbigem Rand */
+  [class*="st-key-opt_"] { border-left: 4px solid; border-radius: 0.5rem; padding: 0.5rem 0.85rem;
+    margin-bottom: 0.15rem; gap: 0.15rem; }
+  [class*="st-key-opt_"] p { line-height: 1.5; }
+  [class*="st-key-opt_hit_"] { border-color: #2e9d5b; background: rgba(46, 157, 91, 0.07); }
+  [class*="st-key-opt_wrong_"] { border-color: #d6455d; background: rgba(214, 69, 93, 0.07); }
+  [class*="st-key-opt_missed_"] { border-color: #e08a1e; background: rgba(224, 138, 30, 0.08); }
+  [class*="st-key-opt_neutral_"] { border-color: rgba(128, 128, 128, 0.45); background: rgba(127, 127, 127, 0.04); }
   [class*="st-key-qcard_"] h4 { line-height: 1.45; }
   /* Handy: weniger Rand, kleinere Überschriften, Reiter horizontal scrollbar, Zeilen kompakt nebeneinander */
   @media (max-width: 640px) {

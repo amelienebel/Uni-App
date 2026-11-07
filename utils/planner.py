@@ -120,6 +120,19 @@ def review_due(module_cfg: dict, lecture_date: date) -> date:
 
 
 def exercise_due(module_cfg: dict, ex: dict, schedule: list[dict], breaks=()) -> date:
+    """Frist „Übungsblatt lösen“ – ggf. um exercise_shift_days verschoben (Mathe: eine Woche früher), aber nie vor
+    der Vorlesung, zu der das Blatt gehört."""
+    base = _exercise_due(module_cfg, ex, schedule, breaks)
+    shift = int(module_cfg.get("deadlines", {}).get("exercise_shift_days", 0))
+    if not shift:
+        return base
+    shifted = base + timedelta(days=shift)
+    lecture = next((lec["date"] for lec in lectures_of(module_cfg)
+                    if ex.get("chapter_id") and lec.get("chapter_id") == ex["chapter_id"]), None)
+    return shifted if lecture is None or shifted > lecture else base
+
+
+def _exercise_due(module_cfg: dict, ex: dict, schedule: list[dict], breaks=()) -> date:
     """Frist „Übungsblatt lösen“: fester Wochentag vor der Übung (bzw. dem Tutorium, falls es keine Übung gibt)."""
     module_id = module_cfg["id"]
     session = exercise_session(module_id, ex, schedule, breaks)

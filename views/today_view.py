@@ -13,7 +13,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (in_timetable, days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
                            load_todos, semester_dates, today)
 from views import cards_center
-from views.common import kind_badge, todo_text, STEP_KIND, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
+from views.common import grouped, group_header, prio_button, kind_badge, todo_text, STEP_KIND, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
 
 
 def _safe(text: str) -> str:
@@ -33,14 +33,15 @@ def _todo_row(cfg: dict, t: dict, modules_data: dict, state: dict, now) -> None:
     key = f"today_{t['key']}"
     st.session_state[key] = planner.todo_done(t, modules_data, state)
     with st.container(key=f"tdrow_{module['id']}_today_{_safe(t['key'])}"):
-        c0, c1, c2, c3 = st.columns([0.5, 8, 3, 0.6], vertical_alignment="center")
+        c0, c1, c2, c3 = st.columns([0.5, 8, 3, 0.8], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
-        c1.button(f"{kind_badge(t['kind'])} **{module['short']}** · {todo_text(t)}", key=f"open_{key}",
+        c1.button(f"**{module['short']}** · {todo_text(t)}", key=f"open_{key}",
                   type="tertiary", icon=micon(module), on_click=open_todo, args=(t,), help=t["title"])
         c2.caption(planner.format_due(t["due"], now))
         if t.get("custom"):
-            c3.button("", key=f"del_{key}", icon=":material/delete:", type="tertiary", help="Löschen",
+            c2.button("", key=f"del_{key}", icon=":material/delete:", type="tertiary", help="Löschen",
                       on_click=delete_custom_todo, args=(t["key"],))
+        prio_button(c3, t["key"], key)
 
 
 def render(cfg: dict) -> None:
@@ -114,8 +115,10 @@ def render(cfg: dict) -> None:
             custom_todo_form(cfg, "today_new", now)
         if not open_todos:
             st.caption("Nichts offen – stark!")
-        for t in open_todos:
-            _todo_row(cfg, t, modules_data, state, now)
+        for name, items in grouped(open_todos):
+            group_header(name, len(items))
+            for t in items:
+                _todo_row(cfg, t, modules_data, state, now)
 
         # --- Klausur-Lernplan --------------------------------------------------------
         conf = load_extra("exam_plan").get("settings", {})

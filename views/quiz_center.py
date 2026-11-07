@@ -90,24 +90,40 @@ def hint_box(q: dict, key: str, on_save=None) -> None:
             st.rerun()
 
 
-def option_breakdown(q: dict, picked: list[int]) -> None:
-    """Jede Option einzeln: deine Wahl, richtig/falsch und warum."""
+_OPTION_STATE = {
+    "hit": ("green", "check_circle", "Deine Wahl · richtig"),
+    "wrong": ("red", "cancel", "Deine Wahl · falsch"),
+    "missed": ("orange", "error", "Richtig · nicht gewählt"),
+    "neutral": ("gray", "remove", "Nicht gewählt · falsch"),
+}
+
+
+def paragraphs(text: str) -> str:
+    """Lange Erklärungen ohne Absätze in Absätze à zwei Sätze teilen (bessere Lesbarkeit)."""
+    import re
+
+    text = (text or "").strip()
+    if "\n" in text or len(text) < 280:
+        return text
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-ZÄÖÜ$(])", text)
+    return "\n\n".join(" ".join(sentences[i:i + 2]) for i in range(0, len(sentences), 2))
+
+
+def option_breakdown(q: dict, picked: list[int], key: str = "") -> None:
+    """Jede Antwortmöglichkeit als eigener Block: Status, Antwort, Begründung – untereinander."""
     right = set(exams.correct_indices(q))
     notes = q.get("option_notes") or []
-    lines = []
+    key = key or str(abs(hash(q.get("question", ""))) % 10 ** 8)
     for j, opt in enumerate(q["options"]):
         chosen, ok = j in picked, j in right
-        if chosen and ok:
-            mark = ":green[:material/check_circle:] **Deine Wahl – richtig**"
-        elif chosen:
-            mark = ":red[:material/cancel:] **Deine Wahl – falsch**"
-        elif ok:
-            mark = ":orange[:material/error:] **Richtig – nicht gewählt**"
-        else:
-            mark = ":gray[:material/remove:] nicht gewählt, falsch"
+        state = "hit" if chosen and ok else "wrong" if chosen else "missed" if ok else "neutral"
+        color, icon, label = _OPTION_STATE[state]
         note = notes[j].strip() if j < len(notes) and notes[j] else ""
-        lines.append(f"{mark} · {chr(65 + j)}) {opt}" + (f"  \n  _{note}_" if note else ""))
-    st.markdown("\n\n".join(lines))
+        with st.container(key=f"opt_{state}_{key}_{j}"):
+            st.markdown(f":{color}-badge[:material/{icon}: {label}]")
+            st.markdown(f"**{chr(65 + j)})** {opt}")
+            if note:
+                st.markdown(note)
 
 
 def show_result(q: dict, result: dict) -> None:

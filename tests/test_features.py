@@ -663,4 +663,4 @@ def test_quiz_option_breakdown_and_hint(monkeypatch):
     _button(at, "Auswerten").click()
     _run(at)
     text = " ".join(m.value for m in at.markdown)
-    assert "Deine Wahl – falsch" in text and "verwechselt mit sigma" in text and "Richtig – nicht gewählt" in text
+    assert "Deine Wahl · falsch" in text and "verwechselt mit sigma" in text and "Richtig · nicht gewählt" in text

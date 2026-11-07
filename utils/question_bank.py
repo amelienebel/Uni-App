@@ -155,9 +155,10 @@ Inhalt:
 Zu jeder Frage:
 - hints: genau 3 Tipps in steigender Stärke, die die Lösung NICHT verraten: (1) Denkanstoß/Rückfrage, (2) passendes
   Konzept bzw. Bedeutung der Zeichen/Begriffe, (3) konkreter nächster Schritt.
-- option_notes (sc/mc): für JEDE Option in derselben Reihenfolge ein Satz, ob richtig/falsch und WARUM (bei
-  falschen den Denkfehler benennen). Sonst leer.
-- explanation: warum die Lösung richtig ist – Kernargument bzw. Rechenweg in Worten, typische Falle.
+- option_notes (sc/mc): für JEDE Option in derselben Reihenfolge 1–2 kurze Sätze, beginnend mit „Richtig:“ oder
+  „Falsch:“, dann WARUM (bei falschen den konkreten Denkfehler benennen). Sonst leer.
+- explanation: gut lesbar in 2–4 kurzen Absätzen (Leerzeile dazwischen) oder Stichpunkten: (1) die Kernaussage,
+  (2) Begründung bzw. Rechenweg Schritt für Schritt in Worten, (3) typische Falle. Keine Textwand.
 - Formeln in LaTeX mit $...$.
 """
 
@@ -242,10 +243,15 @@ def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, le
         mt = r["mt"]
         flags = [f["text"] for f in (data.get("mastery", {}).get(mt["id"], {}) or {}).get("exercise_flags", [])
                  if f["kind"] == "schlecht" and f.get("open")]
+        from utils.sessions import feedback_notes
+
+        notes = feedback_notes(data, mt["id"])
         lines.append(f"[{i}] type={r['type']} · Minithema: {mt['title']} (Thema: {mt['topic']}; "
                      f"{lec_names.get(mt['lecture_id'], '')}) · Art: {mt.get('kind', 'wissen')}\n"
                      f"    Kerninhalt: {mt.get('summary', '')}"
-                     + (f"\n    Lief schlecht in der Übung: {' | '.join(flags)}" if flags else ""))
+                     + (f"\n    Lief schlecht in der Übung: {' | '.join(flags)}" if flags else "")
+                     + (f"\n    Feedback der Studentin zu früheren Fragen (beachten!): {' | '.join(notes)}"
+                        if notes else ""))
     lec_ids = sorted({r["mt"]["lecture_id"] for r in requests})
     prompt = QUESTIONS_USER.format(exam_format=exam_format(module)["label"], calc=calc_rule(settings),
                                    hints=_lecture_hints(data, lec_ids, lec_names), requests="\n".join(lines),

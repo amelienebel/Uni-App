@@ -58,13 +58,13 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   nachbereitete Vorlesungen → `legacy_lectures` (kein Check-To-do, nur Wochentraining). Alte Karten nur noch unter
   Einstellungen → Ausgeblendet (`views/archive_view.py`); Umrechnung Gar nicht/Etwas → schwer, Gut → mittel,
   Perfekt → einfach (`mastery.ARCHIVE_GRADE`). Karten nie löschen.
-- **Nacharbeiten** (`views/module_tabs/nacharbeiten.py`): 1 Folien sichten (Raster, Klick aufs Bild = nicht relevant,
-  `doc.excluded_slides`; `topics.suggest_exclusions` schlägt Wiederholungen aus früheren VL und Titel/Orga-Folien
-  ohne KI vor) · 2 alle zählenden Folien genau lesen (Haiku, `topics.read_all`) · 3 Hinweise zur Quiz-Erstellung:
-  Umfang ganze VL / Folie x–y (`notes.scope`; Rest wird der nächsten VL angeboten: `offered_carry`), Wichtig
-  (`emphasized`), Streichen (`skip`), Sonstiger Hinweis (`card_hint`, Vorrang), eigene Notizen · 4 Minithemen
-  (`topics.create_topics`, Sonnet; ordnet alte Karten zu → `archive_map`; Definitionen → Reiter Definitionen ohne
-  Karte) = Nacharbeiten erledigt. Ausgelassen wird NUR, was sie ausgeschlossen hat; Beispiele nie abfragen, außer
+- **Nacharbeiten** (`views/module_tabs/nacharbeiten.py`): KEIN Folienraster mehr – 1 Umfang & Hinweise: je
+  Foliendatei „Von/Bis Folie“ (`notes.scopes`), Wichtig (`emphasized`), Streichen (`skip`), Sonstiger Hinweis
+  (`card_hint`, Vorrang), eigene Notizen; automatisch ausgelassene Folien (Titel/Orga, schon in früheren VL –
+  `topics.suggest_exclusions`, `doc.excluded_slides`) nur als Liste mit „Doch lesen“ · 2 „Nacharbeiten abschließen“
+  liest alle Folien im Umfang gründlich (Haiku, `topics.read_all`) und erstellt die Minithemen (`topics.create_topics`,
+  Sonnet; ordnet alte Karten zu → `archive_map`; Definitionen → Reiter Definitionen ohne Karte) = Nacharbeiten
+  erledigt. Ausgelassen wird NUR, was sie ausgeschlossen hat; Beispiele nie abfragen, außer
   sie sagt es. Kein Tutor, kein Lehrbuch, keine Klausuraufgaben im neuen System.
 - **Wissensstand je Minithema** (`utils/mastery.py`): FSRS je Minithema, Leiter Single → Multiple Choice → Freitext
   (Rechen-Minithemen enden bei MC/Zahl), falsch → Stufe runter, Tipp benutzt → zählt wie schwer, Übungs-Rückmeldung
@@ -100,7 +100,17 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   „Weiter ab Folie x“ an → `doc.shared_units` + Bereich ab x (`topics.accept_carry`, `is_shared`); Raster zeigt bei
   übernommenen Dateien erst ab dieser Folie; Wiederholungs-Erkennung vergleicht eine Datei nie mit sich selbst.
 - Mathe: Blatt n gehört zu Einheit/Vorlesung n (Blatt 3 → Einheit 3 Selbststudium); `exercise_chapters_version` in
-  config.json verwirft einmalig von Hand gesetzte Blatt-Kapitel.
+  config.json verwirft einmalig von Hand gesetzte Blatt-Kapitel. Fristen eine Woche früher
+  (`deadlines.exercise_shift_days: -7`, `planner.exercise_due`), aber nie vor der zugehörigen Vorlesung
+  (Blatt 4 → 31.10., Blatt 5 → 7.11.; Blatt 8–10 bleiben, weil ihre Vorlesung erst kurz davor ist).
+- Quiz-Antworten: jede Option als eigener Block (`quiz_center.option_breakdown`, CSS `opt_hit/wrong/missed/neutral`),
+  Erklärung in Absätzen (`quiz_center.paragraphs`; Prompt verlangt 2–4 Absätze). Feedback je Frage
+  (`session_ui._feedback` → `sessions.question_feedback`): „Fehler“ lässt Claude die Frage gegen die Folien prüfen,
+  korrigiert sie und wertet die Antwort neu (Freitext: nicht gewertet, `item.void`); gemeldete Fragen werden nicht
+  wiederverwendet, Hinweise fließen in neue Fragen zum Minithema ein (`sessions.feedback_notes`).
+- Heute/Wochenplan: To-dos je Tag nach Kategorie gruppiert (`common.grouped`: Nacharbeiten, Check, Übungsblatt,
+  Wochentraining, Sonstiges) und nach Priorität 1–3 sortiert (`common.prio_button`, todos.json → `_prio`, tippen
+  schaltet 1 → 2 → 3 → keine). Stundenplan-Blöcke ohne Raum (nur beim Drüberfahren).
 
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als

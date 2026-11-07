@@ -428,3 +428,60 @@ def test_unfinished_tasks_carry_into_current_week():
     again = planner.overdue_before(cfg, modules_data, storage.get_schedule(cfg), monday, sem_start, sem_end, {},
                                    state, storage.lecture_breaks(cfg))
     assert carried[0]["key"] not in {t["key"] for t in again}
+
+
+def test_mathe_deadlines_one_week_earlier():
+    from utils import planner, storage
+    from utils.config import get_module, load_config
+
+    cfg = load_config()
+    module = get_module(cfg, "mathe")
+    due = {ex["title"].split(" –")[0]: planner.exercise_due(module, ex, storage.get_schedule(cfg),
+                                                             storage.lecture_breaks(cfg))
+           for ex in planner.exercises_of(module)}
+    assert due["Übungsblatt 4"] == date(2026, 10, 31) and due["Übungsblatt 5"] == date(2026, 11, 7)
+    assert due["Übungsblatt 1"] == date(2026, 10, 17)  # nie vor der zugehörigen Vorlesung
+
+
+def test_question_feedback_corrects_and_regrades(monkeypatch):
+    from utils import ai, sessions, topics
+
+    cfg, data, lec, lecs, _ = _setup()
+    monkeypatch.setattr(ai, "is_available", lambda: True)
+    monkeypatch.setattr(ai, "complete_json", _fake_topics)
+    monkeypatch.setattr(ai, "complete", lambda *a, **k: "Profil")
+    topics.create_topics(cfg, "invfin", lec, lecs)
+    monkeypatch.setattr(ai, "complete_json", _fake_questions)
+    session = sessions.start_check(cfg, "invfin", lec, {})
+    idx = next(i for i, it in enumerate(session["items"]) if it["type"] == "sc")
+    sessions.submit(cfg, "invfin", session, idx, [2])
+    assert session["items"][idx]["correct"] is False
+    monkeypatch.setattr(ai, "complete_json", lambda *a, **k: {
+        "error_confirmed": True, "reply": "Stimmt, C ist richtig.", "correct_indices": [2], "number_answer": "",
+        "sample_answer": "", "explanation": "Neu.", "option_notes": []})
+    entry = sessions.question_feedback(cfg, "invfin", session, idx, sessions.FEEDBACK_KINDS[0], "C ist richtig")
+    q = sessions.question(data, session["items"][idx]["question_id"])
+    assert entry["confirmed"] and q["correct_indices"] == [2] and q["retired"] and q["corrected"]
+    assert session["items"][idx]["correct"] is True  # neu gewertet
+    mt_id = session["items"][idx]["minitopic_id"]
+    assert any("C ist richtig" in n for n in sessions.feedback_notes(data, mt_id))
+
+
+def test_priority_and_grouping():
+    from utils import storage
+    from views import common
+
+    todos = [{"key": "a", "kind": "Wochentraining", "due": date(2026, 11, 2), "module_id": "m"},
+             {"key": "b", "kind": "Übungsblatt", "due": date(2026, 11, 3), "module_id": "m"},
+             {"key": "c", "kind": "Nacharbeiten", "due": date(2026, 11, 5), "module_id": "m"},
+             {"key": "d", "kind": "Nacharbeiten", "due": date(2026, 11, 1), "module_id": "m"},
+             {"key": "e", "kind": "Eigenes", "due": date(2026, 11, 1), "module_id": None}]
+    common._cycle_prio("c")  # → 1
+    assert common.prio_of("c") == 1
+    groups = common.grouped(todos)
+    assert [g for g, _ in groups] == ["Nacharbeiten", "Übungsblatt", "Wochentraining", "Sonstiges"]
+    assert [t["key"] for t in groups[0][1]] == ["c", "d"]  # Priorität 1 vor früherer Frist
+    for _ in range(3):
+        common._cycle_prio("c")
+    assert common.prio_of("c") is None
+    del storage

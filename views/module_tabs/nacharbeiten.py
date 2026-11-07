@@ -11,19 +11,11 @@ import streamlit as st
 
 from utils import ai, mastery, planner, sessions, topics
 from utils.config import get_module, load_config
-from utils.storage import load_module, load_todos, now_iso, read_data_file, save_module, save_todos
+from utils.storage import load_module, load_todos, now_iso, save_module, save_todos
 from utils.units import lecture_notes
 from views import progress, session_ui
 from views.common import LECTURE_TAB, PAGES
 
-THUMB_SCALE = 0.6
-
-
-@st.cache_data(show_spinner=False, max_entries=400)
-def _thumb(path: str, page: int) -> bytes | None:
-    from utils.pdf_parser import render_page
-
-    return render_page(read_data_file(path), page, scale=THUMB_SCALE)
 
 
 def set_done(module_id: str, lec: dict, field: str, value: bool = True) -> None:
@@ -44,42 +36,23 @@ def _msg(module_id: str, kind: str, text: str) -> None:
 # 1 · Folien sichten
 # ---------------------------------------------------------------------------
 
-GRID_LIMIT = 80
-
-
-def _slide_grid(module_id: str, doc: dict, data: dict, lec: dict) -> None:
-    pages = topics.n_pages(doc)
-    skip = topics.excluded(doc)
+def _auto_skipped(module_id: str, data: dict, lec: dict) -> None:
+    """Automatisch ausgelassene Folien (Titel/Orga, schon in früheren Vorlesungen) – einzeln wieder aufnehmbar."""
     notes = lecture_notes(data, lec["id"])
-    first, last = topics.doc_range(notes, doc, pages)
-    counting = [p for p in range(first, last + 1) if p not in skip]
-    shared = topics.is_shared(doc, lec["id"])
-    # Gemeinsame Foliendatei mehrerer Termine: nur ab der ersten Folie dieser Vorlesung zeigen
-    shown = list(range(first if shared else 1, pages + 1))[:GRID_LIMIT]
-    st.caption(f"{doc['filename']} · Folie {first}–{last} · {len(counting)} Folien zählen")
-    cols = st.columns(3)
-    for i, p in enumerate(shown):
-        out = p in skip
-        outside = not topics.in_scope(notes, p, pages, doc)
-        state = "off" if out else "scope" if outside else "on"
-        with cols[i % 3]:
-            with st.container(key=f"slide_{state}_{doc['id']}_{p}"):
-                try:
-                    png = _thumb(doc["path"], p)
-                except Exception:  # noqa: BLE001
-                    png = None
-                if png:
-                    st.image(png, width="stretch")
-                else:
-                    st.caption(f"Folie {p}")
-                st.button("Ein-/ausblenden", key=f"sltg_{doc['id']}_{p}", on_click=topics.toggle_slide,
-                          args=(module_id, doc["id"], p), width="stretch")
-            label = f"Folie {p}"
-            if out:
-                label += f" · nicht relevant ({skip[p]})"
-            elif outside:
-                label += " · nicht in dieser Vorlesung"
-            st.caption(label)
+    rows = []
+    for doc in topics.slide_docs(data, lec):
+        n = topics.n_pages(doc)
+        first, last = topics.doc_range(notes, doc, n)
+        rows += [(doc, p, reason) for p, reason in sorted(topics.excluded(doc).items())
+                 if first <= p <= last and reason != topics.REASON_USER]
+    if not rows:
+        return
+    with st.expander(f"Automatisch ausgelassen: {len(rows)} Folie(n)", icon=":material/filter_alt:"):
+        for doc, p, reason in rows:
+            c1, c2 = st.columns([4, 1], vertical_alignment="center")
+            c1.caption(f"Folie {p} · {reason}")
+            c2.button("Doch lesen", key=f"incl_{doc['id']}_{p}", width="stretch", on_click=topics.toggle_slide,
+                      args=(module_id, doc["id"], p))
 
 
 def _carry_box(module_id: str, data: dict, lec: dict, lecs: list[dict]) -> None:
@@ -107,7 +80,7 @@ def _hints_form(module_id: str, data: dict, lec: dict) -> None:
     with st.form(f"qhints_{module_id}_{lec['id']}"):
         ranges = {}
         if docs:
-            st.markdown("**Umfang** – bis wohin seid ihr gekommen?")
+            st.markdown("**Umfang** – von welcher bis zu welcher Folie?")
         for doc in docs:
             n = topics.n_pages(doc)
             first, last = topics.doc_range(notes, doc, n)
@@ -170,6 +143,15 @@ def topic_tree(module_id: str, data: dict, lec: dict, editable: bool = True) -> 
 
 
 def _create(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
+    """Nacharbeiten abschließen: Folien im Umfang gründlich lesen, dann Themen und Minithemen erstellen."""
+    unread = sum(len(p) for p in topics.unread_pages(load_module(module_id), lec).values())
+    if unread:
+        with st.spinner(f"Lese {unread} Folien gründlich (auch Grafiken, Tabellen und Formeln) …"):
+            try:
+                topics.read_all(cfg, module_id, lec)
+            except ai.AIError as exc:
+                _msg(module_id, "error", str(exc))
+                return
     with st.spinner("Claude zerlegt die Vorlesung in Themen und Minithemen …"):
         try:
             n = topics.create_topics(cfg, module_id, lec, lecs)
@@ -188,33 +170,14 @@ def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
     topics.ensure_suggestions(module_id, data, lec, lecs)
     has_topics = bool(topics.lecture_topics(data, lec["id"]))
 
-    st.markdown("#### 1 · Folien sichten")
+    st.markdown("#### 1 · Umfang & Hinweise")
     _carry_box(module_id, data, lec, lecs)
     if not docs:
         st.caption("Noch keine Folien hochgeladen (Reiter Dateien).")
-    for doc in docs:
-        with st.expander(f"Folien – {doc['filename']}", expanded=not has_topics, icon=":material/view_module:"):
-            _slide_grid(module_id, doc, data, lec)
-
-    st.markdown("#### 2 · Genau lesen")
-    unread = topics.unread_pages(data, lec)
-    if unread:
-        n = sum(len(p) for p in unread.values())
-        if st.button(f"{n} Folien genau lesen", key=f"readall_{lec['id']}", type="primary",
-                     icon=":material/image_search:", disabled=not ai.is_available()):
-            with st.spinner(f"Lese {n} Folien genau (auch Grafiken und Tabellen) …"):
-                try:
-                    _msg(module_id, "success", topics.read_all(cfg, module_id, lec))
-                except ai.AIError as exc:
-                    _msg(module_id, "error", str(exc))
-            st.rerun()
-    elif docs:
-        st.caption("Alle zählenden Folien sind genau gelesen.")
-
-    st.markdown("#### 3 · Hinweise zur Quiz-Erstellung")
     _hints_form(module_id, data, lec)
+    _auto_skipped(module_id, data, lec)
 
-    st.markdown("#### 4 · Themen & Minithemen")
+    st.markdown("#### 2 · Themen & Minithemen")
     if has_topics:
         topic_tree(module_id, data, lec)
         c1, c2 = st.columns(2)

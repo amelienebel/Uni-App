@@ -14,7 +14,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (in_timetable, days_until_exam, get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
 from views import cards_center
-from views.common import is_mobile, kind_badge, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
+from views.common import grouped, group_header, prio_button, prio_of, sort_todos, is_mobile, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -124,13 +124,14 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
     st.session_state[key] = done
     _, slot = _placement(t, monday)
     with st.container(key=f"tdrow_{module['id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
-        c0, c1, c2, c3 = st.columns([0.5, 7, 3, 1], vertical_alignment="center")
+        c0, c1, c2, c3 = st.columns([0.5, 7, 3, 1.5], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
-        c1.button(f"{kind_badge(t['kind'])} **{module['short']}** · {todo_text(t)}", key=f"open_{key}",
+        c1.button(f"**{module['short']}** · {todo_text(t)}", key=f"open_{key}",
                   type="tertiary", icon=micon(module), on_click=open_todo, args=(t,), help=t["title"])
         c2.caption(f"Frist: {planner.format_due(t['due'], now)}"
                    + (f" · geplant {SLOT_LABELS[slot]} Uhr" if slot else ""))
-        with c3:
+        with c3.container(horizontal=True, gap="small"):
+            prio_button(st, t["key"], key)
             _move_popover(t, monday, place)
 
 
@@ -142,7 +143,9 @@ def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: da
     mark = ":material/check: " if done else (":material/schedule: " if overdue else "")
     state = "done" if done else "open"
     with st.container(key=f"chip_{state}_{module['id']}_{key}"):
-        st.button(f"{mark}**{module['short']}**  \n{kind_icon(t['kind'])} {_short_label(t)}", key=f"chipbtn_{key}",
+        prio = prio_of(t["key"])
+        st.button(f"{mark}**{module['short']}**" + (f" · {prio}" if prio else "")
+                  + f"  \n{kind_icon(t['kind'])} {_short_label(t)}", key=f"chipbtn_{key}",
                   type="tertiary",
                   on_click=open_todo, args=(t,), help=t["title"])
 
@@ -182,12 +185,10 @@ def _open_event(ev: dict) -> None:
 def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:
     module = get_module(cfg, ev["module_id"])
     with st.container(key=f"evcard_{ev['module_id']}_{key}"):
-        st.button(f"{module['short']}  \n{ev.get('type', '')}", key=f"evbtn_{key}",
-                  type="tertiary", on_click=_open_event, args=(ev,), help="Vorlesung bzw. Übung mit allen Unterlagen öffnen")
-        when = f"{ev.get('start', '')}–{ev.get('end', '')}"
         room = ev.get("room", "")
-        short_room = room.split(" – ")[-1].strip() if room else ""  # „Geschw.-Scholl-Pl. 1 (B) – B 201“ → „B 201“
-        st.caption(f"{when}  \n{short_room}" if short_room else when)
+        st.button(f"{module['short']}  \n{ev.get('type', '')}", key=f"evbtn_{key}", type="tertiary",
+                  on_click=_open_event, args=(ev,), help=room or None)
+        st.caption(f"{ev.get('start', '')}–{ev.get('end', '')}")  # Raum nur beim Drüberfahren (Blöcke bleiben klein)
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +281,7 @@ def render(cfg: dict) -> None:
     card_counts = {day: ({} if planner.LEARNING_V2 else _card_counts(modules_data, day, now, new_min)) for day in
                    (monday + timedelta(days=i) for i in range(7))}
     placed: dict[tuple[date, int | None], list[dict]] = {}
-    for t in todos:
+    for t in sort_todos(todos):
         placed.setdefault(_placement(t, monday), []).append(t)
     days = [monday + timedelta(days=i) for i in range(7)]
     calendar: dict[date, list[str]] = {}
@@ -361,13 +362,14 @@ def render(cfg: dict) -> None:
         open_count = sum(1 for t in todos if not planner.todo_done(t, modules_data, todo_state))
         st.progress(1 - open_count / len(todos), text=f"{len(todos) - open_count} von {len(todos)} erledigt")
         for day in days:
-            day_todos = sorted((t for t in todos if _placement(t, monday)[0] == day),
-                               key=lambda t: (_placement(t, monday)[1] or 99, t["module_id"] or ""))
+            day_todos = [t for t in todos if _placement(t, monday)[0] == day]
             if not day_todos:
                 continue
-            st.markdown(f"**{WEEKDAYS[day.weekday()]}, {day:%d.%m.}**")
-            for t in day_todos:
-                _todo_widget(t, cfg, modules_data, todo_state, monday, now, place="list", compact=False)
+            st.markdown(f"#### {WEEKDAYS[day.weekday()]}, {day:%d.%m.}")
+            for name, items in grouped(day_todos):
+                group_header(name, len(items))
+                for t in items:
+                    _todo_widget(t, cfg, modules_data, todo_state, monday, now, place="list", compact=False)
 
     st.divider()
     with st.expander("Kapitelstatus aller Module", expanded=False):

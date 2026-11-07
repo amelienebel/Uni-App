@@ -142,8 +142,19 @@ st.markdown("""
     text-align: left; }
   [class*="st-key-row_"] button { justify-content: flex-start; text-align: left; }
   [class*="st-key-row_"] { margin-bottom: -0.6rem; }
-  [class*="st-key-row_"]:has(.step-row) { margin-bottom: 0.3rem; }
-  [class*="st-key-row_"] .step-row { margin-top: -0.4rem; padding-left: 2rem; }
+  [class*="st-key-row_"]:has([class*="st-key-steps_"]) { margin-bottom: 0.3rem; }
+  [class*="st-key-row_"] [class*="st-key-steps_"] { margin-top: -0.3rem; padding-left: 2rem; }
+  /* Schritte je Vorlesung als anklickbare Pillen */
+  [class*="st-key-stp_"] button { border-radius: 999px; min-height: 1.7rem !important; padding: 0.05rem 0.65rem;
+    font-size: 0.8rem; font-weight: 600; }
+  [class*="st-key-stp_"] button p { font-size: 0.8rem; }
+  [class*="st-key-stp_done_"] button { background: rgba(46, 157, 91, 0.14); color: #2e9d5b;
+    border: 1px solid rgba(46, 157, 91, 0.45); }
+  [class*="st-key-stp_open_"] button { background: transparent; border: 1.5px dashed rgba(128, 128, 128, 0.55); }
+  [class*="st-key-stp_overdue_"] button { background: rgba(214, 69, 93, 0.10); color: #d6455d;
+    border: 1px solid rgba(214, 69, 93, 0.55); }
+  [class*="st-key-stp_na_"] button { opacity: 0.4; text-decoration: line-through; }
+  [class*="st-key-stp_"] button:hover:not(:disabled) { filter: brightness(0.95); border-style: solid; }
   [class*="st-key-nextbox_"] { background: rgba(28, 131, 225, 0.09); border-color: rgba(28, 131, 225, 0.35) !important; }
   [class*="st-key-nextbox_"] h4 { padding: 0.2rem 0 0 0; }
   [class*="st-key-hintbox_"] { background: rgba(217, 130, 43, 0.08); border-color: rgba(217, 130, 43, 0.55) !important; }
@@ -272,6 +283,16 @@ for _m in cfg["modules"]:
         f"[class*='st-key-chip_open_{_id}_'] strong, [class*='st-key-chip_done_{_id}_'] strong, "
         f"[class*='st-key-tdrow_{_id}_'] strong {{color: {_c};}}",
         f".st-key-modhead_{_id} {{border-bottom: 3px solid {_c}; padding-bottom: 0.3rem; margin-bottom: 0.4rem;}}",
+        # Vorlesungs-Check, Wochentraining und Frage-Ansicht in den Farben des Moduls
+        f"[class*='st-key-ckrow_{_id}_'] {{border-left: 5px solid {_c} !important; background: {_c}0d;}}",
+        f"[class*='st-key-ckrow_{_id}_'] [data-testid='stIconMaterial'], "
+        f".st-key-trhead_{_id} [data-testid='stIconMaterial'], .st-key-sesshead_{_id} [data-testid='stIconMaterial'], "
+        f"[class*='st-key-ckhead_{_id}'] [data-testid='stIconMaterial'] {{color: {_c};}}",
+        f".st-key-trhead_{_id} {{border-left: 6px solid {_c}; background: {_c}14; border-radius: 0.8rem; "
+        f"padding: 0.7rem 1rem;}}",
+        f".st-key-qcard_{_id} {{border-left: 6px solid {_c} !important;}}",
+        f".st-key-sesshead_{_id} {{border-bottom: 3px solid {_c}; padding-bottom: 0.2rem;}}",
+        f"[class*='st-key-ckhead_{_id}'] {{border-bottom: 2px solid {_c}55; margin-top: 0.6rem;}}",
     ]
 st.markdown(f"<style>{' '.join(_rules)}</style>", unsafe_allow_html=True)
 

@@ -44,18 +44,25 @@ def _msg(module_id: str, kind: str, text: str) -> None:
 # 1 · Folien sichten
 # ---------------------------------------------------------------------------
 
+GRID_LIMIT = 80
+
+
 def _slide_grid(module_id: str, doc: dict, data: dict, lec: dict) -> None:
-    pages = len(topics.get_document_pages(doc)) or int(doc.get("n_pages") or 0)
+    pages = topics.n_pages(doc)
     skip = topics.excluded(doc)
     notes = lecture_notes(data, lec["id"])
-    counting = [p for p in range(1, pages + 1) if p not in skip and topics.in_scope(notes, p, pages)]
-    st.caption(f"{doc['filename']} · {len(counting)} von {pages} Folien zählen")
+    first, last = topics.doc_range(notes, doc, pages)
+    counting = [p for p in range(first, last + 1) if p not in skip]
+    shared = topics.is_shared(doc, lec["id"])
+    # Gemeinsame Foliendatei mehrerer Termine: nur ab der ersten Folie dieser Vorlesung zeigen
+    shown = list(range(first if shared else 1, pages + 1))[:GRID_LIMIT]
+    st.caption(f"{doc['filename']} · Folie {first}–{last} · {len(counting)} Folien zählen")
     cols = st.columns(3)
-    for p in range(1, pages + 1):
+    for i, p in enumerate(shown):
         out = p in skip
-        outside = not topics.in_scope(notes, p, pages)
+        outside = not topics.in_scope(notes, p, pages, doc)
         state = "off" if out else "scope" if outside else "on"
-        with cols[(p - 1) % 3]:
+        with cols[i % 3]:
             with st.container(key=f"slide_{state}_{doc['id']}_{p}"):
                 try:
                     png = _thumb(doc["path"], p)
@@ -71,7 +78,7 @@ def _slide_grid(module_id: str, doc: dict, data: dict, lec: dict) -> None:
             if out:
                 label += f" · nicht relevant ({skip[p]})"
             elif outside:
-                label += " · außerhalb des Umfangs"
+                label += " · nicht in dieser Vorlesung"
             st.caption(label)
 
 
@@ -81,10 +88,10 @@ def _carry_box(module_id: str, data: dict, lec: dict, lecs: list[dict]) -> None:
         return
     with st.container(border=True, key=f"carry_{lec['id'].replace(':', '_')}"):
         for c in offer:
-            pages = c["pages"]
-            st.markdown(f":material/redo: **Noch offen aus Vorlesung {c['from_nr']}:** Folien {pages[0]}–{pages[-1]}")
+            st.markdown(f":material/redo: **Weiter mit {c['filename']} ab Folie {c['pages'][0]}** "
+                        f"(Vorlesung {c['from_nr']} kam bis Folie {c['pages'][0] - 1})")
         b1, b2 = st.columns(2)
-        b1.button("In diese Vorlesung übernehmen", key=f"carry_ok_{lec['id']}", type="primary", width="stretch",
+        b1.button("Für diese Vorlesung übernehmen", key=f"carry_ok_{lec['id']}", type="primary", width="stretch",
                   on_click=topics.accept_carry, args=(module_id, lec["id"], offer, True))
         b2.button("Nicht übernehmen", key=f"carry_no_{lec['id']}", width="stretch",
                   on_click=topics.accept_carry, args=(module_id, lec["id"], offer, False))
@@ -96,14 +103,20 @@ def _carry_box(module_id: str, data: dict, lec: dict, lecs: list[dict]) -> None:
 
 def _hints_form(module_id: str, data: dict, lec: dict) -> None:
     notes = lecture_notes(data, lec["id"])
-    sc = topics.scope(notes)
-    n_pages = max([len(topics.get_document_pages(d)) for d in topics.slide_docs(data, lec)] or [0])
+    docs = topics.slide_docs(data, lec)
     with st.form(f"qhints_{module_id}_{lec['id']}"):
-        mode = st.radio("Umfang", ["Ganze Vorlesung", "Nur bestimmte Folien"], horizontal=True,
-                        index=1 if sc["mode"] == "range" else 0)
-        c1, c2 = st.columns(2)
-        first = c1.number_input("Von Folie", min_value=1, value=sc["from"], step=1)
-        last = c2.number_input("Bis Folie", min_value=1, value=sc["to"] or max(1, n_pages), step=1)
+        ranges = {}
+        if docs:
+            st.markdown("**Umfang** – bis wohin seid ihr gekommen?")
+        for doc in docs:
+            n = topics.n_pages(doc)
+            first, last = topics.doc_range(notes, doc, n)
+            c0, c1, c2 = st.columns([3, 1, 1], vertical_alignment="bottom")
+            c0.caption(doc["filename"])
+            ranges[doc["id"]] = (c1.number_input("Von Folie", 1, max(1, n), min(first, max(1, n)), step=1,
+                                                 key=f"rng_from_{lec['id']}_{doc['id']}"),
+                                 c2.number_input("Bis Folie", 1, max(1, n), min(last, max(1, n)), step=1,
+                                                 key=f"rng_to_{lec['id']}_{doc['id']}"))
         with st.container(border=True, key=f"hintbox_{lec['id'].replace(':', '_')}"):
             hint = st.text_area(":material/edit_note: **Sonstiger Hinweis**", notes["card_hint"], height=90,
                                 placeholder="z. B. Herleitung auf Folie 12 nicht relevant; Beispiel X lernen")
@@ -112,10 +125,11 @@ def _hints_form(module_id: str, data: dict, lec: dict) -> None:
         skip = c4.text_area("Streichen", notes["skip"], height=110)
         text = st.text_area("Eigene Notizen", notes["text"], height=110)
         if st.form_submit_button("Speichern", type="primary", width="stretch"):
-            notes.update({"scope": {"mode": "range" if mode == "Nur bestimmte Folien" else "all",
-                                    "from": int(first), "to": int(last)},
-                          "card_hint": hint, "emphasized": important, "skip": skip, "text": text,
-                          "updated_at": now_iso()})
+            scopes = notes.setdefault("scopes", {})
+            for doc_id, (first, last) in ranges.items():
+                scopes[doc_id] = {"from": int(first), "to": int(max(first, last))}
+            notes.update({"scope": {"mode": "all"}, "card_hint": hint, "emphasized": important, "skip": skip,
+                          "text": text, "updated_at": now_iso()})
             save_module(module_id)
             st.rerun()
 
@@ -186,8 +200,7 @@ def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
     unread = topics.unread_pages(data, lec)
     if unread:
         n = sum(len(p) for p in unread.values())
-        cost = topics.read_cost(data, lec) * 100
-        if st.button(f"{n} Folien genau lesen (ca. {cost:.1f} Cent)", key=f"readall_{lec['id']}", type="primary",
+        if st.button(f"{n} Folien genau lesen", key=f"readall_{lec['id']}", type="primary",
                      icon=":material/image_search:", disabled=not ai.is_available()):
             with st.spinner(f"Lese {n} Folien genau (auch Grafiken und Tabellen) …"):
                 try:
@@ -209,13 +222,12 @@ def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
                   width="stretch", on_click=_goto_tab, args=(lec["id"], "check"))
         with c2.popover("Minithemen neu erstellen", icon=":material/refresh:", width="stretch"):
             st.caption("Gleichnamige Minithemen behalten ihren Wissensstand.")
-            if st.button(f"Neu erstellen (ca. {topics.cost_estimate(data, lec) * 100:.0f} Cent)",
+            if st.button("Neu erstellen",
                          key=f"retopics_{lec['id']}", disabled=not ai.is_available()):
                 _create(cfg, module_id, lec, lecs)
                 st.rerun()
     else:
-        cost = topics.cost_estimate(data, lec) * 100 if ai.is_available() else 0
-        if st.button(f"Nacharbeiten abschließen – Minithemen erstellen (ca. {cost:.0f} Cent)",
+        if st.button("Nacharbeiten abschließen – Minithemen erstellen",
                      key=f"mktopics_{lec['id']}", type="primary", icon=":material/account_tree:", width="stretch",
                      disabled=not ai.is_available()):
             _create(cfg, module_id, lec, lecs)
@@ -281,11 +293,7 @@ def check_panel(cfg: dict, module_id: str, lec: dict, key: str) -> None:
         settings = settings_inputs(key)
         slots = sessions.plan_check(data, lec["id"], settings)
         new = sessions.new_questions_needed(data, slots, settings)
-        from utils import question_bank as qb
-
-        cost = qb.cost_estimate(new) * 100
-        label = ("Check wiederholen" if done else "Check starten") + f" · {len(slots)} Fragen" + \
-            (f" (ca. {cost:.0f} Cent)" if cost else "")
+        label = ("Check wiederholen" if done else "Check starten") + f" · {len(slots)} Fragen"
         if st.button(label, key=f"{key}_go", type="secondary" if done else "primary", icon=":material/play_arrow:",
                      width="stretch", disabled=not ai.is_available() and new > 0):
             start_check(cfg, module_id, lec, settings)

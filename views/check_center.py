@@ -27,7 +27,7 @@ def _row(cfg: dict, module: dict, data: dict, lec: dict, state: dict) -> None:
     due = planner.review_due(module, lec["date"])
     with st.container(border=True, key=f"ckrow_{module_id}_{lec['id'].replace(':', '_')}"):
         c1, c2 = st.columns([3, 2], vertical_alignment="center")
-        c1.markdown(f"**{sessions.check_label(module, lec)}**  \n"
+        c1.markdown(f"{micon(module)} **{sessions.check_label(module, lec)}**  \n"
                     f"<span class='small-muted'>{lec['topic'][:70]}</span>", unsafe_allow_html=True)
         if total:
             c1.progress(asked / total, text=f"{asked}/{total} Minithemen abgefragt")
@@ -66,7 +66,12 @@ def render(cfg: dict) -> None:
     st.subheader(f"Offen ({len(open_rows)})")
     if not open_rows:
         st.caption("Alle Checks erledigt.")
+    shown = None
     for module, data, lec in open_rows:
+        if module["id"] != shown:
+            shown = module["id"]
+            with st.container(key=f"ckhead_{module['id']}"):
+                st.markdown(f"#### {micon(module)} {module['name']}")
         _row(cfg, module, data, lec, state)
     if done_rows:
         st.subheader(f"Erledigt ({len(done_rows)})")

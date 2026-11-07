@@ -86,8 +86,21 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   hakt alle offenen Trainings-To-dos des Moduls ab). Aufholplan auf Heute (`utils/catchup.py`): dringende Blätter
   zuerst, dann Rangfolge ExRW/I&F > Statistik/Mathe > VWL, älteste VL zuerst; Zeitbudget Mo 2 h, Di 4 h, Mi 6 h,
   Do 2 h, Fr–So je 4 h (Einstellungen), Blatt 3 h.
-- Modul: Ablauf mit Schritt-Pillen je VL (`views/progress.py`), Reiter „Wissensstand“ (statt Lernen & Klausur, mit
-  Altklausuren). Keine Emojis in der Oberfläche (Material-Symbole statt ✓ ○ ↩ ↔).
+- Modul: Ablauf mit anklickbaren Schritt-Pillen je VL (`progress.step_buttons`: Nacharbeiten/Check öffnen den Reiter der
+  Vorlesung, ein angefangener Check läuft direkt weiter, Übungsblatt öffnet das Blatt, Wochentraining die Seite), auch
+  im Kopf der Vorlesungsseite; Reiter „Wissensstand“ (statt Lernen & Klausur, mit Altklausuren). Keine Emojis in der
+  Oberfläche (Material-Symbole statt ✓ ○ ↩ ↔ ◀ ▶). Keine Kostenangaben („ca. x Cent“) in der Oberfläche.
+- Aufgabenarten überall mit Etikett (`common.kind_badge`/`KIND_STYLE`: Nacharbeiten blau, Check violett, Übungsblatt
+  orange, Wochentraining grün), To-dos haben `short`/`chip`. Offene Aufgaben früherer Wochen wandern mit
+  (`planner.overdue_before`, `carried` → bei heute; auch eigene To-dos). Kein „Fortschritt pro Modul“ in der
+  Wochenübersicht. Check/Training/Frage-Ansicht in Modulfarbe (CSS-Schlüssel `ckrow_`, `ckhead_`, `trhead_`, `qcard_`,
+  `sesshead_` in `app.py`).
+- Eine Foliendatei für mehrere Termine (z. B. ExRW 2.11.–7.12.): Umfang je Datei und Vorlesung (`notes.scopes`,
+  `topics.doc_range`, im Formular „Von/Bis Folie“); endet der Umfang vor dem Dateiende, bietet die nächste VL
+  „Weiter ab Folie x“ an → `doc.shared_units` + Bereich ab x (`topics.accept_carry`, `is_shared`); Raster zeigt bei
+  übernommenen Dateien erst ab dieser Folie; Wiederholungs-Erkennung vergleicht eine Datei nie mit sich selbst.
+- Mathe: Blatt n gehört zu Einheit/Vorlesung n (Blatt 3 → Einheit 3 Selbststudium); `exercise_chapters_version` in
+  config.json verwirft einmalig von Hand gesetzte Blatt-Kapitel.
 
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als

@@ -6,8 +6,9 @@ from datetime import datetime
 
 import streamlit as st
 
-from utils import ai, mastery, question_bank as qb, sessions, topics
-from utils.config import module_label
+from utils import ai, mastery, sessions, topics
+from utils.config import get_module, module_label
+from views.common import micon
 from utils.storage import load_module
 from views import progress, session_ui
 from views.check_center import MODULE_RANK
@@ -66,13 +67,18 @@ def render(cfg: dict) -> None:
     ids = [m["id"] for m in sorted(cfg["modules"], key=lambda m: MODULE_RANK.get(m["id"], 3))]
     if st.session_state.get("tr_module") not in ids:
         st.session_state["tr_module"] = ids[0]
-    module_id = st.segmented_control("Modul", ids, key="tr_module", format_func=lambda m: module_label(cfg, m, short=True),
-                                     label_visibility="collapsed") or ids[0]
+    module_id = st.segmented_control("Modul", ids, key="tr_module", label_visibility="collapsed",
+                                     format_func=lambda m: f"{micon(get_module(cfg, m))} {module_label(cfg, m, short=True)}"
+                                     ) or ids[0]
+    module = get_module(cfg, module_id)
     data = load_module(module_id)
     held = sessions.held_lectures(cfg, module_id, data)
     lec_ids = {lec["id"] for lec in held}
     stats = progress.module_stats(data, lec_ids)
 
+    with st.container(key=f"trhead_{module_id}"):
+        st.markdown(f"### {micon(module)} {module['name']}")
+        st.caption(f"Nächstes: Wochentraining {sessions.next_training_number(data)} {module['short']}")
     with st.container(key="kpis"):
         c1, c2, c3 = st.columns(3)
         c1.metric("Vorlesungen bisher", len(held))
@@ -85,8 +91,7 @@ def render(cfg: dict) -> None:
         with st.container(border=True, key="legacybox"):
             st.markdown(f":material/account_tree: **{len(missing)} frühere Vorlesung(en) ohne Minithemen:** "
                         + ", ".join(f"VL {lec['nr']}" for lec in missing))
-            cost = sum(topics.read_cost(data, lec) + topics.cost_estimate(data, lec) for lec in missing) * 100
-            if st.button(f"Minithemen anlegen (ca. {cost:.0f} Cent)", key="tr_legacy", type="primary",
+            if st.button("Minithemen anlegen", key="tr_legacy", type="primary",
                          icon=":material/auto_awesome:", disabled=not ai.is_available()):
                 _prepare_legacy(cfg, module_id, missing)
                 st.rerun()
@@ -121,9 +126,7 @@ def render(cfg: dict) -> None:
                            "davon dran, der Rest folgt im nächsten Training.", icon=":material/info:")
             slots = sessions.plan_training(data, held, n, settings)
             new = sessions.new_questions_needed(data, slots, settings)
-            cost = qb.cost_estimate(new) * 100
-            label = f"Wochentraining {sessions.next_training_number(data)} starten" + \
-                (f" (ca. {cost:.0f} Cent)" if cost else "")
+            label = f"Wochentraining {sessions.next_training_number(data)} starten"
             if st.button(label, key="tr_go", type="primary", icon=":material/play_arrow:", width="stretch",
                          disabled=not slots or (not ai.is_available() and new > 0)):
                 with st.spinner("Stelle dein Wochentraining zusammen …"):

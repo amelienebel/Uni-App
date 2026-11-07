@@ -271,6 +271,12 @@ def load_module(module_id: str) -> dict:
         data.setdefault("chapters", [])
         data.setdefault("formulas", [])
         migrated = _apply_syllabus_update(data, module_cfg, default)
+        # Neue Blatt-Zuordnung aus config.json: von Hand gesetzte Kapitel der Übungen einmalig verwerfen
+        ex_version = int(module_cfg.get("exercise_chapters_version", 0))
+        if ex_version > int(data.get("exercise_chapters_version", 0)):
+            data["exercise_chapters"] = {}
+            data["exercise_chapters_version"] = ex_version
+            migrated = True
         for field, value in default.items():
             data.setdefault(field, value)
         # Neue Kapitel aus config.json ergänzen (Erweiterbarkeit)

@@ -26,7 +26,7 @@ def _finished_dates(data: dict, kind: str) -> list[date]:
 
 
 def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict], state: dict) -> list[tuple]:
-    """[(Name, Status)] mit Status done / open / overdue / na."""
+    """[(Name, Status, Ziel)] mit Status done / open / overdue / na; Ziel = wohin ein Klick führt."""
     now = today()
     module_id = module["id"]
     review = planner.review_due(module, lec["date"])
@@ -37,29 +37,67 @@ def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict
         return "overdue" if due and due < now else "open"
 
     steps = [("Nacharbeiten", status(bool(state.get(planner.lecture_key(module_id, lec["date"], "nachbereitet"))),
-                                     review))]
+                                     review), ("lecture", "nachbereitet"))]
     if sessions.is_legacy(data, lec["id"]):
-        steps.append(("Check", "na"))
+        steps.append(("Check", "na", ("lecture", "check")))
     else:
         steps.append(("Check", status(bool(state.get(planner.lecture_key(module_id, lec["date"], "check")))
-                                      or sessions.check_done(data, lec["id"]), review)))
+                                      or sessions.check_done(data, lec["id"]), review), ("lecture", "check")))
     schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
     related = [ex for ex in exs if ex.get("chapter_id") and ex["chapter_id"] == lec.get("chapter_id")]
     if related:
         ex = related[-1]
         ex_due = planner.exercise_due(module, ex, schedule, breaks)
-        steps.append(("Übungsblatt", status(bool(state.get(ex["plan_key"])), ex_due)))
+        steps.append(("Übungsblatt", status(bool(state.get(ex["plan_key"])), ex_due), ("exercise", ex["id"])))
         trained = any(d >= ex_due - timedelta(days=3) for d in _finished_dates(data, "training"))
         nxt = next((w for w in planner.training_windows(cfg, module, schedule, breaks) if w["due"] >= ex_due), None)
-        steps.append(("Wochentraining", status(trained, nxt["due"] if nxt else None)))
+        steps.append(("Wochentraining", status(trained, nxt["due"] if nxt else None), ("training", None)))
     else:
-        steps += [("Übungsblatt", "na"), ("Wochentraining", "na")]
+        steps += [("Übungsblatt", "na", None), ("Wochentraining", "na", ("training", None))]
     return steps
+
+
+STEP_ICONS = {"Nacharbeiten": "edit_note", "Check": "fact_check", "Übungsblatt": "assignment",
+              "Wochentraining": "fitness_center"}
+
+
+def _go(module_id: str, lec_id: str, target: tuple) -> None:
+    from views import session_ui
+    from views.common import LECTURE_TAB, PAGES, open_training, open_unit
+
+    kind, arg = target
+    if kind == "training":
+        open_training(module_id)
+    elif kind == "exercise":
+        open_unit(module_id, arg)
+    elif kind == "lecture" and arg == "check":
+        from utils.storage import load_module
+
+        run = sessions.running(load_module(module_id), "check", lec_id)
+        if run:  # angefangenen Check direkt fortsetzen
+            session_ui.open_session(module_id, run["id"])
+            st.session_state["nav"] = PAGES["cards"]
+            return
+        st.session_state[f"ltab_next_{lec_id}"] = LECTURE_TAB["check"]
+        open_unit(module_id, lec_id)
+    else:
+        st.session_state[f"ltab_next_{lec_id}"] = LECTURE_TAB[arg]
+        open_unit(module_id, lec_id)
+
+
+def step_buttons(module_id: str, lec: dict, steps: list[tuple], key: str) -> None:
+    """Schritte als anklickbare Pillen: führt direkt zu Nacharbeiten, Check, Übungsblatt oder Wochentraining."""
+    with st.container(horizontal=True, gap="small", key=f"steps_{key}"):
+        for i, (name, state_, target) in enumerate(steps):
+            icon = "check" if state_ == "done" else "schedule" if state_ == "overdue" else STEP_ICONS[name]
+            st.button(name, key=f"stp_{state_}_{key}_{i}", icon=f":material/{icon}:", width="content",
+                      disabled=target is None or state_ == "na", on_click=_go if target else None,
+                      args=(module_id, lec["id"], target) if target else None)
 
 
 def steps_html(steps: list[tuple]) -> str:
     pills = []
-    for name, st_ in steps:
+    for name, st_, *_ in steps:
         pills.append(f"<span class='step-pill {_STEP_CSS[st_]}'><span class='material-symbols-rounded'>"
                      f"{_STEP_ICON[st_]}</span>{html.escape(name)}</span>")
     return "<div class='step-row'>" + "".join(pills) + "</div>"

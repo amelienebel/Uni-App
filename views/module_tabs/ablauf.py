@@ -40,8 +40,9 @@ def _lecture_row_v2(cfg: dict, module: dict, data: dict, lec: dict, exs: list[di
                   key=f"open_{module_id}_{lec['id']}", type="tertiary", on_click=open_unit, icon=":material/co_present:",
                   args=(module_id, lec["id"]))
         if lec["date"] <= today() and not lec["is_break"]:
-            c1.markdown(progress.steps_html(progress.lecture_steps(cfg, module, data, lec, exs, state)),
-                        unsafe_allow_html=True)
+            with c1:
+                progress.step_buttons(module_id, lec, progress.lecture_steps(cfg, module, data, lec, exs, state),
+                                      key=f"abl_{module_id}_{lec['id'].replace(':', '_')}")
         else:
             c1.caption(f"nacharbeiten bis {_due(planner.review_due(module, lec['date']))}")
         if total:

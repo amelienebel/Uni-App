@@ -68,10 +68,10 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
     nav[0].button("Zum Ablauf", key=f"back_{ex['id']}", on_click=open_unit, args=(module_id, None))
     idx = exs.index(ex)
     if idx > 0:
-        nav[1].button("◀ vorige Übung", key=f"prev_{ex['id']}", on_click=open_unit,
+        nav[1].button("vorige Übung", icon=":material/chevron_left:", key=f"prev_{ex['id']}", on_click=open_unit,
                       args=(module_id, exs[idx - 1]["id"]), width="stretch")
     if idx < len(exs) - 1:
-        nav[2].button("nächste Übung ▶", key=f"next_{ex['id']}", on_click=open_unit,
+        nav[2].button("nächste Übung", icon=":material/chevron_right:", key=f"next_{ex['id']}", on_click=open_unit,
                       args=(module_id, exs[idx + 1]["id"]), width="stretch")
 
     st.markdown(f"## :material/edit_note: {ex['title']}")

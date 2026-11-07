@@ -375,3 +375,56 @@ def test_v2_pages_open():
     at.session_state["nav"] = PAGES["settings"]
     _run(at)
     assert any("Karten mit allen Bewertungen unverändert" in c.value for c in at.caption)
+
+
+def test_mathe_sheets_follow_lectures():
+    from utils import storage, units
+    from utils.config import get_module, load_config
+
+    cfg = load_config()
+    data = storage.load_module("mathe")
+    data["exercise_chapters"] = {}
+    lecs, exs = units.all_units(cfg, get_module(cfg, "mathe"), data)
+    by_title = {ex["title"].split(" –")[0]: ex for ex in exs}
+    assert by_title["Übungsblatt 3"]["chapter_id"] == "e3"  # Einheit 3 (Selbststudium)
+    assert by_title["Übungsblatt 4"]["chapter_id"] == "e4"
+    lec3 = next(x for x in lecs if x["chapter_id"] == "e3")
+    assert [ex["title"].split(" –")[0] for ex in units.related_exercises(lec3, exs)] == ["Übungsblatt 3"]
+
+
+def test_shared_slide_deck_continues_in_next_lecture():
+    from utils import storage, topics
+    from utils.units import lecture_notes, unit_docs
+
+    cfg, data, lec, lecs, _ = _setup("rewe", 0)
+    nxt = next(x for x in lecs if x["date"] > lec["date"] and not x["is_break"])
+    doc = next(d for d in data["documents"] if d["id"] == "doc1")
+    topics.set_range("rewe", lec["id"], "doc1", 1, 2)  # „wir kamen bis Folie 2“
+    assert topics.active_pages(data, lec, doc) == [1, 2]
+    offer = topics.offered_carry(data, nxt, lecs)
+    assert offer and offer[0]["pages"][0] == 3
+    topics.accept_carry("rewe", nxt["id"], offer, True)
+    assert doc in unit_docs(data, nxt) and topics.is_shared(doc, nxt["id"])
+    assert topics.doc_range(lecture_notes(data, nxt["id"]), doc, 4) == (3, 4)
+    assert not topics.offered_carry(data, nxt, lecs)  # schon übernommen
+    # Vorschläge vergleichen eine gemeinsame Datei nicht mit sich selbst
+    assert all(not r.startswith("schon in VL") for r in topics.suggest_exclusions(data, nxt, lecs, doc).values())
+    del storage
+
+
+def test_unfinished_tasks_carry_into_current_week():
+    from utils import planner, storage
+    from utils.config import load_config
+
+    cfg = load_config()
+    modules_data = {m["id"]: storage.load_module(m["id"]) for m in cfg["modules"]}
+    sem_start, sem_end = storage.semester_dates(cfg)
+    monday = planner.monday_of(storage.today())
+    carried = planner.overdue_before(cfg, modules_data, storage.get_schedule(cfg), monday, sem_start, sem_end, {},
+                                     {}, storage.lecture_breaks(cfg))
+    assert carried and all(t["due"] < monday and t["carried"] for t in carried)
+    assert len({t["key"] for t in carried}) == len(carried)
+    state = {carried[0]["key"]: True}
+    again = planner.overdue_before(cfg, modules_data, storage.get_schedule(cfg), monday, sem_start, sem_end, {},
+                                   state, storage.lecture_breaks(cfg))
+    assert carried[0]["key"] not in {t["key"] for t in again}

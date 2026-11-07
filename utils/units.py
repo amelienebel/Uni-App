@@ -123,7 +123,8 @@ def related_exercises(lec: dict, exercise_list: list[dict]) -> list[dict]:
 def unit_docs(data: dict, unit: dict) -> list[dict]:
     """Dateien dieser Einheit – plus ältere Dateien ohne Einheit, die nur einem Kapitel zugeordnet sind."""
     types = LECTURE_DOC_TYPES if unit["kind"] == "lecture" else EXERCISE_DOC_TYPES
-    own = [d for d in data["documents"] if d.get("unit") == unit["id"]]
+    own = [d for d in data["documents"] if d.get("unit") == unit["id"]
+           or unit["id"] in (d.get("shared_units") or [])]
     legacy = [d for d in data["documents"] if not d.get("unit") and unit.get("chapter_id")
               and d.get("chapter_id") == unit["chapter_id"] and d["doc_type"] in types]
     return own + legacy

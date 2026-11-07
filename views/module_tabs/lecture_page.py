@@ -9,7 +9,7 @@ import streamlit as st
 
 from utils import ai, planner, script, textbook
 from utils.config import WEEKDAYS, get_module, load_config
-from utils.learning import (page_cost_estimate, pending_figures, read_pages_visual, run_analysis, script_docs,
+from utils.learning import (pending_figures, read_pages_visual, run_analysis, script_docs,
                             unit_material)
 from utils.pdf_parser import figure_pages, render_page
 from utils.storage import (IMAGE_TYPES, abs_data_path, chapter_label, delete_data_file, get_notes, load_module,
@@ -43,10 +43,10 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
     nav[0].button("Zum Ablauf", key=f"back_{lec['id']}", on_click=open_unit, args=(module_id, None))
     idx = lecs.index(lec)
     if idx > 0:
-        nav[1].button("◀ vorige VL", key=f"prev_{lec['id']}", on_click=open_unit, args=(module_id, lecs[idx - 1]["id"]),
+        nav[1].button("vorige VL", icon=":material/chevron_left:", key=f"prev_{lec['id']}", on_click=open_unit, args=(module_id, lecs[idx - 1]["id"]),
                       width="stretch")
     if idx < len(lecs) - 1:
-        nav[2].button("nächste VL ▶", key=f"next_{lec['id']}", on_click=open_unit,
+        nav[2].button("nächste VL", icon=":material/chevron_right:", key=f"next_{lec['id']}", on_click=open_unit,
                       args=(module_id, lecs[idx + 1]["id"]), width="stretch")
 
     slot = {} if lec.get("self_study") else next((s for s in module["schedule"] if s.get("type") == "Vorlesung"
@@ -74,8 +74,8 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
     if planner.LEARNING_V2:
         from views import progress
 
-        st.markdown(progress.steps_html(progress.lecture_steps(cfg, module, data, lec, exs, state)),
-                    unsafe_allow_html=True)
+        progress.step_buttons(module_id, lec, progress.lecture_steps(cfg, module, data, lec, exs, state),
+                              key=f"lp_{lec['id'].replace(':', '_')}")
     related = related_exercises(lec, exs)
     if related:
         st.markdown("**Zugehörige Übungen:**")
@@ -160,7 +160,6 @@ def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
         wkey = f"figsel_{doc['id']}"
         chosen = st.multiselect("Welche Seiten soll ich genau lesen?", pending, default=pending, key=wkey,
                                 format_func=lambda p: f"Seite {p}")
-        cost = page_cost_estimate(len(chosen)) * 100
         verb = "aktualisieren" if has_prep else "erstellen"
         c1, c2 = st.columns([3, 2])
 
@@ -168,7 +167,7 @@ def _figure_pages(cfg: dict, module_id: str, doc: dict) -> None:
             doc["skipped_figures"] = sorted(set(doc.get("skipped_figures", [])) | set(pages))
             save_module(module_id)
 
-        if c1.button(f"Genau lesen & Vorbereitung {verb} (ca. {cost:.1f} Cent)", key=f"figgo_{doc['id']}",
+        if c1.button(f"Genau lesen & Vorbereitung {verb}", key=f"figgo_{doc['id']}",
                      type="primary", disabled=not chosen or not ai.is_available()):
             skip([p for p in pending if p not in chosen])
             _run(cfg, module_id, lambda: read_pages_visual(cfg, module_id, doc, chosen),
@@ -229,7 +228,7 @@ def _exact_read(cfg: dict, module_id: str, lec: dict) -> bool:
             chosen = st.multiselect("Welche Seiten soll ich genau lesen?", options, default=pending,
                                     key=f"exsel_{doc['id']}", format_func=lambda p: f"Seite {p}")
             c1, c2 = st.columns([3, 2])
-            if c1.button(f"Genau lesen (ca. {page_cost_estimate(len(chosen)) * 100:.1f} Cent)",
+            if c1.button("Genau lesen",
                          key=f"exgo_{doc['id']}", type="primary", disabled=not chosen or not ai.is_available()):
                 doc["skipped_figures"] = sorted(set(doc.get("skipped_figures", [])) | (set(pending) - set(chosen)))
                 save_module(module_id)

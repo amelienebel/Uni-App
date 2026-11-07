@@ -13,7 +13,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (in_timetable, days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
                            load_todos, semester_dates, today)
 from views import cards_center
-from views.common import custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
+from views.common import kind_badge, todo_text, STEP_KIND, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
 
 
 def _safe(text: str) -> str:
@@ -35,8 +35,8 @@ def _todo_row(cfg: dict, t: dict, modules_data: dict, state: dict, now) -> None:
     with st.container(key=f"tdrow_{module['id']}_today_{_safe(t['key'])}"):
         c0, c1, c2, c3 = st.columns([0.5, 8, 3, 0.6], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
-        c1.button(f"**{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary", icon=micon(module),
-                  on_click=open_todo, args=(t,))
+        c1.button(f"{kind_badge(t['kind'])} **{module['short']}** · {todo_text(t)}", key=f"open_{key}",
+                  type="tertiary", icon=micon(module), on_click=open_todo, args=(t,), help=t["title"])
         c2.caption(planner.format_due(t["due"], now))
         if t.get("custom"):
             c3.button("", key=f"del_{key}", icon=":material/delete:", type="tertiary", help="Löschen",
@@ -57,10 +57,11 @@ def render(cfg: dict) -> None:
     # --- Kennzahlen ------------------------------------------------------------
     schedule = get_schedule(cfg)
     monday = planner.monday_of(now)
-    todos = []
-    for start in (monday - timedelta(weeks=1), monday):
-        todos += planner.generate_todos(cfg, modules_data, schedule, start, sem_start, sem_end,
-                                        load_settings()["learning"], breaks)
+    # offene Aufgaben früherer Wochen wandern mit (nicht nur die letzte Woche)
+    todos = planner.overdue_before(cfg, modules_data, schedule, monday, sem_start, sem_end,
+                                   load_settings()["learning"], state, breaks)
+    todos += planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end,
+                                    load_settings()["learning"], breaks)
     todos += planner.custom_todos(state, end=now + timedelta(days=1))
     seen, open_todos = set(), []
     for t in todos:
@@ -183,7 +184,8 @@ def _catchup_box(cfg: dict, plan: dict, now) -> None:
         for i, t in enumerate(today_items):
             module = get_module(cfg, t["module_id"])
             late = " · überfällig" if t["due"] < now else ""
-            st.button(f"**{module['short']}** · {t['label']} – {t['about'][:50]} ({t['minutes']} min{late})",
+            st.button(f"{kind_badge(STEP_KIND.get(t['step'], ''))} **{module['short']}** · {t['label']} – "
+                      f"{t['about'][:50]} ({t['minutes']} min{late})",
                       key=f"cu_{i}", type="tertiary", icon=micon(module), on_click=_open_task,
                       args=(t["module_id"], t))
         if not today_items:
@@ -195,7 +197,8 @@ def _catchup_box(cfg: dict, plan: dict, now) -> None:
                 st.markdown(f"**{WEEKDAYS[day['date'].weekday()]}, {day['date']:%d.%m.}** · "
                             f"{day['used'] / 60:.1f} von {day['capacity'] / 60:.0f} h")
                 for t in day["items"]:
-                    st.caption(f"{get_module(cfg, t['module_id'])['short']} · {t['label']} – {t['about'][:50]}")
+                    st.markdown(f"{kind_badge(STEP_KIND.get(t['step'], ''))} "
+                                f"{get_module(cfg, t['module_id'])['short']} · {t['label']} – {t['about'][:50]}")
 
 
 def _learning_status(cfg: dict, modules_data: dict) -> None:

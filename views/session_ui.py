@@ -11,6 +11,7 @@ import streamlit as st
 from utils import ai, mastery, question_bank as qb, sessions, topics
 from utils.config import get_module
 from utils.storage import load_module, read_data_file
+from views.common import micon
 from views.module_tabs import exams
 
 STATE = "v2_session"
@@ -167,9 +168,11 @@ def render(cfg: dict) -> None:
     data = load_module(module_id)
     n = len(session["items"])
     idx = sessions.current_index(session)
+    with st.container(key=f"sesshead_{module_id}"):
+        st.markdown(f"#### {micon(module)} {session['label']}")
     top = st.columns([1, 3, 1], vertical_alignment="center")
     top[0].button("Pause", key="v2_pause", icon=":material/pause:", on_click=close, help="Später weitermachen")
-    top[1].progress(min(idx, n) / n, text=f"{session['label']} · Frage {min(idx + 1, n)} von {n} · "
+    top[1].progress(min(idx, n) / n, text=f"Frage {min(idx + 1, n)} von {n} · "
                                           f"ca. {sessions.remaining_minutes(data, session):.0f} Min übrig")
     if idx >= n:
         _summary(cfg, module_id, session)

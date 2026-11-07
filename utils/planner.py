@@ -312,12 +312,14 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                     continue
                 add({"key": lecture_key(module_id, lec["date"], "nachbereitet"), "module_id": module_id,
                      "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "nachbereitet", "step": 1,
-                     "kind": "Nacharbeiten", "due": due,
+                     "kind": "Nacharbeiten", "due": due, "short": f"Vorlesung {nr}: {lec['topic']}",
+                     "chip": f"VL {nr} nacharbeiten",
                      "title": f"Vorlesung {nr} nacharbeiten (Folien hochladen, kommentieren, genau lesen) – {label}"})
                 if f"vl:{lec['date'].isoformat()}" not in legacy:
                     add({"key": lecture_key(module_id, lec["date"], "check"), "module_id": module_id,
                          "chapter_id": lec.get("chapter_id"), "status_field": None, "step": 2,
-                         "kind": "Vorlesungs-Check", "due": due, "title": f"Vorlesung {nr} {module['short']} Check"})
+                         "kind": "Vorlesungs-Check", "due": due, "title": f"Vorlesung {nr} {module['short']} Check",
+                         "short": f"Vorlesung {nr} {module['short']} Check", "chip": f"VL {nr} Check"})
                 continue
             for field, kind, verb, due in (("vorbereitet", "Vorbereitung", "vorbereiten", prep_due(module, lec["date"])),
                                            ("nachbereitet", "Nachbereitung", "nachbereiten",
@@ -332,14 +334,16 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                 continue
             add({"key": exercise_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),
                  "status_field": None, "sync": "uebung", "kind": "Übungsblatt", "step": 3,
-                 "title": f"Übungsblatt {'– ' if LEARNING_V2 else 'lösen – '}{ex['title']}", "due": due})
+                 "title": f"Übungsblatt lösen – {ex['title']}", "due": due, "short": ex["title"],
+                 "chip": _sheet_chip(ex["title"])})
         if LEARNING_V2:
             since = v2_start(modules_data[module_id])
             for w in training_windows(cfg, module, schedule, breaks):
                 if monday <= w["due"] <= sunday and (since is None or w["due"] >= since):
                     add({"key": w["key"], "module_id": module_id, "chapter_id": None, "status_field": None,
                          "kind": "Wochentraining", "step": 4, "due": w["due"], "start": w["start"],
-                         "title": f"Wochentraining {module['short']} (inkl. Übungen und früherer Vorlesungen)"})
+                         "title": f"Wochentraining {module['short']} (inkl. Übungen und früherer Vorlesungen)",
+                         "short": "Wochentraining (inkl. Übungen und früherer Vorlesungen)", "chip": "Wochentraining"})
 
     # Zusätzliche Termine mit Zeitraum (Klausuranmeldung, Quizze, Extra-Sessions) – für alle Module
     for module in cfg["modules"]:
@@ -373,6 +377,32 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
 
     todos.sort(key=lambda t: (t["due"], t["module_id"], t.get("step", 9)))
     return todos
+
+
+def _sheet_chip(title: str) -> str:
+    import re
+
+    m = re.search(r"(?:Übungs)?[Bb]latt\s*(\d+)", title)
+    return f"Blatt {m.group(1)}" if m else "Übungsblatt"
+
+
+def overdue_before(cfg: dict, modules_data: dict[str, dict], schedule: list[dict], monday: date,
+                   semester_start: date, semester_end: date, learning: dict, todo_state: dict, breaks=(),
+                   weeks: int = 12) -> list[dict]:
+    """Noch offene Aufgaben aus früheren Wochen (wandern in die aktuelle Woche mit)."""
+    seen: set[str] = set()
+    out = []
+    for back in range(weeks, 0, -1):
+        start = monday - timedelta(weeks=back)
+        if start + timedelta(days=6) < monday_of(semester_start):
+            continue
+        for t in generate_todos(cfg, modules_data, schedule, start, semester_start, semester_end, learning, breaks):
+            if t["due"] >= monday or t["key"] in seen or t["kind"] in ("Wiederholung", "Klausurvorbereitung"):
+                continue
+            seen.add(t["key"])
+            if not todo_done(t, modules_data, todo_state):
+                out.append({**t, "carried": True})
+    return out
 
 
 def v2_start(module_data: dict) -> date | None:

@@ -71,6 +71,8 @@ def suggest_exclusions(data: dict, lec: dict, lecs: list[dict], doc: dict) -> di
         if other["date"] >= lec["date"] or other["id"] == lec["id"]:
             continue
         for d in slide_docs(data, other):
+            if d["id"] == doc["id"]:  # gemeinsame Foliendatei mehrerer Termine: nicht mit sich selbst vergleichen
+                continue
             for nr, text in enumerate(get_document_pages(d), start=1):
                 words = _words(text)
                 if len(words) >= 8:
@@ -127,35 +129,60 @@ def scope(notes: dict) -> dict:
     return {"mode": sc.get("mode", "all"), "from": int(sc.get("from") or 1), "to": int(sc.get("to") or 0)}
 
 
-def in_scope(notes: dict, page: int, n_pages: int) -> bool:
+def is_shared(doc: dict, lec_id: str) -> bool:
+    """Foliendatei, die diese Vorlesung von einer früheren übernommen hat (eine Datei für mehrere Termine)."""
+    return lec_id in (doc.get("shared_units") or []) and doc.get("unit") != lec_id
+
+
+def doc_range(notes: dict, doc: dict, n_pages: int) -> tuple[int, int]:
+    """Umfang (von, bis) einer Foliendatei für eine Vorlesung: eigener Bereich je Datei, sonst „Folie x bis y“
+    der Vorlesung, sonst die ganze Datei. bis = 0 heißt „bis zum Ende“."""
+    own = (notes.get("scopes") or {}).get(doc["id"])
+    if own:
+        return int(own.get("from") or 1), int(own.get("to") or 0) or n_pages
+    sc = scope(notes)
+    if sc["mode"] == "range":
+        return sc["from"], sc["to"] or n_pages
+    return 1, n_pages
+
+
+def in_scope(notes: dict, page: int, n_pages: int, doc: dict | None = None) -> bool:
+    if doc is not None:
+        first, last = doc_range(notes, doc, n_pages)
+        return first <= page <= last
     sc = scope(notes)
     if sc["mode"] != "range":
         return True
     return sc["from"] <= page <= (sc["to"] or n_pages)
 
 
+def n_pages(doc: dict) -> int:
+    return len(get_document_pages(doc)) or int(doc.get("n_pages") or 0)
+
+
 def active_pages(data: dict, lec: dict, doc: dict) -> list[int]:
     """Seiten eines Dokuments, die für Minithemen zählen: im Umfang (nur Folien) und nicht ausgeblendet."""
-    n = len(get_document_pages(doc)) or int(doc.get("n_pages") or 0)
+    n = n_pages(doc)
     if doc["doc_type"] != "folien":
         return list(range(1, n + 1))
     notes = lecture_notes(data, lec["id"])
     skip = excluded(doc)
-    return [p for p in range(1, n + 1) if p not in skip and in_scope(notes, p, n)]
+    return [p for p in range(1, n + 1) if p not in skip and in_scope(notes, p, n, doc)]
 
 
 def carry_over(data: dict, lec: dict) -> list[dict]:
-    """Folien außerhalb des Umfangs („nur bis Folie x“) – werden der nächsten Vorlesung vorgeschlagen."""
+    """Folien nach dem Ende des Umfangs („nur bis Folie x“) – werden der nächsten Vorlesung angeboten."""
     notes = lecture_notes(data, lec["id"])
-    sc = scope(notes)
-    if sc["mode"] != "range":
-        return []
     result = []
     for doc in slide_docs(data, lec):
-        n = len(get_document_pages(doc)) or int(doc.get("n_pages") or 0)
-        rest = [p for p in range(1, n + 1) if not in_scope(notes, p, n) and p not in excluded(doc)]
+        n = n_pages(doc)
+        first, last = doc_range(notes, doc, n)
+        if last >= n:
+            continue
+        rest = [p for p in range(last + 1, n + 1) if p not in excluded(doc)]
         if rest:
-            result.append({"doc_id": doc["id"], "pages": rest, "from": lec["id"], "from_nr": lec["nr"]})
+            result.append({"doc_id": doc["id"], "pages": rest, "from": lec["id"], "from_nr": lec["nr"],
+                           "filename": doc["filename"]})
     return result
 
 
@@ -167,16 +194,32 @@ def offered_carry(data: dict, lec: dict, lecs: list[dict]) -> list[dict]:
     prev = earlier[-1]
     notes = lecture_notes(data, lec["id"])
     decided = {c["doc_id"] for c in notes.get("carry_in", [])} | set(notes.get("carry_declined", []))
-    return [c for c in carry_over(data, prev) if c["doc_id"] not in decided]
+    own = {d["id"] for d in slide_docs(data, lec)}
+    return [c for c in carry_over(data, prev) if c["doc_id"] not in decided and c["doc_id"] not in own]
 
 
 def accept_carry(module_id: str, lec_id: str, items: list[dict], accept: bool) -> None:
+    """Übernehmen: dieselbe Foliendatei gilt auch für diese Vorlesung, ab der ersten noch offenen Folie."""
     data = load_module(module_id)
     notes = lecture_notes(data, lec_id)
     if accept:
-        notes.setdefault("carry_in", []).extend(items)
+        for c in items:
+            doc = next((d for d in data["documents"] if d["id"] == c["doc_id"]), None)
+            if doc is None:
+                continue
+            shared = doc.setdefault("shared_units", [])
+            if lec_id not in shared:
+                shared.append(lec_id)
+            notes.setdefault("scopes", {})[doc["id"]] = {"from": c["pages"][0], "to": 0}
+            notes.setdefault("carry_in", []).append({"doc_id": doc["id"], "pages": [], "from": c["from"]})
     else:
         notes.setdefault("carry_declined", []).extend(c["doc_id"] for c in items)
+    save_module(module_id)
+
+
+def set_range(module_id: str, lec_id: str, doc_id: str, first: int, last: int) -> None:
+    data = load_module(module_id)
+    lecture_notes(data, lec_id).setdefault("scopes", {})[doc_id] = {"from": int(first), "to": int(last)}
     save_module(module_id)
 
 
@@ -297,7 +340,7 @@ def _documents(data: dict, lec: dict) -> tuple[str, list[dict]]:
     extra = []
     for c in notes.get("carry_in", []):
         doc = next((d for d in data["documents"] if d["id"] == c["doc_id"]), None)
-        if doc and doc not in docs:
+        if doc and doc not in docs and c.get("pages"):
             extra.append((doc, c["pages"]))
     blocks, order = [], []
     for doc, pages in [(d, active_pages(data, lec, d)) for d in docs] + extra:

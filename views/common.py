@@ -46,6 +46,36 @@ def open_training(module_id: str) -> None:
     st.session_state["nav"] = PAGES["quiz"]
 
 
+# Aufgabenarten: Symbol, Farbe und kurzer Name (Etikett in Heute, Wochenplan und Aufholplan)
+KIND_STYLE = {
+    "Nacharbeiten": ("edit_note", "blue", "Nacharbeiten"),
+    "Nachbereitung": ("edit_note", "blue", "Nachbereiten"),
+    "Vorbereitung": ("menu_book", "blue", "Vorbereiten"),
+    "Vorlesungs-Check": ("fact_check", "violet", "Check"),
+    "Übungsblatt": ("assignment", "orange", "Übungsblatt"),
+    "Wochentraining": ("fitness_center", "green", "Wochentraining"),
+    "Klausurvorbereitung": ("history_edu", "red", "Klausur"),
+    "Aufgabe": ("event", "gray", "Termin"),
+    "Eigenes": ("person", "gray", "Eigenes"),
+    "Wiederholung": ("style", "gray", "Karten"),
+}
+STEP_KIND = {1: "Nacharbeiten", 2: "Vorlesungs-Check", 3: "Übungsblatt", 4: "Wochentraining"}
+
+
+def kind_badge(kind: str) -> str:
+    icon, color, label = KIND_STYLE.get(kind, ("task_alt", "gray", kind))
+    return f":{color}-badge[:material/{icon}: {label}]"
+
+
+def kind_icon(kind: str) -> str:
+    return f":material/{KIND_STYLE.get(kind, ('task_alt',))[0]}:"
+
+
+def todo_text(t: dict) -> str:
+    """Kurzer Text eines To-dos (ohne die Aufgabenart, die das Etikett zeigt)."""
+    return t.get("short") or t["title"]
+
+
 def is_mobile() -> bool:
     """Schmaler Bildschirm (Cookie setzt das Skript in app.py beim ersten Laden)."""
     try:

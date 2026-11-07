@@ -197,25 +197,25 @@
         },
         {
           "week_of": "2026-10-26",
-          "chapter_id": "e4",
+          "chapter_id": "e3",
           "due": "2026-11-02",
           "title": "Übungsblatt 3 – Besprechung im Montags-Tutorium 02.11."
         },
         {
           "week_of": "2026-11-02",
-          "chapter_id": "e5",
+          "chapter_id": "e4",
           "due": "2026-11-09",
           "title": "Übungsblatt 4 – Besprechung im Montags-Tutorium 09.11."
         },
         {
           "week_of": "2026-11-09",
-          "chapter_id": "e6",
+          "chapter_id": "e5",
           "due": "2026-11-16",
           "title": "Übungsblatt 5 – Besprechung im Montags-Tutorium 16.11."
         },
         {
           "week_of": "2026-11-16",
-          "chapter_id": "e7",
+          "chapter_id": "e6",
           "due": "2026-11-23",
           "title": "Übungsblatt 6 – Besprechung im Montags-Tutorium 23.11."
         },
@@ -276,7 +276,8 @@
         "review_weekday": 2,
         "exercise_weekday": 5
       },
-      "symbol": "calculate"
+      "symbol": "calculate",
+      "exercise_chapters_version": 1
     },
     {
       "id": "rewe",

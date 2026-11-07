@@ -14,7 +14,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (in_timetable, days_until_exam, get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
 from views import cards_center
-from views.common import is_mobile, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
+from views.common import is_mobile, kind_badge, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -38,13 +38,18 @@ def _plans() -> dict:
 
 
 def _placement(todo: dict, monday: date) -> tuple[date, int | None]:
-    """Tag/Zeitfenster eines To-dos: eigene Planung, sonst Frist (auf die angezeigte Woche begrenzt)."""
+    """Tag/Zeitfenster eines To-dos: eigene Planung, sonst Frist (auf die angezeigte Woche begrenzt);
+    Liegengebliebenes aus früheren Wochen steht bei heute."""
     plan = _plans().get(todo["key"])
     if plan:
         try:
-            return date.fromisoformat(plan["date"]), plan.get("slot")
+            planned = date.fromisoformat(plan["date"])
+            if not todo.get("carried") or planned >= monday:
+                return planned, plan.get("slot")
         except (KeyError, ValueError):
             pass
+    if todo.get("carried"):
+        return min(max(today(), monday), monday + timedelta(days=6)), None
     sunday = monday + timedelta(days=6)
     return min(max(todo["due"], monday), sunday), None
 
@@ -72,10 +77,13 @@ SHORT_KIND = {
     "Übungsblatt": "Übungsblatt lösen",
     "Wiederholung": "Karten wiederholen",
     "Klausurvorbereitung": "Altklausur rechnen",
+    "Wochentraining": "Wochentraining",
 }
 
 
 def _short_label(t: dict) -> str:
+    if t.get("chip"):
+        return t["chip"]
     if t["kind"] in SHORT_KIND:
         return SHORT_KIND[t["kind"]]
     title = t["title"].split(":")[0].split("(")[0].strip()
@@ -118,8 +126,8 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
     with st.container(key=f"tdrow_{module['id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
         c0, c1, c2, c3 = st.columns([0.5, 7, 3, 1], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
-        c1.button(f"**{module['short']}** · {t['title']}", key=f"open_{key}", type="tertiary", icon=micon(module),
-                  on_click=open_todo, args=(t,), help="Öffnen")
+        c1.button(f"{kind_badge(t['kind'])} **{module['short']}** · {todo_text(t)}", key=f"open_{key}",
+                  type="tertiary", icon=micon(module), on_click=open_todo, args=(t,), help=t["title"])
         c2.caption(f"Frist: {planner.format_due(t['due'], now)}"
                    + (f" · geplant {SLOT_LABELS[slot]} Uhr" if slot else ""))
         with c3:
@@ -134,7 +142,8 @@ def _todo_chip(t: dict, cfg: dict, modules_data: dict, todo_state: dict, now: da
     mark = ":material/check: " if done else (":material/schedule: " if overdue else "")
     state = "done" if done else "open"
     with st.container(key=f"chip_{state}_{module['id']}_{key}"):
-        st.button(f"{mark}**{module['short']}**  \n{_short_label(t)}", key=f"chipbtn_{key}", type="tertiary",
+        st.button(f"{mark}**{module['short']}**  \n{kind_icon(t['kind'])} {_short_label(t)}", key=f"chipbtn_{key}",
+                  type="tertiary",
                   on_click=open_todo, args=(t,), help=t["title"])
 
 
@@ -243,13 +252,13 @@ def render(cfg: dict) -> None:
                 + (" · vorlesungsfrei" if planner.is_break_week(monday, breaks)
                    else f" · Vorlesungswoche {week_no}" if 1 <= week_no and monday <= sem_end else ""))
     c1, c2, c3, _ = st.container(key="weeknav").columns([1, 1, 1, 4])
-    if c1.button("◀ Vorwoche", width="stretch"):
+    if c1.button("Vorwoche", icon=":material/chevron_left:", width="stretch"):
         st.session_state["week_offset"] = offset - 1
         st.rerun()
     if c2.button("Heute", width="stretch"):
         st.session_state["week_offset"] = 0
         st.rerun()
-    if c3.button("Nächste ▶", width="stretch"):
+    if c3.button("Nächste", icon=":material/chevron_right:", width="stretch"):
         st.session_state["week_offset"] = offset + 1
         st.rerun()
 
@@ -259,6 +268,12 @@ def render(cfg: dict) -> None:
               and not planner.break_for(e["date"], breaks)]
     todos = planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end, settings["learning"], breaks)
     todo_state = load_todos()
+    if monday <= now <= monday + timedelta(days=6):  # Liegengebliebenes aus früheren Wochen wandert mit
+        known = {t["key"] for t in todos}
+        todos += [t for t in planner.overdue_before(cfg, modules_data, schedule, monday, sem_start, sem_end,
+                                                    settings["learning"], todo_state, breaks) if t["key"] not in known]
+        todos += [{**t, "carried": True} for t in planner.custom_todos(todo_state, None, monday - timedelta(days=1))
+                  if not planner.todo_done(t, modules_data, todo_state)]
     todos += planner.custom_todos(todo_state, monday, monday + timedelta(days=6))
     todos = [t for t in todos if t["kind"] != "Wiederholung"]  # Karteikarten haben eine eigene Zeile
     new_min = int(settings["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
@@ -355,16 +370,6 @@ def render(cfg: dict) -> None:
                 _todo_widget(t, cfg, modules_data, todo_state, monday, now, place="list", compact=False)
 
     st.divider()
-    with st.container():
-        st.subheader(":material/trending_up: Fortschritt pro Modul")
-        for module in cfg["modules"]:
-            progress = planner.module_progress(modules_data[module["id"]])
-            stats = progress["card_stats"]
-            st.progress(progress["overall"],
-                        text=f"{module['short']} – {progress['overall'] * 100:.0f} % "
-                             f"({progress['chapters_done']}/{progress['n_chapters']} Kapitel komplett, "
-                             f"{stats['due']} Karten fällig)")
-
     with st.expander("Kapitelstatus aller Module", expanded=False):
         rows = []
         for module in cfg["modules"]:

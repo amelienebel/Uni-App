@@ -178,13 +178,8 @@ def generate_button(cfg: dict, module_id: str, unit: dict, existing: list[dict],
                     label: str | None = None) -> None:
     label = label or ("Karten ergänzen (neue Notizen/Dateien berücksichtigen)" if existing
                       else "Karteikarten erstellen")
-    cost = learning.cards_cost_estimate(load_module(module_id), unit) if ai.is_available() else 0.0
-    if st.button(label, key=f"gen_{key}", type="secondary" if existing else "primary",
-                 help=f"Geschätzte Kosten: ca. {cost * 100:.0f} Cent" if cost else None):
+    if st.button(label, key=f"gen_{key}", type="secondary" if existing else "primary"):
         run_generation(cfg, module_id, unit)
-    if cost and not existing:
-        st.caption(f"Geschätzte Kosten: ca. {max(1, round(cost * 100))} Cent · Am besten erst nach der "
-                   "Nachbereitung (sehr wichtig / nicht so wichtig / streichen eingetragen).")
 
 
 def run_generation(cfg: dict, module_id: str, unit: dict, existing: list[dict] | None = None,
@@ -221,8 +216,7 @@ def coverage_panel(cfg: dict, module_id: str, unit: dict, key: str) -> None:
         if missing:
             st.warning(line + " · Noch ohne Karte: " + "; ".join(
                 f"{c['doc']['filename']} S. {', '.join(map(str, c['missing']))}" for c in coverage if c["missing"]))
-            cost = learning.cards_cost_estimate(data, unit, only=missing)
-            if st.button(f"Fehlende Seiten nachholen (ca. {max(1, round(cost * 100))} Cent)", key=f"gapfill_{key}"):
+            if st.button("Fehlende Seiten nachholen", key=f"gapfill_{key}"):
                 run_generation(cfg, module_id, unit, only=missing)
         else:
             st.success(line + " · Alles abgedeckt.")
@@ -243,8 +237,7 @@ def coverage_panel(cfg: dict, module_id: str, unit: dict, key: str) -> None:
     slim_panel(cfg, module_id, unit, cards, key)
     c1, c2, c3 = st.columns(3)
     if cards:
-        cost = learning.slim_cost_estimate(data, unit)
-        if c3.button(f"Karten ausdünnen (ca. {max(1, round(cost * 100))} Cent)", key=f"slim_{key}",
+        if c3.button("Karten ausdünnen", key=f"slim_{key}",
                      disabled=bool(data.get("card_slim", {}).get(unit["id"]))):
             with st.spinner("Gehe die Karten mit deiner Nachbereitung, den Übungen und Altklausuren durch …"):
                 try:
@@ -256,8 +249,7 @@ def coverage_panel(cfg: dict, module_id: str, unit: dict, key: str) -> None:
                     st.session_state[f"genmsg_{unit['id']}"] = ("error", str(exc))
             st.rerun()
         checked = data.get("cards_checked", {}).get(unit["id"])
-        cost = learning.check_cost_estimate(data, unit)
-        if c1.button(f"Karten gegen die Unterlagen prüfen (ca. {max(1, round(cost * 100))} Cent)",
+        if c1.button("Karten gegen die Unterlagen prüfen",
                      key=f"cardcheck_{key}", help="Haiku vergleicht jede Karte mit den Folien (Formeln, Fakten)."
                      + (f" Zuletzt geprüft am {checked[:10]}." if checked else "")):
             with st.spinner("Prüfe die Karten …"):

@@ -110,17 +110,25 @@ def sort_todos(todos: list[dict]) -> list[dict]:
     return sorted(todos, key=lambda t: (group_of(t), prio_of(t["key"]) or 9, t["due"], t.get("module_id") or ""))
 
 
+NEXT_GROUP = "Als Nächstes"
+
+
 def grouped(todos: list[dict]) -> list[tuple[str, list[dict]]]:
-    out = []
+    """Oben „Als Nächstes“ (alles mit Priorität, 1 zuerst), darunter der Rest nach Kategorie."""
+    nxt = sorted([t for t in todos if prio_of(t["key"])],
+                 key=lambda t: (prio_of(t["key"]), group_of(t), t["due"], t.get("module_id") or ""))
+    rest = [t for t in todos if not prio_of(t["key"])]
+    out = [(NEXT_GROUP, nxt)] if nxt else []
     for i, (name, _) in enumerate(GROUPS + [("Sonstiges", ())]):
-        items = [t for t in sort_todos(todos) if group_of(t) == i]
+        items = [t for t in sort_todos(rest) if group_of(t) == i]
         if items:
             out.append((name, items))
     return out
 
 
 def group_header(name: str, n: int) -> None:
-    badge = kind_badge(name) if name in KIND_STYLE else ":gray-badge[:material/more_horiz: Sonstiges]"
+    badge = (":red-badge[:material/flag: Als Nächstes]" if name == NEXT_GROUP else kind_badge(name)
+             if name in KIND_STYLE else ":gray-badge[:material/more_horiz: Sonstiges]")
     st.markdown(f"<div class='grp-head'></div>\n\n{badge} <span class='small-muted'>{n}</span>",
                 unsafe_allow_html=True)
 

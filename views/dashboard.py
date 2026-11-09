@@ -14,7 +14,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (in_timetable, days_until_exam, get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
 from views import cards_center
-from views.common import grouped, group_header, prio_button, prio_of, sort_todos, is_mobile, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
+from views.common import NEXT_GROUP, grouped, group_header, prio_button, prio_of, sort_todos, is_mobile, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -116,7 +116,7 @@ def _move_popover(t: dict, monday: date, place: str) -> None:
 
 
 def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monday: date, now: date,
-                 place: str, compact: bool = False) -> None:
+                 place: str, compact: bool = False, with_kind: bool = False) -> None:
     """Volle Zeile: Abhaken links, Frist in der Mitte, Verschieben rechts."""
     module = todo_module(cfg, t)
     key = f"todo_{place}_{t['key']}_{monday.isoformat()}"
@@ -126,8 +126,9 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
     with st.container(key=f"tdrow_{module['id']}_{place}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
         c0, c1, c2, c3 = st.columns([0.5, 7, 3, 1.5], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
-        c1.button(f"**{module['short']}** · {todo_text(t)}", key=f"open_{key}",
-                  type="tertiary", icon=micon(module), on_click=open_todo, args=(t,), help=t["title"])
+        c1.button(f"**{module['short']}** · " + (f"{kind_icon(t['kind'])} " if with_kind else "") + todo_text(t),
+                  key=f"open_{key}", type="tertiary", icon=micon(module), on_click=open_todo, args=(t,),
+                  help=t["title"])
         c2.caption(f"Frist: {planner.format_due(t['due'], now)}"
                    + (f" · geplant {SLOT_LABELS[slot]} Uhr" if slot else ""))
         with c3.container(horizontal=True, gap="small"):
@@ -186,9 +187,16 @@ def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:
     module = get_module(cfg, ev["module_id"])
     with st.container(key=f"evcard_{ev['module_id']}_{key}"):
         room = ev.get("room", "")
-        st.button(f"{module['short']}  \n{ev.get('type', '')}", key=f"evbtn_{key}", type="tertiary",
-                  on_click=_open_event, args=(ev,), help=room or None)
-        st.caption(f"{ev.get('start', '')}–{ev.get('end', '')}")  # Raum nur beim Drüberfahren (Blöcke bleiben klein)
+        # eine kompakte Zeile: Modul · Art · Zeit (Raum nur beim Drüberfahren)
+        st.button(f"**{module['short']}** {ev.get('type', '')}  \n{_short_time(ev)}", key=f"evbtn_{key}",
+                  type="tertiary", on_click=_open_event, args=(ev,), help=room or None)
+
+
+def _short_time(ev: dict) -> str:
+    """„10:00–12:00“ → „10–12“ (Minuten nur, wenn nicht volle Stunde)."""
+    def part(t: str) -> str:
+        return t[:-3] if t.endswith(":00") else t
+    return f"{part(ev.get('start', ''))}–{part(ev.get('end', ''))}"
 
 
 # ---------------------------------------------------------------------------
@@ -196,16 +204,21 @@ def _event_card(cfg: dict, ev: dict, key: str, show_date: bool = False) -> None:
 # ---------------------------------------------------------------------------
 
 def _grid_css(cfg: dict) -> None:
-    rules = ["[class*='st-key-cell_'] {min-height: 4.2rem; padding: 4px 4px;}",
+    rules = ["[class*='st-key-cell_'] {min-height: 1.6rem; padding: 2px 3px; gap: 0.25rem !important;}",
+             ".st-key-ttgrid {gap: 0.3rem !important;}",
+             ".st-key-ttgrid [data-testid='stHorizontalBlock'] {gap: 0.4rem !important;}",
+             ".st-key-ttgrid [data-testid='stMarkdownContainer'] p {font-size: 0.85rem; margin: 0;}",
              "[class*='st-key-cell_today_'] {background: rgba(127,127,127,0.16); border-radius: 8px;"
              " padding: 4px 6px;}",
              "[class*='st-key-head_today'] {background: rgba(127,127,127,0.22); border-radius: 8px;"
              " padding: 2px 6px;}",
              # Veranstaltungs-Karten
              "[class*='st-key-evcard_'] {background: rgba(127,127,127,0.08); border-radius: 6px;"
-             " padding: 6px 9px 8px 9px; gap: 0 !important; min-height: 6.4rem;}",
-             "[class*='st-key-evcard_'] button {padding: 0; min-height: 0; font-weight: 600; text-align: left;}",
-             "[class*='st-key-evcard_'] button p {font-size: 0.92rem; font-weight: 600;}",
+             " padding: 2px 6px; gap: 0 !important;}",
+             "[class*='st-key-evcard_'] button {padding: 0; min-height: 0; text-align: left;"
+             " justify-content: flex-start;}",
+             "[class*='st-key-evcard_'] button div {justify-content: flex-start; text-align: left;}",
+             "[class*='st-key-evcard_'] button p {font-size: 0.8rem; line-height: 1.25; font-weight: 400;}",
              "[class*='st-key-evcard_'] [data-testid='stCaptionContainer'] p {font-size: 0.82rem;"
              " line-height: 1.3; margin: 0;}",
              # To-do-Kärtchen im Raster (antippen = öffnen)
@@ -297,8 +310,9 @@ def render(cfg: dict) -> None:
 
     # --- Stundenplan-Raster ---------------------------------------------------
     if not list_view:
+        grid = st.container(key="ttgrid")
         widths = [0.6] + [1] * 7
-        header = st.columns(widths)
+        header = grid.columns(widths)
         header[0].markdown("&nbsp;")
         for col, day in zip(header[1:], days):
             with col:
@@ -311,8 +325,9 @@ def render(cfg: dict) -> None:
                             st.error(f"Klausur {get_module(cfg, mid)['short']}")
                     for entry in calendar.get(day, []):
                         st.warning(entry)
-        for slot in SLOTS + [None] + ([] if planner.LEARNING_V2 else ["cards"]):
-            row = st.columns(widths)
+        used = {_slot_of(e.get("start", "")) for e in events} | {s for (_d, s) in placed}
+        for slot in [x for x in SLOTS if x in used] + [None] + ([] if planner.LEARNING_V2 else ["cards"]):
+            row = grid.columns(widths)
             row[0].markdown("**Karteikarten**" if slot == "cards" else f"**{SLOT_LABELS[slot]}**" if slot is not None
                             else "**To-dos**")
             if slot == "cards":
@@ -369,7 +384,8 @@ def render(cfg: dict) -> None:
             for name, items in grouped(day_todos):
                 group_header(name, len(items))
                 for t in items:
-                    _todo_widget(t, cfg, modules_data, todo_state, monday, now, place="list", compact=False)
+                    _todo_widget(t, cfg, modules_data, todo_state, monday, now, place="list", compact=False,
+                                 with_kind=name == NEXT_GROUP)
 
     st.divider()
     with st.expander("Kapitelstatus aller Module", expanded=False):

@@ -34,6 +34,11 @@ def open_session(module_id: str, session_id: str) -> None:
     st.session_state[STATE] = {"mid": module_id, "sid": session_id}
 
 
+def _view(vkey: str, idx: int, cur: int) -> None:
+    """Zurück/Weiter: frühere Frage ansehen (None = aktuelle Frage)."""
+    st.session_state[vkey] = idx if 0 <= idx < cur else None
+
+
 def close() -> None:
     st.session_state.pop(STATE, None)
 
@@ -168,12 +173,18 @@ def render(cfg: dict) -> None:
     module = get_module(cfg, module_id)
     data = load_module(module_id)
     n = len(session["items"])
-    idx = sessions.current_index(session)
+    cur = sessions.current_index(session)
+    vkey = f"v2_view_{session['id']}"
+    view = st.session_state.get(vkey)
+    reviewing = view is not None and 0 <= view < cur
+    idx = view if reviewing else cur
     with st.container(key=f"sesshead_{module_id}"):
         st.markdown(f"#### {micon(module)} {session['label']}")
-    top = st.columns([1, 3, 1], vertical_alignment="center")
-    top[0].button("Pause", key="v2_pause", icon=":material/pause:", on_click=close, help="Später weitermachen")
-    top[1].progress(min(idx, n) / n, text=f"Frage {min(idx + 1, n)} von {n} · "
+    top = st.columns([1, 1, 3], vertical_alignment="center")
+    top[0].button("Zurück", key="v2_back", icon=":material/arrow_back:", disabled=idx == 0,
+                  on_click=_view, args=(vkey, idx - 1, cur), help="Vorherige Frage ansehen")
+    top[1].button("Pause", key="v2_pause", icon=":material/pause:", on_click=close, help="Später weitermachen")
+    top[2].progress(min(cur, n) / n, text=f"Frage {min(idx + 1, n)} von {n} · "
                                           f"ca. {sessions.remaining_minutes(data, session):.0f} Min übrig")
     if idx >= n:
         _summary(cfg, module_id, session)
@@ -188,7 +199,7 @@ def render(cfg: dict) -> None:
                                           f"{mt['topic']} › {mt['title']}", qb.TYPE_LABELS.get(q["type"], ""))
                               if x))
         st.markdown(f"#### {q['question']}")
-        answered = "answer" in item
+        answered = "answer" in item or reviewing
         answer = _answer_input(q, key, item)
         _hints(module_id, session, idx, q, key, answered)
         if not answered:
@@ -207,6 +218,14 @@ def render(cfg: dict) -> None:
     if st.toggle("Passende Folien anzeigen", key=f"{key}_slides"):
         slides(data, q.get("slides") or mt.get("slides") or [], key)
     _feedback(cfg, module_id, session, idx, key)
+    if reviewing:
+        if "answer" in item:
+            _result(q, item)
+        if item.get("self"):
+            st.caption(f"Deine Einschätzung: {GRADE_STYLE.get(item['self'], item['self'])}")
+        st.button("Weiter" if idx + 1 < cur else "Zur aktuellen Frage", key=f"{key}_fwd", type="primary",
+                  icon=":material/arrow_forward:", width="stretch", on_click=_view, args=(vkey, idx + 1, cur))
+        return
     if "answer" in item:
         _result(q, item)
         _self_grade(cfg, module_id, session, idx, key)

@@ -108,9 +108,14 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   (`session_ui._feedback` → `sessions.question_feedback`): „Fehler“ lässt Claude die Frage gegen die Folien prüfen,
   korrigiert sie und wertet die Antwort neu (Freitext: nicht gewertet, `item.void`); gemeldete Fragen werden nicht
   wiederverwendet, Hinweise fließen in neue Fragen zum Minithema ein (`sessions.feedback_notes`).
-- Heute/Wochenplan: To-dos je Tag nach Kategorie gruppiert (`common.grouped`: Nacharbeiten, Check, Übungsblatt,
-  Wochentraining, Sonstiges) und nach Priorität 1–3 sortiert (`common.prio_button`, todos.json → `_prio`, tippen
-  schaltet 1 → 2 → 3 → keine). Stundenplan-Blöcke ohne Raum (nur beim Drüberfahren).
+- Heute/Wochenplan: To-dos mit Priorität stehen oben unter „Als Nächstes“ (1 zuerst, mit Aufgaben-Symbol), der Rest
+  darunter je Tag nach Kategorie (`common.grouped`: Nacharbeiten, Check, Übungsblatt, Wochentraining, Sonstiges;
+  `common.prio_button`, todos.json → `_prio`, tippen schaltet 1 → 2 → 3 → keine). Stundenplan kompakt (Container
+  `ttgrid`, eine Zeile „Modul Art / Zeit“, leere Zeitblöcke der Woche ausgeblendet, Raum nur beim Drüberfahren).
+- Falsch hochgeladene Vorlesung verschieben: Nacharbeiten-Reiter → „In andere Vorlesung verschieben“ (`utils/move.py`:
+  Dateien, Hinweise, Minithemen, Wissensstand, Fragen, Definitionen, Checks, Erledigt-Stand; Verweise alter Karten
+  im Quellmodul werden gelöst).
+- Check/Training: „Zurück“ zeigt frühere Fragen nur zum Lesen (`session_ui._view`), „Weiter“ führt zur aktuellen.
 
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als

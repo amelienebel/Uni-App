@@ -304,6 +304,17 @@ def test_check_session_end_to_end(monkeypatch):
         assert at.success, "Antwort sollte richtig sein"
         at.button(key=f"sg_mittel_v2_{session['id']}_{idx}").click()
         _run(at)
+        if idx == 1:  # Zurück: vorherige Frage ansehen (nur lesen), dann wieder zur aktuellen
+            at.button(key="v2_back").click()
+            _run(at)
+            assert any("Einschätzung: Mittel" in c.value for c in at.caption)
+            at.button(key="v2_back").click()
+            _run(at)
+            at.button(key=f"v2_{session['id']}_0_fwd").click()
+            _run(at)
+            at.button(key=f"v2_{session['id']}_1_fwd").click()
+            _run(at)
+            assert at.button(key=f"v2_{session['id']}_2_check")
     assert any("geschafft" in m.value for m in at.markdown)
     data = at.session_state["_module_invfin"]
     assert sessions.check_done(data, lec["id"])
@@ -479,9 +490,42 @@ def test_priority_and_grouping():
     common._cycle_prio("c")  # → 1
     assert common.prio_of("c") == 1
     groups = common.grouped(todos)
-    assert [g for g, _ in groups] == ["Nacharbeiten", "Übungsblatt", "Wochentraining", "Sonstiges"]
-    assert [t["key"] for t in groups[0][1]] == ["c", "d"]  # Priorität 1 vor früherer Frist
+    # Vorgenommenes (mit Priorität) steht oben, der Rest darunter nach Kategorie
+    assert [g for g, _ in groups] == ["Als Nächstes", "Nacharbeiten", "Übungsblatt", "Wochentraining", "Sonstiges"]
+    assert [t["key"] for t in groups[0][1]] == ["c"] and [t["key"] for t in groups[1][1]] == ["d"]
+    common._cycle_prio("a")
+    common._cycle_prio("a")  # → 2
+    assert [t["key"] for t in common.grouped(todos)[0][1]] == ["c", "a"]
+    for _ in range(2):
+        common._cycle_prio("a")
     for _ in range(3):
         common._cycle_prio("c")
     assert common.prio_of("c") is None
     del storage
+
+
+def test_move_lecture_to_other_module(monkeypatch):
+    """Falsch hochgeladene VL (I&F 4 statt VWL 4): Dateien, Minithemen, Definitionen und Erledigt wandern mit."""
+    from utils import ai, move, planner, storage, topics, units
+    from utils import definitions as defs
+    from utils.config import get_module
+
+    cfg, data, lec, lecs, _ = _setup()
+    monkeypatch.setattr(ai, "complete_json", _fake_topics)
+    topics.create_topics(cfg, "invfin", lec, lecs)
+    units.lecture_notes(data, lec["id"])["emphasized"] = "Kapitalwert"
+    storage.load_todos()[planner.lecture_key("invfin", lec["date"], "nachbereitet")] = True
+    vwl_lec = next(x for x in units.lectures(cfg, get_module(cfg, "vwl")) if not x["is_break"])
+    res = move.move_lecture("invfin", lec, "vwl", vwl_lec)
+    assert res["docs"] == 1 and res["minitopics"] == 3
+    vwl = storage.load_module("vwl")
+    assert not topics.lecture_topics(data, lec["id"]) and not [d for d in data["documents"] if d["id"] == "doc1"]
+    assert len(topics.minitopics(vwl, vwl_lec["id"])) == 3
+    assert next(d for d in vwl["documents"] if d["id"] == "doc1")["unit"] == vwl_lec["id"]
+    assert storage.get_document_pages(next(d for d in vwl["documents"] if d["id"] == "doc1"))
+    assert [d["term"] for d in defs.definitions(vwl)] == ["Kapitalwert"] and not defs.definitions(data)
+    assert units.lecture_notes(vwl, vwl_lec["id"])["emphasized"] == "Kapitalwert"
+    assert not data.get("archive_map")
+    state = storage.load_todos()
+    assert state.get(planner.lecture_key("vwl", vwl_lec["date"], "nachbereitet"))
+    assert not state.get(planner.lecture_key("invfin", lec["date"], "nachbereitet"))

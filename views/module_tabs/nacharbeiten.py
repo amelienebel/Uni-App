@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from utils import ai, mastery, planner, sessions, topics
+from utils import ai, mastery, move, planner, sessions, topics
 from utils.config import get_module, load_config
 from utils.storage import load_module, load_todos, now_iso, save_module, save_todos
 from utils.units import lecture_notes
@@ -200,6 +200,40 @@ def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
     from views.module_tabs.lecture_page import _board_images
 
     _board_images(get_module(cfg, module_id), module_id, lec, lecture_notes(data, lec["id"]))
+    if move.movable(data, lec):
+        _move_box(cfg, module_id, data, lec)
+
+
+def _move_box(cfg: dict, module_id: str, data: dict, lec: dict) -> None:
+    """Falsch hochgeladene Vorlesung (Dateien + Minithemen) in ein anderes Modul / eine andere VL verschieben."""
+    from utils.units import lectures
+
+    with st.popover("In andere Vorlesung verschieben", icon=":material/drive_file_move:"):
+        mods = cfg["modules"]
+        names = {m["id"]: m["name"] for m in mods}
+        target = st.selectbox("Modul", list(names), format_func=names.get, key=f"mvmod_{lec['id']}",
+                              index=list(names).index(module_id))
+        tlecs = [x for x in lectures(cfg, get_module(cfg, target)) if not x["is_break"]
+                 and (target, x["id"]) != (module_id, lec["id"])]
+        if not tlecs:
+            return
+        default = next((i for i, x in enumerate(tlecs) if x["nr"] == lec["nr"]), 0)
+        dst = st.selectbox("Vorlesung", tlecs, index=default, key=f"mvlec_{lec['id']}_{target}",
+                           format_func=lambda x: f"Vorlesung {x['nr']} · {x['date']:%d.%m.} · {x['topic']}")
+        docs = [d for d in data["documents"] if d.get("unit") == lec["id"]]
+        chosen = st.multiselect("Dateien", [d["id"] for d in docs], default=[d["id"] for d in docs],
+                                format_func=lambda i: next(d["filename"] for d in docs if d["id"] == i),
+                                key=f"mvdocs_{lec['id']}")
+        st.button("Verschieben", key=f"mvgo_{lec['id']}", type="primary", icon=":material/drive_file_move:",
+                  on_click=_do_move, args=(module_id, lec, target, dst, chosen))
+
+
+def _do_move(module_id: str, lec: dict, target: str, dst: dict, chosen: list[str]) -> None:
+    from views.common import open_unit
+
+    res = move.move_lecture(module_id, lec, target, dst, chosen)
+    _msg(target, "success", f"Verschoben: {res['docs']} Dateien, {res['minitopics']} Minithemen.")
+    open_unit(target, dst["id"])
 
 
 def _goto_tab(lec_id: str, tab: str) -> None:

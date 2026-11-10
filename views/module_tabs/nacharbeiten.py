@@ -1,8 +1,9 @@
-"""Neues Lernsystem auf der Vorlesungsseite: Reiter „Nacharbeiten“ und „Vorlesungs-Check“.
+"""Neues Lernsystem auf der Vorlesungsseite: Reiter „Upload“, „Nacharbeit“ und „Checks“.
 
-Nacharbeiten: 1 Folien sichten (Klick aufs Bild = nicht relevant; Wiederholungen und Orga-Folien vorgeschlagen) ·
-2 Alles genau lesen · 3 Hinweise zur Quiz-Erstellung (Umfang, Wichtig, Streichen, Sonstiger Hinweis) ·
-4 Themen & Minithemen (= Nacharbeiten abschließen).
+Upload: 1 Umfang & Hinweise (Von/Bis Folie, was genau gelesen wird, Wichtig, Streichen, Sonstiger Hinweis) ·
+2 Genau lesen (in kleinen Paketen) · 3 Themen & Minithemen (= Upload abgeschlossen).
+Nacharbeit: Tutor-Prompt zum Kopieren, Zusammenfassung aus dem Chat einfügen → Einstufung je Minithema.
+Checks: Check 1 (erste Hälfte der Minithemen) und Check 2 (zweite Hälfte, nach dem Übungsblatt).
 """
 
 from __future__ import annotations
@@ -78,7 +79,7 @@ def _hints_form(module_id: str, data: dict, lec: dict) -> None:
     notes = lecture_notes(data, lec["id"])
     docs = topics.slide_docs(data, lec)
     with st.form(f"qhints_{module_id}_{lec['id']}"):
-        ranges = {}
+        ranges, reads = {}, {}
         if docs:
             st.markdown("**Umfang** – von welcher bis zu welcher Folie?")
         for doc in docs:
@@ -90,6 +91,14 @@ def _hints_form(module_id: str, data: dict, lec: dict) -> None:
                                                  key=f"rng_from_{lec['id']}_{doc['id']}"),
                                  c2.number_input("Bis Folie", 1, max(1, n), min(last, max(1, n)), step=1,
                                                  key=f"rng_to_{lec['id']}_{doc['id']}"))
+            rs = topics.read_settings(notes, doc)
+            r1, r2 = st.columns([2, 3], vertical_alignment="bottom")
+            modes = list(topics.READ_MODES)
+            reads[doc["id"]] = (r1.selectbox("Genau lesen", modes, index=modes.index(rs["mode"]),
+                                             format_func=topics.READ_MODES.get, key=f"rdm_{lec['id']}_{doc['id']}"),
+                                r2.text_input("Nicht genau lesen (Folien)", topics.format_pages(rs["text_only"]),
+                                              placeholder="z. B. 1-40, 120-130",
+                                              key=f"rdx_{lec['id']}_{doc['id']}"))
         with st.container(border=True, key=f"hintbox_{lec['id'].replace(':', '_')}"):
             hint = st.text_area(":material/edit_note: **Sonstiger Hinweis**", notes["card_hint"], height=90,
                                 placeholder="z. B. Herleitung auf Folie 12 nicht relevant; Beispiel X lernen")
@@ -100,7 +109,10 @@ def _hints_form(module_id: str, data: dict, lec: dict) -> None:
         if st.form_submit_button("Speichern", type="primary", width="stretch"):
             scopes = notes.setdefault("scopes", {})
             for doc_id, (first, last) in ranges.items():
-                scopes[doc_id] = {"from": int(first), "to": int(max(first, last))}
+                mode, skip_text = reads[doc_id]
+                doc = next(d for d in docs if d["id"] == doc_id)
+                scopes[doc_id] = {**scopes.get(doc_id, {}), "from": int(first), "to": int(max(first, last)),
+                                  "read": mode, "text_only": topics.parse_pages(skip_text, topics.n_pages(doc))}
             notes.update({"scope": {"mode": "all"}, "card_hint": hint, "emphasized": important, "skip": skip,
                           "text": text, "updated_at": now_iso()})
             save_module(module_id)
@@ -142,24 +154,58 @@ def topic_tree(module_id: str, data: dict, lec: dict, editable: bool = True) -> 
                 st.caption(f"Seite(n) {', '.join(map(str, x['pages']))}: {x['reason']}")
 
 
-def _create(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
-    """Nacharbeiten abschließen: Folien im Umfang gründlich lesen, dann Themen und Minithemen erstellen."""
+def _read(cfg: dict, module_id: str, lec: dict) -> bool:
+    """Ausgewählte Folien genau lesen (Fortschrittsbalken; jedes Paket wird sofort gespeichert)."""
     unread = sum(len(p) for p in topics.unread_pages(load_module(module_id), lec).values())
-    if unread:
-        with st.spinner(f"Lese {unread} Folien gründlich (auch Grafiken, Tabellen und Formeln) …"):
-            try:
-                topics.read_all(cfg, module_id, lec)
-            except ai.AIError as exc:
-                _msg(module_id, "error", str(exc))
-                return
-    with st.spinner("Claude zerlegt die Vorlesung in Themen und Minithemen …"):
-        try:
-            n = topics.create_topics(cfg, module_id, lec, lecs)
-        except ai.AIError as exc:
-            _msg(module_id, "error", str(exc))
-            return
+    if not unread:
+        return True
+    bar = st.progress(0.0, text=f"Lese {unread} Folien genau …")
+    try:
+        topics.read_all(cfg, module_id, lec,
+                        progress=lambda done, total: bar.progress(done / total, text=f"Genau gelesen: {done} von "
+                                                                                    f"{total} Folien"))
+    except ai.AIError as exc:
+        _msg(module_id, "error", f"{exc} – bereits gelesene Folien sind gespeichert, „Weiter lesen“ macht dort "
+                                 "weiter.")
+        return False
+    return True
+
+
+def _create(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
+    """Upload abschließen: ausgewählte Folien genau lesen, dann Themen und Minithemen erstellen."""
+    if not _read(cfg, module_id, lec):
+        return
+    bar = st.progress(0.0, text="Claude zerlegt die Vorlesung in Themen und Minithemen …")
+    try:
+        n = topics.create_topics(cfg, module_id, lec, lecs, progress=lambda done, total: bar.progress(
+            done / total, text=f"Minithemen: Abschnitt {done} von {total}"))
+    except ai.AIError as exc:
+        _msg(module_id, "error", str(exc))
+        return
     set_done(module_id, lec, "nachbereitet")
-    _msg(module_id, "success", f"{n} Minithemen angelegt – Nacharbeiten erledigt. Weiter mit dem Vorlesungs-Check.")
+    from utils import nacharbeit
+
+    if nacharbeit.needs_mapping(load_module(module_id), lec["id"]):
+        try:
+            nacharbeit.map_summary(cfg, module_id, lec["id"])
+        except ai.AIError:
+            pass
+    _msg(module_id, "success", f"{n} Minithemen angelegt – Upload erledigt.")
+
+
+def _read_status(module_id: str, data: dict, lec: dict) -> None:
+    """Wie viele Folien genau gelesen werden (Auswahl im Formular) und wie viele davon schon gelesen sind."""
+    docs = topics.slide_docs(data, lec)
+    if not docs:
+        return
+    want = sum(len(topics.exact_candidates(data, lec, d)) for d in docs)
+    open_ = sum(len(p) for p in topics.unread_pages(data, lec).values())
+    st.caption(f"Genau lesen: {want - open_} von {want} Folien erledigt")
+    if open_ and want - open_:
+        if st.button(f"Weiter lesen ({open_} Folien)", key=f"readon_{lec['id']}", icon=":material/visibility:",
+                     disabled=not ai.is_available()):
+            _read(load_config(), module_id, lec)
+            st.rerun()
 
 
 def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
@@ -176,13 +222,14 @@ def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
         st.caption("Noch keine Folien hochgeladen (Reiter Dateien).")
     _hints_form(module_id, data, lec)
     _auto_skipped(module_id, data, lec)
+    _read_status(module_id, data, lec)
 
     st.markdown("#### 2 · Themen & Minithemen")
     if has_topics:
         topic_tree(module_id, data, lec)
         c1, c2 = st.columns(2)
-        c1.button("Zum Vorlesungs-Check", key=f"tocheck_{lec['id']}", type="primary", icon=":material/fact_check:",
-                  width="stretch", on_click=_goto_tab, args=(lec["id"], "check"))
+        c1.button("Weiter zur Nacharbeit", key=f"tonach_{lec['id']}", type="primary", icon=":material/forum:",
+                  width="stretch", on_click=_goto_tab, args=(lec["id"], "nacharbeit"))
         with c2.popover("Minithemen neu erstellen", icon=":material/refresh:", width="stretch"):
             st.caption("Gleichnamige Minithemen behalten ihren Wissensstand.")
             if st.button("Neu erstellen",
@@ -190,7 +237,7 @@ def render(cfg: dict, module_id: str, lec: dict, lecs: list[dict]) -> None:
                 _create(cfg, module_id, lec, lecs)
                 st.rerun()
     else:
-        if st.button("Nacharbeiten abschließen – Minithemen erstellen",
+        if st.button("Upload abschließen – Minithemen erstellen",
                      key=f"mktopics_{lec['id']}", type="primary", icon=":material/account_tree:", width="stretch",
                      disabled=not ai.is_available()):
             _create(cfg, module_id, lec, lecs)
@@ -255,10 +302,10 @@ def settings_inputs(key: str, with_n: bool = False) -> dict:
     return out
 
 
-def start_check(cfg: dict, module_id: str, lec: dict, settings: dict) -> None:
-    with st.spinner("Stelle deinen Vorlesungs-Check zusammen …"):
+def start_check(cfg: dict, module_id: str, lec: dict, settings: dict, part: int = 1) -> None:
+    with st.spinner(f"Stelle deinen Check {part} zusammen …"):
         try:
-            session = sessions.start_check(cfg, module_id, lec, settings)
+            session = sessions.start_check(cfg, module_id, lec, settings, part)
         except ai.AIError as exc:
             st.error(str(exc))
             return
@@ -267,13 +314,13 @@ def start_check(cfg: dict, module_id: str, lec: dict, settings: dict) -> None:
     st.rerun()
 
 
-def check_panel(cfg: dict, module_id: str, lec: dict, key: str) -> None:
-    """Start / Weitermachen / Ergebnis eines Vorlesungs-Checks (Vorlesungsseite und Check-Übersicht)."""
+def check_panel(cfg: dict, module_id: str, lec: dict, key: str, part: int = 1) -> None:
+    """Start / Weitermachen / Ergebnis von Check 1 bzw. 2 (Vorlesungsseite und Check-Übersicht)."""
     data = load_module(module_id)
     if not topics.minitopics(data, lec["id"]):
-        st.caption("Erst nacharbeiten – dann ist der Check frei.")
+        st.caption("Erst den Upload abschließen – dann sind die Checks frei.")
         return
-    run = sessions.running(data, "check", lec["id"])
+    run = sessions.running_check(data, lec["id"], part)
     if run:
         i = sessions.current_index(run)
         c1, c2 = st.columns(2)
@@ -285,31 +332,109 @@ def check_panel(cfg: dict, module_id: str, lec: dict, key: str) -> None:
         c2.button("Verwerfen", key=f"{key}_discard", width="stretch", on_click=sessions.discard,
                   args=(module_id, run["id"]))
         return
-    done = sessions.finished(data, "check", lec["id"])
+    done = [s for s in sessions.finished(data, "check", lec["id"]) if (s.get("part") or 1) == part]
     with st.container(border=True, key=f"checkstart_{key}"):
         settings = settings_inputs(key)
-        slots = sessions.plan_check(data, lec["id"], settings)
+        slots = sessions.plan_check(data, lec["id"], settings, part)
         new = sessions.new_questions_needed(data, slots, settings)
-        label = ("Check wiederholen" if done else "Check starten") + f" · {len(slots)} Fragen"
+        label = (f"Check {part} wiederholen" if done else f"Check {part} starten") + f" · {len(slots)} Fragen"
         if st.button(label, key=f"{key}_go", type="secondary" if done else "primary", icon=":material/play_arrow:",
-                     width="stretch", disabled=not ai.is_available() and new > 0):
-            start_check(cfg, module_id, lec, settings)
+                     width="stretch", disabled=not slots or (not ai.is_available() and new > 0)):
+            start_check(cfg, module_id, lec, settings, part)
     for s in done[-3:]:
         res = sessions.summary(s)
         st.caption(f"{s['label']} · {s['finished_at'][:10]} · {res['right']} richtig, {res['partial']} teilweise, "
                    f"{res['wrong']} falsch")
 
 
+def _part_header(data: dict, lec: dict, part: int, mts: list[dict]) -> None:
+    asked, total = mastery.coverage(data, mts)
+    done = sessions.check_done(data, lec["id"], part)
+    icon = ":material/check_circle:" if done else ":material/fact_check:"
+    st.markdown(f"#### {icon} Check {part} · {'erste' if part == 1 else 'zweite'} Hälfte · {total} Minithemen")
+    if total:
+        st.progress(asked / total, text=f"{asked} von {total} abgefragt")
+
+
 def check_tab(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
-    module = get_module(cfg, module_id)
-    st.markdown(f"#### :material/fact_check: {sessions.check_label(module, lec)}")
     if sessions.is_legacy(data, lec["id"]):
         st.caption("Diese Vorlesung lag vor dem neuen System – sie wird im Wochentraining abgefragt.")
-    check_panel(cfg, module_id, lec, key=f"ck_{lec['id']}")
+    if sessions.single_check(data, lec["id"]):
+        st.markdown("#### :material/check_circle: Check (ganze Vorlesung)")
+        check_panel(cfg, module_id, lec, key=f"ck_{lec['id']}", part=1)
+    else:
+        first, second = sessions.halves(data, lec["id"])
+        for part, mts in ((1, first), (2, second)):
+            if part == 2 and not mts and first:
+                continue
+            with st.container(border=True, key=f"ckpart_{part}_{lec['id'].replace(':', '_')}"):
+                _part_header(data, lec, part, mts)
+                if mts:
+                    st.markdown(progress.chips_html(data, mts), unsafe_allow_html=True)
+                check_panel(cfg, module_id, lec, key=f"ck{part}_{lec['id']}", part=part)
     mts = topics.minitopics(data, lec["id"])
     if mts:
-        asked, total = mastery.coverage(data, mts)
-        st.progress(asked / total if total else 0.0, text=f"Abdeckung: {asked} von {total} Minithemen abgefragt")
         progress.render_status(data, {lec["id"]})
         topic_tree(module_id, data, lec, editable=False)
+
+
+# ---------------------------------------------------------------------------
+# Reiter „Nacharbeit“ (externer Tutor-Chat)
+# ---------------------------------------------------------------------------
+
+def _save_summary(cfg: dict, module_id: str, lec: dict, text: str) -> None:
+    from utils import nacharbeit
+
+    nacharbeit.save(module_id, lec["id"], text)
+    if text.strip():
+        set_done(module_id, lec, "nacharbeit")
+    if text.strip() and ai.is_available() and topics.minitopics(load_module(module_id), lec["id"]):
+        with st.spinner("Ordne die Zusammenfassung den Minithemen zu …"):
+            try:
+                n = nacharbeit.map_summary(cfg, module_id, lec["id"])
+            except ai.AIError as exc:
+                _msg(module_id, "error", str(exc))
+                return
+        _msg(module_id, "success", f"Gespeichert – {n} Zuordnungen zu Minithemen.")
+
+
+def nacharbeit_tab(cfg: dict, module_id: str, lec: dict) -> None:
+    from utils import nacharbeit
+    from views.common import done_button
+
+    data = load_module(module_id)
+    if msg := st.session_state.pop(f"nmsg_{module_id}", None):
+        getattr(st, msg[0])(msg[1])
+    item = nacharbeit.entry(data, lec["id"])
+    done = bool(load_todos().get(planner.lecture_key(module_id, lec["date"], "nacharbeit")))
+    c1, c2 = st.columns(2, vertical_alignment="center")
+    with c1.popover("Prompt für den Tutor-Chat", icon=":material/content_copy:", width="stretch"):
+        st.code(nacharbeit.TUTOR_PROMPT, language=None, wrap_lines=True)
+    wkey = f"nach_done_{module_id}_{lec['id']}"
+    done_button(c2, "Nacharbeit erledigt", done, None, wkey, callback=set_done,
+                args=(module_id, lec, "nacharbeit", not done))
+    with st.form(f"nachform_{module_id}_{lec['id']}"):
+        text = st.text_area("Zusammenfassung aus dem Chat", item.get("text", ""), height=260,
+                            placeholder="SICHER:\n- [Folie 3–5] …\n\nWACKELIG:\n- …")
+        if st.form_submit_button("Speichern & auswerten", type="primary", icon=":material/save:", width="stretch"):
+            _save_summary(cfg, module_id, lec, text)
+            st.rerun()
+    if nacharbeit.has_summary(data, lec["id"]) and not topics.minitopics(data, lec["id"]):
+        st.caption("Wird den Minithemen zugeordnet, sobald der Upload abgeschlossen ist.")
+    groups = nacharbeit.rated(data, lec["id"])
+    if any(groups[r] for r in mastery.NACH_RATINGS):
+        for rating, label in mastery.NACH_RATINGS.items():
+            if not groups[rating]:
+                continue
+            color = mastery.NACH_COLORS[rating]
+            st.markdown(f"**{label}** <span class='small-muted'>{len(groups[rating])}</span>",
+                        unsafe_allow_html=True)
+            for mt in groups[rating]:
+                nach = mastery.peek(data, mt["id"]).get("nacharbeit") or {}
+                extra = f" – {nach['text']}" if nach.get("text") and rating != "sicher" else ""
+                st.markdown(f"<span class='mt-dot' style='background:{color}'></span>{mt['title']}"
+                            f"<span class='small-muted'>{extra}</span>", unsafe_allow_html=True)
+    if done or nacharbeit.has_summary(data, lec["id"]):
+        st.button("Weiter zu Check 1", key=f"tock1_{lec['id']}", type="primary", icon=":material/fact_check:",
+                  width="stretch", on_click=_goto_tab, args=(lec["id"], "check"))

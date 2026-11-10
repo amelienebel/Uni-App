@@ -118,8 +118,6 @@ def _general(cfg: dict) -> None:
     st.subheader("Lernparameter")
     learning = settings["learning"]
     if planner.LEARNING_V2:
-        _time_budget(cfg, learning)
-    if planner.LEARNING_V2:
         _deadlines_caption(cfg)
     else:
         _card_params(cfg, learning)
@@ -209,34 +207,8 @@ def _card_params(cfg: dict, learning: dict) -> None:
             st.success("Gespeichert.")
 
 
-def _time_budget(cfg: dict, learning: dict) -> None:
-    """Zeitbudget je Wochentag, Dauer je Schritt und Modul-Rangfolge für den Aufholplan."""
-    from utils import catchup
-
-    budget, durations, ranks = catchup.budget(), catchup.minutes(), catchup.ranks()
-    with st.form("budget_form"):
-        st.markdown("**Lernzeit pro Tag (Stunden)**")
-        cols = st.columns(7)
-        hours = [cols[d].number_input(WEEKDAYS[d][:2], 0.0, 16.0, budget[d] / 60, step=0.5, key=f"bud_{d}")
-                 for d in range(7)]
-        st.markdown("**Geschätzte Dauer (Minuten)**")
-        cols = st.columns(4)
-        mins = {step: cols[i].number_input(catchup.STEP_LABELS[step], 5, 600, durations[step], step=5,
-                                           key=f"dur_{step}") for i, step in enumerate(catchup.STEP_LABELS)}
-        st.markdown("**Rangfolge beim Aufholen** (1 = zuerst)")
-        cols = st.columns(len(cfg["modules"]))
-        new_ranks = {m["id"]: cols[i].selectbox(m["short"], [1, 2, 3], index=min(2, ranks.get(m["id"], 2)),
-                                                key=f"rank_{m['id']}") - 1 for i, m in enumerate(cfg["modules"])}
-        if st.form_submit_button("Speichern"):
-            learning["budget"] = {str(d): int(h * 60) for d, h in enumerate(hours)}
-            learning["task_minutes"] = {str(k): int(v) for k, v in mins.items()}
-            learning["module_rank"] = new_ranks
-            save_settings()
-            st.success("Gespeichert.")
-
-
 def _deadlines_caption(cfg: dict) -> None:
     days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    lines = [f"- **{m['short']}**: nacharbeiten {days[m['deadlines']['review_weekday']]} · Übungsblatt "
+    lines = [f"- **{m['short']}**: Upload, Nacharbeit, Check 1 {days[m['deadlines']['review_weekday']]} · Übungsblatt "
              f"{days[m['deadlines']['exercise_weekday']]}" for m in cfg["modules"] if m.get("deadlines")]
     st.caption("Feste Fristen (in config.json → deadlines):\n" + "\n".join(lines))

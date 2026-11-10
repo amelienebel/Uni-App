@@ -1,12 +1,11 @@
-"""Vorlesungs-Check und Wochentraining: Fragen auswählen, Session anlegen, Antworten auswerten, Wissensstand buchen.
+"""Checks und Wochentraining: Fragen auswählen, Session anlegen, Antworten auswerten, Wissensstand buchen.
 
-Vorlesungs-Check (pro Vorlesung, nach dem Nacharbeiten): genau CHECK_SIZE Fragen, höchstens ~CHECK_MINUTES Minuten,
-so viele verschiedene Minithemen wie möglich; nicht abgefragte bleiben offen und haben im nächsten Wochentraining
-Vorrang.
-Wochentraining (pro Modul, fortlaufend nummeriert): 5/10/15 Fragen über alle bisherigen Vorlesungen.
-Reihenfolge der Auswahl: offene Minithemen aus Checks → „lief schlecht“ in Übungen → fällig (Spaced Repetition) →
-noch nie gefragt aus Vorlesungen vor dem neuen System (alte Karten nur als Hinweis: schwach zuerst) → Rest
-(wichtig und unsicher zuerst).
+Ablauf je Vorlesung: 1 Upload · 2 Nacharbeit (Tutor-Chat) · 3 Check 1 · 4 Übungsblatt · 5 Check 2 · 6 Wochentraining.
+Check 1 fragt die erste Hälfte der Minithemen ab, Check 2 die zweite (Hälfte an einer Themengrenze). Jedes Minithema
+der Hälfte kommt dran (darum auch mal mehr als 15 Fragen); was beim Nacharbeiten oder in der Übung gehakt hat,
+bekommt eine zweite Frage; bei wenig Minithemen wird bis 15 aufgefüllt (höchstens 3 Fragen je Minithema).
+Wochentraining (pro Modul, fortlaufend nummeriert): 5/10/15 Fragen, Schwerpunkt auf Problemen aus den Checks, dann
+Übung und Nacharbeit; etwa ein Viertel bleibt für die Wiederholung älterer Themen (fällig laut Spaced Repetition).
 """
 
 from __future__ import annotations
@@ -43,8 +42,8 @@ def lec_names(lecs: list[dict]) -> dict[str, str]:
     return {lec["id"]: f"Vorlesung {lec['nr']}: {lec['topic']}" for lec in lecs}
 
 
-def check_label(module: dict, lec: dict) -> str:
-    return f"Vorlesung {lec['nr']} {module['short']} Check"
+def check_label(module: dict, lec: dict, part: int = 1) -> str:
+    return f"Vorlesung {lec['nr']} {module['short']} Check {part}"
 
 
 def is_legacy(data: dict, lec_id: str) -> bool:
@@ -65,8 +64,64 @@ def running(data: dict, kind: str | None = None, lec_id: str | None = None) -> d
     return next((s for s in reversed(sessions_of(data, kind, lec_id)) if not s.get("finished_at")), None)
 
 
-def check_done(data: dict, lec_id: str) -> bool:
-    return bool(finished(data, "check", lec_id))
+def _part(session: dict) -> int | None:
+    """1 / 2; None = Check aus der Zeit vor der Aufteilung (fragte die ganze Vorlesung ab)."""
+    return session.get("part")
+
+
+def single_check(data: dict, lec_id: str) -> bool:
+    """Vorlesung hatte schon einen Check über alle Minithemen (vor der Aufteilung) → kein Check 2."""
+    return any(_part(s) is None for s in finished(data, "check", lec_id))
+
+
+def check_done(data: dict, lec_id: str, part: int = 1) -> bool:
+    return any(_part(s) in (part, None) for s in finished(data, "check", lec_id))
+
+
+def running_check(data: dict, lec_id: str, part: int | None = None) -> dict | None:
+    return next((s for s in reversed(sessions_of(data, "check", lec_id)) if not s.get("finished_at")
+                 and (part is None or (_part(s) or 1) == part)), None)
+
+
+def halves(data: dict, lec_id: str) -> tuple[list[dict], list[dict]]:
+    """Minithemen einer Vorlesung in zwei Hälften (Folienreihenfolge, Schnitt an einer Themengrenze nahe der Mitte).
+    Ist Check 1 schon gelaufen, bleibt seine Hälfte fest; alles andere (auch neue Minithemen) gehört zu Check 2."""
+    mts = topics.minitopics(data, lec_id)
+    fixed = next((s.get("part_ids") for s in finished(data, "check", lec_id) if _part(s) == 1 and s.get("part_ids")),
+                 None)
+    if fixed:
+        ids = set(fixed)
+        return [m for m in mts if m["id"] in ids], [m for m in mts if m["id"] not in ids]
+    n = len(mts)
+    if n <= 1:
+        return mts, []
+    bounds, prev = [], None
+    for i, m in enumerate(mts):
+        if prev is not None and m["topic_id"] != prev:
+            bounds.append(i)
+        prev = m["topic_id"]
+    cut = (n + 1) // 2
+    near = [b for b in bounds if abs(b - n / 2) <= max(1, n * 0.15)]
+    if near:
+        cut = min(near, key=lambda b: (abs(b - n / 2), b))
+    return mts[:cut], mts[cut:]
+
+
+def part_minitopics(data: dict, lec_id: str, part: int) -> list[dict]:
+    first, second = halves(data, lec_id)
+    return first if part == 1 else second
+
+
+def checked_ids(data: dict) -> set[str]:
+    """Minithemen, deren Check schon gelaufen ist."""
+    out: set[str] = set()
+    for s in finished(data, "check"):
+        lec_id = s.get("lecture_id")
+        if _part(s) is None:
+            out |= {m["id"] for m in topics.minitopics(data, lec_id)}
+        else:
+            out |= {m["id"] for m in part_minitopics(data, lec_id, _part(s))}
+    return out
 
 
 def next_training_number(data: dict) -> int:
@@ -94,29 +149,36 @@ def _next_level(level: str, mt: dict) -> str:
     return mastery.LEVELS[min(top, mastery.LEVELS.index(level) + 1)]
 
 
-def plan_check(data: dict, lec_id: str, settings: dict) -> list[dict]:
-    """Genau 15 Plätze (weniger nur, wenn es kaum Stoff gibt), höchstens ~30 Minuten."""
-    mts = _ordered(topics.minitopics(data, lec_id))
+def plan_check(data: dict, lec_id: str, settings: dict, part: int = 1) -> list[dict]:
+    """Jedes Minithema der Hälfte mindestens einmal; was beim Nacharbeiten oder in der Übung gehakt hat, bekommt eine
+    zweite Frage eine Stufe höher; bei wenig Minithemen bis 15 auffüllen (höchstens 3 Fragen je Minithema)."""
+    mts = part_minitopics(data, lec_id, part)
     if not mts:
         return []
-    slots = [{"mt": m, "level": mastery.current_level(data, m)} for m in mts[:CHECK_SIZE]]
-    # Schon im ersten Check ein paar Freitext-Fragen zu wichtigen Erklär-Themen
+    weak = [m for m in mts if mastery.has_open_nacharbeit(data, m) or mastery.has_open_flag(data, m)]
+    slots = [{"mt": m, "level": mastery.current_level(data, m)} for m in mts]
+    # Schon im ersten Check ein paar Freitext-Fragen zu wichtigen Erklär-Themen (nicht, wo es gehakt hat)
     free = 0
+    weak_ids = {m["id"] for m in weak}
     for slot in slots:
         mt = slot["mt"]
         if free >= MAX_FREITEXT_FIRST_CHECK:
             break
-        if mt.get("importance") == "hoch" and mastery.top_level(mt) == "freitext" and mt.get("kind") != "definition":
+        if mt.get("importance") == "hoch" and mastery.top_level(mt) == "freitext" and mt.get("kind") != "definition" \
+                and mt["id"] not in weak_ids:
             slot["level"] = "freitext"
             free += 1
-    # Wenig Minithemen: zweite (dritte) Frage auf der nächsten Stufe, wichtige und Anwendungen zuerst
+    for mt in weak:
+        slots.append({"mt": mt, "level": _next_level(mastery.current_level(data, mt), mt)})
+    # Wenig Minithemen: weitere Fragen auf der nächsten Stufe, wichtige und Anwendungen zuerst
+    target = min(CHECK_SIZE, 3 * len(mts))
     rounds = 0
-    while len(slots) < CHECK_SIZE and rounds < CHECK_SIZE:
+    while len(slots) < target and rounds < 3:
         rounds += 1
         extra = sorted(mts, key=lambda m: (_IMPORTANCE_RANK.get(m.get("importance"), 1),
                                            m.get("kind") != "anwendung"))
         for mt in extra:
-            if len(slots) >= CHECK_SIZE:
+            if len(slots) >= target:
                 break
             used = [s["level"] for s in slots if s["mt"]["id"] == mt["id"]]
             if len(used) > rounds:
@@ -125,46 +187,64 @@ def plan_check(data: dict, lec_id: str, settings: dict) -> list[dict]:
             slots.append({"mt": mt, "level": level})
     for slot in slots:
         slot["type"] = qb.question_type(slot["mt"], slot["level"], settings)
-    # Zeitrahmen: Freitext zur Not auf Multiple Choice zurückstufen
+    # Zeitrahmen (~30 Minuten je 15 Fragen): Freitext zur Not auf Multiple Choice zurückstufen
+    limit = CHECK_MINUTES * max(1.0, len(slots) / CHECK_SIZE)
     for slot in reversed(slots):
-        if sum(qb.MINUTES[s["type"]] for s in slots) <= CHECK_MINUTES:
+        if sum(qb.MINUTES[s["type"]] for s in slots) <= limit:
             break
         if slot["type"] == "freitext":
             slot["level"], slot["type"] = "mc", qb.question_type(slot["mt"], "mc", settings)
-    return slots[:CHECK_SIZE]
+    return slots
 
 
 def open_from_checks(data: dict) -> list[dict]:
-    """Minithemen aus Vorlesungen mit abgeschlossenem Check, die noch nie abgefragt wurden (Pflicht im Training)."""
-    checked = {s["lecture_id"] for s in finished(data, "check")}
-    return [m for m in topics.minitopics(data) if m["lecture_id"] in checked and not mastery.covered(data, m)]
+    """Minithemen, deren Check schon gelaufen ist, die aber noch nie abgefragt wurden (Pflicht im Training)."""
+    done = checked_ids(data)
+    return [m for m in topics.minitopics(data) if m["id"] in done and not mastery.covered(data, m)]
+
+
+def training_focus(data: dict, mts: list[dict]) -> dict[str, list[dict]]:
+    """Schwerpunkte fürs Wochentraining: Probleme aus Checks, Übung, Nacharbeit, offen aus Checks."""
+    done = checked_ids(data)
+    return {"checks": [m for m in mts if mastery.is_problem(data, m, "check")],
+            "training": [m for m in mts if mastery.is_problem(data, m)],
+            "uebung": [m for m in mts if mastery.has_open_flag(data, m)],
+            "nacharbeit": [m for m in mts if mastery.has_open_nacharbeit(data, m) and m["id"] in done],
+            "offen": [m for m in mts if m["id"] in done and not mastery.covered(data, m)]}
 
 
 def plan_training(data: dict, held: list[dict], n: int, settings: dict, day: date | None = None) -> list[dict]:
     day = day or today()
     order = {lec["id"]: i for i, lec in enumerate(held)}
     mts = [m for m in topics.minitopics(data) if m["lecture_id"] in order]
-    checked = {s["lecture_id"] for s in finished(data, "check")}
+    done = checked_ids(data)
+    focus = training_focus(data, mts)
+    reserve = n // 4 if n >= 5 else 0  # Wiederholung älterer Themen
     chosen: list[dict] = []
     ids: set[str] = set()
 
-    def take(items: list[dict]) -> None:
+    def take(items: list[dict], limit: int) -> None:
         for m in items:
-            if len(chosen) >= n:
+            if len(chosen) >= limit:
                 return
             if m["id"] not in ids:
                 ids.add(m["id"])
                 chosen.append(m)
 
-    by_lecture = lambda m: (order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))  # noqa: E731
-    take(sorted([m for m in mts if m["lecture_id"] in checked and not mastery.covered(data, m)], key=by_lecture))
-    take(sorted([m for m in mts if mastery.has_open_flag(data, m)], key=by_lecture))
+    newest = lambda m: (-order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))  # noqa: E731
+    for key in ("checks", "uebung", "nacharbeit", "offen", "training"):
+        take(sorted(focus[key], key=newest), n - reserve)
     take(sorted(mastery.next_due(data, mts, day),
-                key=lambda m: (mastery.retrievability(mastery.peek(data, m["id"]), day) or 0.0)))
-    legacy_new = [m for m in mts if m["lecture_id"] not in checked and not mastery.covered(data, m)]
+                key=lambda m: (mastery.retrievability(mastery.peek(data, m["id"]), day) or 0.0)), n)
+    legacy_new = [m for m in mts if m["id"] not in done and not mastery.covered(data, m)
+                  and is_legacy(data, m["lecture_id"])]
     take(sorted(legacy_new, key=lambda m: (_HINT_RANK.get((mastery.archive_hint(data, m["id"]) or {}).get("label")),
-                                           order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))))
-    take(sorted(mts, key=lambda m: (_IMPORTANCE_RANK.get(m.get("importance"), 1), mastery.score(data, m, day))))
+                                           order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))), n)
+    asked = [m for m in mts if mastery.covered(data, m)]
+    take(sorted(asked, key=lambda m: (mastery.score(data, m, day), order[m["lecture_id"]])), n)
+    for key in ("checks", "uebung", "nacharbeit", "offen", "training"):
+        take(sorted(focus[key], key=newest), n)
+    take(sorted(mts, key=lambda m: (_IMPORTANCE_RANK.get(m.get("importance"), 1), mastery.score(data, m, day))), n)
     # nicht mehr als zwei Fragen derselben Vorlesung hintereinander
     result: list[dict] = []
     pool = list(chosen)
@@ -198,7 +278,7 @@ def new_questions_needed(data: dict, slots: list[dict], settings: dict) -> int:
 
 
 def build(cfg: dict, module_id: str, kind: str, slots: list[dict], settings: dict, label: str,
-          lecture_id: str | None = None) -> dict:
+          lecture_id: str | None = None, part: int | None = None) -> dict:
     """Legt eine Session an (Fragen aus dem Speicher oder neu erzeugt). Wirft ai.AIError."""
     data = load_module(module_id)
     lecs = lectures(cfg, module_id, data)
@@ -239,29 +319,38 @@ def build(cfg: dict, module_id: str, kind: str, slots: list[dict], settings: dic
     session = {"id": new_id(), "kind": kind, "lecture_id": lecture_id, "label": label, "no": session_no,
                "number": next_training_number(data) if kind == "training" else None,
                "settings": settings, "started_at": now_iso(), "finished_at": None, "items": items}
+    if part:
+        session["part"] = part
+        session["part_ids"] = sorted({slot["mt"]["id"] for slot in slots})
     data.setdefault("sessions", []).append(session)
     data["session_counter"] = session_no
     save_module(module_id)
     return session
 
 
-def start_check(cfg: dict, module_id: str, lec: dict, settings: dict) -> dict:
+def start_check(cfg: dict, module_id: str, lec: dict, settings: dict, part: int = 1) -> dict:
     data = load_module(module_id)
     if not topics.minitopics(data, lec["id"]):
-        raise ai.AIError("Für diese Vorlesung gibt es noch keine Minithemen – erst nacharbeiten.")
+        raise ai.AIError("Für diese Vorlesung gibt es noch keine Minithemen – erst den Upload abschließen.")
+    ensure_feedback_mapped(cfg, module_id)
+    ensure_nacharbeit_mapped(cfg, module_id)
+    data = load_module(module_id)
+    slots = plan_check(data, lec["id"], settings, part)
+    if not slots:
+        raise ai.AIError("Für diese Hälfte gibt es keine Minithemen.")
     module = get_module(cfg, module_id)
-    return build(cfg, module_id, "check", plan_check(data, lec["id"], settings), settings,
-                 check_label(module, lec), lec["id"])
+    return build(cfg, module_id, "check", slots, settings, check_label(module, lec, part), lec["id"], part)
 
 
 def start_training(cfg: dict, module_id: str, n: int, settings: dict) -> dict:
     data = load_module(module_id)
     held = held_lectures(cfg, module_id, data)
     ensure_feedback_mapped(cfg, module_id)
+    ensure_nacharbeit_mapped(cfg, module_id)
     data = load_module(module_id)
     slots = plan_training(data, held, n, settings)
     if not slots:
-        raise ai.AIError("Noch keine Minithemen für die bisherigen Vorlesungen – erst nacharbeiten oder die "
+        raise ai.AIError("Noch keine Minithemen für die bisherigen Vorlesungen – erst den Upload abschließen oder die "
                          "Minithemen der früheren Vorlesungen anlegen.")
     module = get_module(cfg, module_id)
     return build(cfg, module_id, "training", slots, {**settings, "n": n},
@@ -302,8 +391,7 @@ def submit(cfg: dict, module_id: str, session: dict, idx: int, answer) -> dict:
     elif q["type"] == "zahl":
         item.update({"answer": answer, "correct": qb.check_number(q, answer)})
     else:
-        weak = "; ".join(f["text"] for f in mastery.peek(data, item["minitopic_id"]).get("exercise_flags", [])
-                         if f["kind"] == "schlecht")
+        weak = "; ".join(mastery.weak_notes(data, {"id": item["minitopic_id"]}))
         correct, grading = qb.grade_text(q, answer, weak)
         item.update({"answer": answer, "correct": correct, "grading": grading})
     item["answered_at"] = now_iso()
@@ -346,7 +434,7 @@ def _mark_todos(cfg: dict, module_id: str, session: dict) -> None:
     if session["kind"] == "check" and session.get("lecture_id"):
         lec = next((x for x in lectures(cfg, module_id) if x["id"] == session["lecture_id"]), None)
         if lec:
-            state[planner.lecture_key(module_id, lec["date"], "check")] = True
+            state[planner.lecture_key(module_id, lec["date"], "check2" if session.get("part") == 2 else "check")] = True
     else:
         windows = planner.training_windows(cfg, module, get_schedule(cfg), lecture_breaks(cfg))
         now = today()
@@ -506,3 +594,10 @@ def feedback_notes(data: dict, mt_id: str) -> list[str]:
     return [f"{f['kind']}: {f['text']}" + (f" (bestätigt: {f.get('reply', '')})" if f.get("confirmed") else "")
             for q in data.get("questions", []) if q["minitopic_id"] == mt_id for f in q.get("feedback", [])
             if f.get("text") or f.get("confirmed")][-4:]
+
+
+def ensure_nacharbeit_mapped(cfg: dict, module_id: str) -> None:
+    """Zusammenfassungen aus der Nacharbeit, die noch keinen Minithemen zugeordnet sind, jetzt zuordnen."""
+    from utils import nacharbeit
+
+    nacharbeit.ensure_mapped(cfg, module_id)

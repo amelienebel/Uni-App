@@ -43,6 +43,10 @@ class AIError(Exception):
     """Verständliche Fehlermeldung für die Oberfläche."""
 
 
+class TruncatedError(AIError):
+    """Antwort an der Längengrenze abgeschnitten – Aufrufer können die Anfrage in kleinere Teile zerlegen."""
+
+
 def api_key() -> str | None:
     return get_secret("ANTHROPIC_API_KEY")
 
@@ -193,7 +197,8 @@ def complete_json(prompt: str | list, schema: dict, system: str = BASE_SYSTEM,
         raise _translate_error(exc) from exc
     _check_stop(message)
     if message.stop_reason == "max_tokens":
-        raise AIError("Die Antwort war zu lang und wurde abgeschnitten. Bitte weniger Inhalte auf einmal auswählen.")
+        raise TruncatedError("Die Antwort war zu lang und wurde abgeschnitten. Bitte weniger Inhalte auf einmal "
+                             "auswählen.")
     try:
         return json.loads(_text_of(message))
     except json.JSONDecodeError as exc:

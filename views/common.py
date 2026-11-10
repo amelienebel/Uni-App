@@ -16,7 +16,7 @@ _V2 = planner.LEARNING_V2
 PAGES = {
     "today": ":material/today: Heute",
     "week": ":material/calendar_month: Wochenübersicht",
-    "cards": ":material/fact_check: Vorlesungs-Check" if _V2 else ":material/style: Karteikarten",
+    "cards": ":material/fact_check: Checks" if _V2 else ":material/style: Karteikarten",
     "quiz": ":material/fitness_center: Wochentraining" if _V2 else ":material/quiz: Quiz",
     "examplan": ":material/event_note: Klausur-Lernplan",
     "bulk": ":material/cloud_upload: Bulk-Upload",
@@ -30,13 +30,14 @@ MODULE_TABS = [":material/view_timeline: Ablauf",
                ":material/library_books: Definitionen", ":material/folder_open: Dateien",
                ":material/sticky_note_2: Notizen"]
 LECTURE_TAB = {"files": ":material/folder_open: Dateien", "vorbereitet": ":material/menu_book: Vorbereiten",
-               "nachbereitet": ":material/edit_note: " + ("Nacharbeiten" if _V2 else "Nachbereiten"),
-               "check": ":material/fact_check: Vorlesungs-Check", "learn": ":material/style: Lernen"}
+               "nachbereitet": ":material/upload_file: Upload" if _V2 else ":material/edit_note: Nachbereiten",
+               "nacharbeit": ":material/forum: Nacharbeit", "check": ":material/fact_check: Checks",
+               "learn": ":material/style: Lernen"}
 
 
 def lecture_tabs() -> list[str]:
     hidden = {"vorbereitet"} if not planner.PREP_ENABLED else set()
-    hidden.add("learn" if planner.LEARNING_V2 else "check")
+    hidden |= {"learn"} if planner.LEARNING_V2 else {"check", "nacharbeit"}
     return [t for k, t in LECTURE_TAB.items() if k not in hidden]
 
 
@@ -48,6 +49,10 @@ def open_training(module_id: str) -> None:
 
 # Aufgabenarten: Symbol, Farbe und kurzer Name (Etikett in Heute, Wochenplan und Aufholplan)
 KIND_STYLE = {
+    "Upload": ("upload_file", "blue", "Upload"),
+    "Nacharbeit": ("forum", "yellow", "Nacharbeit"),
+    "Check 1": ("fact_check", "violet", "Check 1"),
+    "Check 2": ("fact_check", "violet", "Check 2"),
     "Nacharbeiten": ("edit_note", "blue", "Nacharbeiten"),
     "Nachbereitung": ("edit_note", "blue", "Nachbereiten"),
     "Vorbereitung": ("menu_book", "blue", "Vorbereiten"),
@@ -59,7 +64,7 @@ KIND_STYLE = {
     "Eigenes": ("person", "gray", "Eigenes"),
     "Wiederholung": ("style", "gray", "Karten"),
 }
-STEP_KIND = {1: "Nacharbeiten", 2: "Vorlesungs-Check", 3: "Übungsblatt", 4: "Wochentraining"}
+STEP_KIND = {1: "Upload", 2: "Nacharbeit", 3: "Check 1", 4: "Übungsblatt", 5: "Check 2", 6: "Wochentraining"}
 
 
 def kind_badge(kind: str) -> str:
@@ -72,8 +77,9 @@ def kind_icon(kind: str) -> str:
 
 
 # Gruppen an einem Tag (Reihenfolge) und Priorität 1–3 je Aufgabe (todos.json → _prio)
-GROUPS = [("Nacharbeiten", ("Nacharbeiten", "Nachbereitung", "Vorbereitung")), ("Vorlesungs-Check", ("Vorlesungs-Check",)),
-          ("Übungsblatt", ("Übungsblatt",)), ("Wochentraining", ("Wochentraining",))]
+GROUPS = [("Upload", ("Upload", "Nacharbeiten", "Nachbereitung", "Vorbereitung")), ("Nacharbeit", ("Nacharbeit",)),
+          ("Check 1", ("Check 1", "Vorlesungs-Check")), ("Übungsblatt", ("Übungsblatt",)), ("Check 2", ("Check 2",)),
+          ("Wochentraining", ("Wochentraining",))]
 
 
 def group_of(t: dict) -> int:
@@ -316,7 +322,8 @@ def open_todo(todo: dict) -> None:
         return
     if len(parts) >= 4 and parts[1] == "vl":
         unit_id = f"vl:{parts[2]}"
-        st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TAB.get(parts[3], LECTURE_TAB["nachbereitet"])
+        tab = {"check2": "check"}.get(parts[3], parts[3])
+        st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TAB.get(tab, LECTURE_TAB["nachbereitet"])
     elif len(parts) >= 4 and parts[1] == "ex":
         unit_id = f"ex:{parts[2]}:{parts[3]}"
     elif todo.get("kind") in ("Wiederholung", "Klausurvorbereitung"):

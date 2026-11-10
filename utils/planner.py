@@ -78,7 +78,7 @@ PREP_DAYS_BEFORE = 1      # Vorlesung vorbereiten: 1 Tag vorher
 # „Vorbereiten“ vorerst abgeschaltet (Reiter, To-dos, Häkchen, Zusammenfassung beim Upload). Der Code bleibt
 # vollständig erhalten – True setzt alles wieder in Gang (Ablauf siehe CLAUDE.md → „Vorbereiten (abgeschaltet)“).
 PREP_ENABLED = False
-# Neues Lernsystem: Nacharbeiten → Vorlesungs-Check → Übungsblatt → Wochentraining (statt Karteikarten/Quiz).
+# Neues Lernsystem: Upload → Nacharbeit → Check 1 → Übungsblatt → Check 2 → Wochentraining (statt Karteikarten/Quiz).
 # False stellt das alte Karteikartensystem mit allen Lernständen wieder her (die Karten bleiben immer erhalten).
 LEARNING_V2 = True
 REVIEW_DAYS_AFTER = 2     # Vorlesung nachbereiten: 2 Tage danach
@@ -313,26 +313,15 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
         module_id = module["id"]
         if module_id not in planned:
             continue
-        legacy = set(modules_data[module_id].get("legacy_lectures", []))
         for nr, lec in enumerate(lectures_of(module), start=1):
             if break_for(lec["date"], breaks):
                 continue
             # Maßgeblich ist die Frist: z. B. Montagsvorlesung → Vorbereitung am Sonntag der Vorwoche
             label = f"{lec['date']:%d.%m.}: {lec['topic']}"
             if LEARNING_V2:
-                due = review_due(module, lec["date"])
-                if not monday <= due <= sunday:
-                    continue
-                add({"key": lecture_key(module_id, lec["date"], "nachbereitet"), "module_id": module_id,
-                     "chapter_id": lec.get("chapter_id"), "status_field": None, "sync": "nachbereitet", "step": 1,
-                     "kind": "Nacharbeiten", "due": due, "short": f"Vorlesung {nr}: {lec['topic']}",
-                     "chip": f"VL {nr} nacharbeiten",
-                     "title": f"Vorlesung {nr} nacharbeiten (Folien hochladen, kommentieren, genau lesen) – {label}"})
-                if f"vl:{lec['date'].isoformat()}" not in legacy:
-                    add({"key": lecture_key(module_id, lec["date"], "check"), "module_id": module_id,
-                         "chapter_id": lec.get("chapter_id"), "status_field": None, "step": 2,
-                         "kind": "Vorlesungs-Check", "due": due, "title": f"Vorlesung {nr} {module['short']} Check",
-                         "short": f"Vorlesung {nr} {module['short']} Check", "chip": f"VL {nr} Check"})
+                for todo in lecture_steps_todos(cfg, module, modules_data[module_id], lec, nr, schedule, breaks):
+                    if monday <= todo["due"] <= sunday:
+                        add(todo)
                 continue
             for field, kind, verb, due in (("vorbereitet", "Vorbereitung", "vorbereiten", prep_due(module, lec["date"])),
                                            ("nachbereitet", "Nachbereitung", "nachbereiten",
@@ -346,7 +335,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             if not (monday <= due <= sunday):
                 continue
             add({"key": exercise_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),
-                 "status_field": None, "sync": "uebung", "kind": "Übungsblatt", "step": 3,
+                 "status_field": None, "sync": "uebung", "kind": "Übungsblatt", "step": 4,
                  "title": f"Übungsblatt lösen – {ex['title']}", "due": due, "short": ex["title"],
                  "chip": _sheet_chip(ex["title"])})
         if LEARNING_V2:
@@ -354,7 +343,7 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             for w in training_windows(cfg, module, schedule, breaks):
                 if monday <= w["due"] <= sunday and (since is None or w["due"] >= since):
                     add({"key": w["key"], "module_id": module_id, "chapter_id": None, "status_field": None,
-                         "kind": "Wochentraining", "step": 4, "due": w["due"], "start": w["start"],
+                         "kind": "Wochentraining", "step": 6, "due": w["due"], "start": w["start"],
                          "title": f"Wochentraining {module['short']} (inkl. Übungen und früherer Vorlesungen)",
                          "short": "Wochentraining (inkl. Übungen und früherer Vorlesungen)", "chip": "Wochentraining"})
 
@@ -389,6 +378,57 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
             })
 
     todos.sort(key=lambda t: (t["due"], t["module_id"], t.get("step", 9)))
+    return todos
+
+
+def lecture_exercise(module: dict, lec: dict) -> dict | None:
+    """Übungsblatt zur Vorlesung (gleiches Kapitel; bei mehreren das letzte)."""
+    related = [ex for ex in exercises_of(module) if ex.get("chapter_id") and ex["chapter_id"] == lec.get("chapter_id")]
+    return related[-1] if related else None
+
+
+def check2_due(module: dict, lec: dict, schedule: list[dict], breaks=()) -> date:
+    """Check 2 nach dem Übungsblatt der Vorlesung (Tag nach der Blatt-Frist), ohne Blatt eine Woche nach dem Upload."""
+    ex = lecture_exercise(module, lec)
+    if ex is None:
+        return review_due(module, lec["date"]) + timedelta(days=7)
+    return max(exercise_due(module, ex, schedule, breaks) + timedelta(days=1), review_due(module, lec["date"]))
+
+
+def single_check(module_data: dict, lec: dict) -> bool:
+    """Vorlesung hatte schon einen Check über alle Minithemen (vor der Aufteilung in Check 1 und 2)."""
+    lec_id = f"vl:{lec['date'].isoformat()}"
+    return any(s.get("kind") == "check" and s.get("lecture_id") == lec_id and s.get("finished_at")
+               and not s.get("part") for s in module_data.get("sessions", []))
+
+
+def lecture_steps_todos(cfg: dict, module: dict, module_data: dict, lec: dict, nr: int, schedule: list[dict],
+                        breaks=()) -> list[dict]:
+    """To-dos einer Vorlesung in fester Reihenfolge: 1 Upload · 2 Nacharbeit · 3 Check 1 · 5 Check 2
+    (4 Übungsblatt und 6 Wochentraining kommen je Blatt bzw. Woche dazu)."""
+    module_id = module["id"]
+    due = review_due(module, lec["date"])
+    label = f"{lec['date']:%d.%m.}: {lec['topic']}"
+    base = {"module_id": module_id, "chapter_id": lec.get("chapter_id"), "status_field": None}
+    short = f"Vorlesung {nr}: {lec['topic']}"
+    todos = [{**base, "key": lecture_key(module_id, lec["date"], "nachbereitet"), "sync": "nachbereitet", "step": 1,
+              "kind": "Upload", "due": due, "short": short, "chip": f"VL {nr} Upload",
+              "title": f"Vorlesung {nr} hochladen (Folien, Umfang & Hinweise, genau lesen, Minithemen) – {label}"}]
+    if f"vl:{lec['date'].isoformat()}" in set(module_data.get("legacy_lectures", [])):
+        return todos
+    whole = single_check(module_data, lec)
+    if not whole:
+        todos.append({**base, "key": lecture_key(module_id, lec["date"], "nacharbeit"), "step": 2,
+                      "kind": "Nacharbeit", "due": due, "short": short, "chip": f"VL {nr} Nacharbeit",
+                      "title": f"Vorlesung {nr} nacharbeiten (Tutor-Chat, Zusammenfassung einfügen) – {label}"})
+    todos.append({**base, "key": lecture_key(module_id, lec["date"], "check"), "step": 3, "kind": "Check 1",
+                  "due": due, "title": f"Vorlesung {nr} {module['short']} Check 1",
+                  "short": f"Vorlesung {nr} {module['short']} Check 1", "chip": f"VL {nr} Check 1"})
+    if not whole:
+        todos.append({**base, "key": lecture_key(module_id, lec["date"], "check2"), "step": 5, "kind": "Check 2",
+                      "due": check2_due(module, lec, schedule, breaks),
+                      "title": f"Vorlesung {nr} {module['short']} Check 2",
+                      "short": f"Vorlesung {nr} {module['short']} Check 2", "chip": f"VL {nr} Check 2"})
     return todos
 
 

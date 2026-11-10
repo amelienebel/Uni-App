@@ -13,7 +13,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (in_timetable, days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
                            load_todos, semester_dates, today)
 from views import cards_center
-from views.common import NEXT_GROUP, grouped, group_header, prio_button, kind_badge, kind_icon, todo_text, STEP_KIND, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
+from views.common import NEXT_GROUP, grouped, group_header, prio_button, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
 
 
 def _safe(text: str) -> str:
@@ -80,19 +80,12 @@ def render(cfg: dict) -> None:
     c1.metric("Offene To-dos", len(open_todos),
               help="Überfällig, heute und morgen fällig")
     if planner.LEARNING_V2:
-        from utils import catchup
-
-        plan = catchup.build(cfg, modules_data, state, now)
-        c2.metric("Rückstand", f"{plan['overdue_minutes'] / 60:.1f} h" if plan["overdue"] else "keiner",
-                  help="Geschätzte Zeit für alles Überfällige")
+        c2.metric("Überfällig", sum(1 for t in open_todos if t["due"] < now))
     else:
-        plan = None
         c2.metric("Karteikarten heute", sum(due_cards.values()),
                   help=f"{sum(p['reviews'] for p in card_plan.values())} Wiederholungen + "
                   f"{sum(p['new'] for p in card_plan.values())} neue Karten")
 
-    if plan and plan["overdue"]:
-        _catchup_box(cfg, plan, now)
     left, right = st.columns([3, 2], gap="large")
     with left:
         # --- Termine ---------------------------------------------------------------
@@ -165,46 +158,6 @@ def render(cfg: dict) -> None:
                               width="stretch")
 
 
-def _open_task(module_id: str, t: dict) -> None:
-    from views.common import LECTURE_TAB, open_training
-
-    if t["tab"] == "training":
-        open_training(module_id)
-        return
-    if t["tab"]:
-        st.session_state[f"ltab_next_{t['unit']['id']}"] = LECTURE_TAB[t["tab"]]
-    open_unit(module_id, t["unit"]["id"])
-
-
-def _catchup_box(cfg: dict, plan: dict, now) -> None:
-    """Aufholplan: Rückstand, voraussichtliches Aufholdatum, was heute (und danach) dran ist."""
-    with st.container(border=True, key="nextbox_catchup"):
-        when = plan["caught_up"]
-        st.markdown(f"#### :material/trending_up: Aufholplan · {len(plan['overdue'])} überfällig")
-        if when:
-            st.caption(f"Mit deinem Zeitbudget voraussichtlich aufgeholt am {WEEKDAYS[when.weekday()]}, "
-                       f"{when:%d.%m.}")
-        today_items = plan["plan"][0]["items"]
-        for i, t in enumerate(today_items):
-            module = get_module(cfg, t["module_id"])
-            late = " · überfällig" if t["due"] < now else ""
-            st.button(f"{kind_badge(STEP_KIND.get(t['step'], ''))} **{module['short']}** · {t['label']} – "
-                      f"{t['about'][:50]} ({t['minutes']} min{late})",
-                      key=f"cu_{i}", type="tertiary", icon=micon(module), on_click=_open_task,
-                      args=(t["module_id"], t))
-        if not today_items:
-            st.caption("Heute ist kein Lernblock eingeplant.")
-        with st.expander("Die nächsten Tage"):
-            for day in plan["plan"][1:8]:
-                if not day["items"]:
-                    continue
-                st.markdown(f"**{WEEKDAYS[day['date'].weekday()]}, {day['date']:%d.%m.}** · "
-                            f"{day['used'] / 60:.1f} von {day['capacity'] / 60:.0f} h")
-                for t in day["items"]:
-                    st.markdown(f"{kind_badge(STEP_KIND.get(t['step'], ''))} "
-                                f"{get_module(cfg, t['module_id'])['short']} · {t['label']} – {t['about'][:50]}")
-
-
 def _learning_status(cfg: dict, modules_data: dict) -> None:
     """Rechte Spalte im neuen System: je Modul offene Checks, Abdeckung und Start Wochentraining."""
     from utils import sessions, topics
@@ -215,8 +168,10 @@ def _learning_status(cfg: dict, modules_data: dict) -> None:
     for module in cfg["modules"]:
         data = modules_data[module["id"]]
         held = sessions.held_lectures(cfg, module["id"], data)
-        open_checks = [lec for lec in held if topics.minitopics(data, lec["id"])
-                       and not sessions.is_legacy(data, lec["id"]) and not sessions.check_done(data, lec["id"])]
+        open_checks = [(lec, part) for lec in held if topics.minitopics(data, lec["id"])
+                       and not sessions.is_legacy(data, lec["id"]) for part in (1, 2)
+                       if not sessions.check_done(data, lec["id"], part)
+                       and (part == 1 or (sessions.halves(data, lec["id"])[1] and not sessions.single_check(data, lec["id"])))]
         stats = progress.module_stats(data, {lec["id"] for lec in held})
         with st.container(key=f"tdrow_{module['id']}_learn"):
             c1, c2 = st.columns([3, 2], vertical_alignment="center")

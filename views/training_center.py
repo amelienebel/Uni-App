@@ -98,7 +98,7 @@ def render(cfg: dict) -> None:
     no_topics = [lec for lec in held if not topics.lecture_topics(data, lec["id"])
                  and not sessions.is_legacy(data, lec["id"])]
     if no_topics:
-        st.caption("Noch nicht nachgearbeitet: " + ", ".join(f"VL {lec['nr']}" for lec in no_topics))
+        st.caption("Upload noch offen: " + ", ".join(f"VL {lec['nr']}" for lec in no_topics))
 
     run = sessions.running(data, "training")
     if run:
@@ -116,13 +116,15 @@ def render(cfg: dict) -> None:
         with st.container(border=True, key="trstart"):
             settings = nacharbeiten.settings_inputs("tr", with_n=True)
             n = settings.pop("n")
-            mandatory = len([m for m in sessions.open_from_checks(data) if m["lecture_id"] in lec_ids])
-            flagged = len([m for m in topics.minitopics(data) if mastery.has_open_flag(data, m)])
-            due = len(mastery.next_due(data, [m for m in topics.minitopics(data) if m["lecture_id"] in lec_ids]))
-            facts = [f"{mandatory} offen aus Checks", f"{flagged} aus Übungen", f"{due} fällig"]
+            held_mts = [m for m in topics.minitopics(data) if m["lecture_id"] in lec_ids]
+            focus = sessions.training_focus(data, held_mts)
+            mandatory = len(focus["offen"])
+            due = len(mastery.next_due(data, held_mts))
+            facts = [f"{len(focus['checks'])} Probleme aus Checks", f"{len(focus['uebung'])} aus Übungen",
+                     f"{len(focus['nacharbeit'])} aus Nacharbeit", f"{mandatory} offen aus Checks", f"{due} fällig"]
             st.caption(" · ".join(facts))
             if mandatory > n:
-                st.warning(f"Noch {mandatory} offene Minithemen aus Vorlesungs-Checks – mit 15 Fragen kommt mehr "
+                st.warning(f"Noch {mandatory} offene Minithemen aus Checks – mit 15 Fragen kommt mehr "
                            "davon dran, der Rest folgt im nächsten Training.", icon=":material/info:")
             slots = sessions.plan_training(data, held, n, settings)
             new = sessions.new_questions_needed(data, slots, settings)
@@ -138,5 +140,5 @@ def render(cfg: dict) -> None:
                 session_ui.open_session(module_id, session["id"])
                 st.rerun()
             if not slots:
-                st.caption("Noch keine Minithemen – erst eine Vorlesung nacharbeiten.")
+                st.caption("Noch keine Minithemen – erst den Upload einer Vorlesung abschließen.")
     _history(data)

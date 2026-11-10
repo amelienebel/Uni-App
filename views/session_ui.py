@@ -156,9 +156,11 @@ def _summary(cfg: dict, module_id: str, session: dict) -> None:
             if mt:
                 st.markdown(f"- {mt['topic']} · {mt['title']} → {it['status_after']}")
     if session["kind"] == "check" and session.get("lecture_id"):
-        mts = topics.minitopics(data, session["lecture_id"])
+        mts = sessions.part_minitopics(data, session["lecture_id"], session["part"]) if session.get("part") \
+            else topics.minitopics(data, session["lecture_id"])
         asked, total = mastery.coverage(data, mts)
-        st.progress(asked / total if total else 0.0, text=f"Abdeckung der Vorlesung: {asked} von {total} Minithemen")
+        what = f"Check {session['part']}" if session.get("part") else "Vorlesung"
+        st.progress(asked / total if total else 0.0, text=f"Abdeckung {what}: {asked} von {total} Minithemen")
         rest = [m for m in mts if not mastery.covered(data, m)]
         if rest:
             st.caption("Kommen im nächsten Wochentraining dran: " + ", ".join(m["title"] for m in rest))

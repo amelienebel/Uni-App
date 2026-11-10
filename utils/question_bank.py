@@ -241,15 +241,16 @@ def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, le
     lines = []
     for i, r in enumerate(requests, start=1):
         mt = r["mt"]
-        flags = [f["text"] for f in (data.get("mastery", {}).get(mt["id"], {}) or {}).get("exercise_flags", [])
-                 if f["kind"] == "schlecht" and f.get("open")]
+        from utils.mastery import weak_notes
+
+        flags = weak_notes(data, mt)
         from utils.sessions import feedback_notes
 
         notes = feedback_notes(data, mt["id"])
         lines.append(f"[{i}] type={r['type']} · Minithema: {mt['title']} (Thema: {mt['topic']}; "
                      f"{lec_names.get(mt['lecture_id'], '')}) · Art: {mt.get('kind', 'wissen')}\n"
                      f"    Kerninhalt: {mt.get('summary', '')}"
-                     + (f"\n    Lief schlecht in der Übung: {' | '.join(flags)}" if flags else "")
+                     + (f"\n    Hat gehakt (Nacharbeit/Übung – gezielt abfragen): {' | '.join(flags)}" if flags else "")
                      + (f"\n    Feedback der Studentin zu früheren Fragen (beachten!): {' | '.join(notes)}"
                         if notes else ""))
     lec_ids = sorted({r["mt"]["lecture_id"] for r in requests})

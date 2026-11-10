@@ -10,7 +10,7 @@ import streamlit as st
 from utils import mastery, planner, sessions, topics
 from utils.storage import get_schedule, lecture_breaks, today
 
-STEP_NAMES = ("Nacharbeiten", "Check", "Übungsblatt", "Wochentraining")
+STEP_NAMES = ("Upload", "Nacharbeit", "Check 1", "Übungsblatt", "Check 2", "Wochentraining")
 _STEP_CSS = {"done": "step-done", "open": "step-open", "overdue": "step-late", "na": "step-na"}
 _STEP_ICON = {"done": "check", "open": "radio_button_unchecked", "overdue": "schedule", "na": "remove"}
 
@@ -26,39 +26,54 @@ def _finished_dates(data: dict, kind: str) -> list[date]:
 
 
 def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict], state: dict) -> list[tuple]:
-    """[(Name, Status, Ziel)] mit Status done / open / overdue / na; Ziel = wohin ein Klick führt."""
+    """[(Name, Status, Ziel)] in fester Reihenfolge Upload · Nacharbeit · Check 1 · Übungsblatt · Check 2 ·
+    Wochentraining; Status done / open / overdue / na; Ziel = wohin ein Klick führt."""
+    from utils import nacharbeit
+
     now = today()
     module_id = module["id"]
     review = planner.review_due(module, lec["date"])
+    schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
 
     def status(done: bool, due: date | None) -> str:
         if done:
             return "done"
         return "overdue" if due and due < now else "open"
 
-    steps = [("Nacharbeiten", status(bool(state.get(planner.lecture_key(module_id, lec["date"], "nachbereitet"))),
-                                     review), ("lecture", "nachbereitet"))]
-    if sessions.is_legacy(data, lec["id"]):
-        steps.append(("Check", "na", ("lecture", "check")))
-    else:
-        steps.append(("Check", status(bool(state.get(planner.lecture_key(module_id, lec["date"], "check")))
-                                      or sessions.check_done(data, lec["id"]), review), ("lecture", "check")))
-    schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
+    def key(field: str) -> bool:
+        return bool(state.get(planner.lecture_key(module_id, lec["date"], field)))
+
+    legacy = sessions.is_legacy(data, lec["id"])
+    whole = sessions.single_check(data, lec["id"])
+    steps = [("Upload", status(key("nachbereitet"), review), ("lecture", "nachbereitet"))]
+    steps.append(("Nacharbeit", "na" if legacy or whole else
+                  status(key("nacharbeit") or nacharbeit.has_summary(data, lec["id"]), review),
+                  ("lecture", "nacharbeit")))
+    steps.append(("Check 1", "na" if legacy else status(key("check") or sessions.check_done(data, lec["id"], 1),
+                                                         review), ("check", 1)))
     related = [ex for ex in exs if ex.get("chapter_id") and ex["chapter_id"] == lec.get("chapter_id")]
+    ex_due = None
     if related:
         ex = related[-1]
         ex_due = planner.exercise_due(module, ex, schedule, breaks)
         steps.append(("Übungsblatt", status(bool(state.get(ex["plan_key"])), ex_due), ("exercise", ex["id"])))
+    else:
+        steps.append(("Übungsblatt", "na", None))
+    no_second = legacy or whole or (topics.minitopics(data, lec["id"]) and not sessions.halves(data, lec["id"])[1])
+    steps.append(("Check 2", "na" if no_second else
+                  status(key("check2") or sessions.check_done(data, lec["id"], 2),
+                         planner.check2_due(module, lec, schedule, breaks)), ("check", 2)))
+    if ex_due:
         trained = any(d >= ex_due - timedelta(days=3) for d in _finished_dates(data, "training"))
         nxt = next((w for w in planner.training_windows(cfg, module, schedule, breaks) if w["due"] >= ex_due), None)
         steps.append(("Wochentraining", status(trained, nxt["due"] if nxt else None), ("training", None)))
     else:
-        steps += [("Übungsblatt", "na", None), ("Wochentraining", "na", ("training", None))]
+        steps.append(("Wochentraining", "na", ("training", None)))
     return steps
 
 
-STEP_ICONS = {"Nacharbeiten": "edit_note", "Check": "fact_check", "Übungsblatt": "assignment",
-              "Wochentraining": "fitness_center"}
+STEP_ICONS = {"Upload": "upload_file", "Nacharbeit": "forum", "Check 1": "fact_check", "Übungsblatt": "assignment",
+              "Check 2": "fact_check", "Wochentraining": "fitness_center"}
 
 
 def _go(module_id: str, lec_id: str, target: tuple) -> None:
@@ -70,10 +85,10 @@ def _go(module_id: str, lec_id: str, target: tuple) -> None:
         open_training(module_id)
     elif kind == "exercise":
         open_unit(module_id, arg)
-    elif kind == "lecture" and arg == "check":
+    elif kind == "check":
         from utils.storage import load_module
 
-        run = sessions.running(load_module(module_id), "check", lec_id)
+        run = sessions.running_check(load_module(module_id), lec_id, arg)
         if run:  # angefangenen Check direkt fortsetzen
             session_ui.open_session(module_id, run["id"])
             st.session_state["nav"] = PAGES["cards"]
@@ -86,7 +101,7 @@ def _go(module_id: str, lec_id: str, target: tuple) -> None:
 
 
 def step_buttons(module_id: str, lec: dict, steps: list[tuple], key: str) -> None:
-    """Schritte als anklickbare Pillen: führt direkt zu Nacharbeiten, Check, Übungsblatt oder Wochentraining."""
+    """Schritte als anklickbare Pillen: führt direkt zu Upload, Nacharbeit, Check 1/2, Übungsblatt, Wochentraining."""
     with st.container(horizontal=True, gap="small", key=f"steps_{key}"):
         for i, (name, state_, target) in enumerate(steps):
             icon = "check" if state_ == "done" else "schedule" if state_ == "overdue" else STEP_ICONS[name]

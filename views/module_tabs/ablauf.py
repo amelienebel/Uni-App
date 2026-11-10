@@ -27,7 +27,8 @@ def _check(col, label: str, todo: dict, state: dict, wkey: str) -> None:
 
 def _lecture_row_v2(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict], state: dict,
                     is_next: bool) -> None:
-    """Vorlesung mit ihren vier Schritten (Nacharbeiten · Check · Übungsblatt · Wochentraining) und Abdeckung."""
+    """Vorlesung mit ihren sechs Schritten (Upload · Nacharbeit · Check 1 · Übungsblatt · Check 2 · Wochentraining)
+    und Abdeckung."""
     from utils import mastery, topics
     from views import progress
 
@@ -44,7 +45,7 @@ def _lecture_row_v2(cfg: dict, module: dict, data: dict, lec: dict, exs: list[di
                 progress.step_buttons(module_id, lec, progress.lecture_steps(cfg, module, data, lec, exs, state),
                                       key=f"abl_{module_id}_{lec['id'].replace(':', '_')}")
         else:
-            c1.caption(f"nacharbeiten bis {_due(planner.review_due(module, lec['date']))}")
+            c1.caption(f"Upload bis {_due(planner.review_due(module, lec['date']))}")
         if total:
             c2.progress(asked / total, text=f"{asked}/{total}")
 

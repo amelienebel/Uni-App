@@ -91,14 +91,19 @@ def move_lecture(src_module: str, src_lec: dict, dst_module: str, dst_lec: dict,
             src["sessions"].remove(s)
             dst.setdefault("sessions", []).append(s)
 
+    # Zusammenfassung aus der Nacharbeit
+    nach = (src.get("nacharbeit") or {}).pop(src_id, None)
+    if nach:
+        dst.setdefault("nacharbeit", {})[dst_id] = nach
+
     if src_id in (src.get("legacy_lectures") or []) and not same:
         src["legacy_lectures"].remove(src_id)
 
-    # Erledigt-Stand (Nacharbeiten, Check) wandert mit
+    # Erledigt-Stand (Upload, Nacharbeit, Check 1 und 2) wandert mit
     state = load_todos()
     src_date = src_lec["date"] if isinstance(src_lec["date"], date) else date.fromisoformat(src_lec["date"])
     dst_date = dst_lec["date"] if isinstance(dst_lec["date"], date) else date.fromisoformat(dst_lec["date"])
-    for field in ("nachbereitet", "check"):
+    for field in ("nachbereitet", "nacharbeit", "check", "check2"):
         old = planner.lecture_key(src_module, src_date, field)
         if state.get(old):
             state[planner.lecture_key(dst_module, dst_date, field)] = state[old]

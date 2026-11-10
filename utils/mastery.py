@@ -80,6 +80,9 @@ def archive_hint(data: dict, mt_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def start_level(data: dict, mt: dict) -> str:
+    rating = nacharbeit_rating(data, mt)
+    if rating:
+        return "mc" if rating == "sicher" else "sc"
     hint = archive_hint(data, mt["id"])
     return "mc" if hint and hint["label"] == "sicher" else "sc"
 
@@ -175,6 +178,9 @@ def record(data: dict, mt: dict, correct, self_grade: str, *, source: str, quest
     for flag in e["exercise_flags"]:
         if flag.get("open") and correct is True and self_grade != "schwer":
             flag["open"] = False  # Schwäche aus der Übung gilt nach einer sicheren Antwort als bearbeitet
+    nach = e.get("nacharbeit")
+    if nach and nach.get("open") and correct is True and self_grade != "schwer":
+        nach["open"] = False  # ebenso eine Schwäche aus der Nacharbeit
     return e
 
 
@@ -206,3 +212,59 @@ def next_due(data: dict, mts: list[dict], today: date | None = None) -> list[dic
 def week_window(today: date) -> tuple[date, date]:
     monday = today - timedelta(days=today.weekday())
     return monday, monday + timedelta(days=6)
+
+
+# ---------------------------------------------------------------------------
+# Nacharbeit (externer Tutor-Chat): Einstufung je Minithema
+# ---------------------------------------------------------------------------
+
+NACH_RATINGS = {"sicher": "Sicher", "wackelig": "Wackelig", "unklar": "Nicht verstanden", "offen": "Nicht geschafft"}
+NACH_COLORS = {"sicher": "#2E9D5B", "wackelig": "#E08A1E", "unklar": "#D6455D", "offen": "#9AA3AF"}
+_NACH_ORDER = ["unklar", "offen", "wackelig", "sicher"]
+
+
+def apply_nacharbeit(data: dict, mt: dict, rating: str, text: str, practice: str = "",
+                     today: date | None = None) -> None:
+    """Einstufung aus der Zusammenfassung des Tutor-Chats: sicher → Einstieg Multiple Choice; wackelig / nicht
+    verstanden / nicht geschafft → Einstieg Single Choice, bleibt offen bis zu einer sicheren richtigen Antwort.
+    Mehrere Zeilen zum selben Minithema: die schwächere Einstufung zählt."""
+    today = today or date.today()
+    e = entry(data, mt["id"])
+    old = e.get("nacharbeit")
+    if old and old.get("date") == today.isoformat() and _NACH_ORDER.index(old["rating"]) < _NACH_ORDER.index(rating):
+        rating, text = old["rating"], old["text"] + (f" | {text}" if text else "")
+    e["nacharbeit"] = {"rating": rating, "text": text, "practice": practice or (old or {}).get("practice", ""),
+                       "date": today.isoformat(), "open": rating != "sicher"}
+    if rating != "sicher" and e.get("level") == "freitext":
+        e["level"] = "mc"
+
+
+def nacharbeit_rating(data: dict, mt: dict) -> str | None:
+    return (peek(data, mt["id"]).get("nacharbeit") or {}).get("rating")
+
+
+def has_open_nacharbeit(data: dict, mt: dict) -> bool:
+    return bool((peek(data, mt["id"]).get("nacharbeit") or {}).get("open"))
+
+
+def weak_notes(data: dict, mt: dict) -> list[str]:
+    """Was beim Nacharbeiten und in der Übung gehakt hat (fließt in neue Fragen und die Korrektur ein)."""
+    e = peek(data, mt["id"])
+    out = [f["text"] for f in e.get("exercise_flags", []) if f["kind"] == "schlecht" and f.get("open")]
+    nach = e.get("nacharbeit") or {}
+    if nach.get("open"):
+        out.append(f"Nacharbeit ({NACH_RATINGS.get(nach['rating'], '')}): {nach.get('text', '')}".strip())
+        if nach.get("practice"):
+            out.append(f"Als Nächstes üben: {nach['practice']}")
+    return out
+
+
+def is_problem(data: dict, mt: dict, source: str | None = None) -> bool:
+    """Letzte Antwort zum Minithema war falsch, nur teilweise richtig oder „schwer“ (optional nur aus Checks)."""
+    hist = [h for h in peek(data, mt["id"]).get("history", []) if source is None or h.get("source") == source]
+    if not hist:
+        return False
+    last_any = peek(data, mt["id"])["history"][-1]
+    if last_any is not hist[-1] and last_any.get("correct") is True and last_any.get("self") != "schwer":
+        return False  # inzwischen sicher beantwortet
+    return hist[-1].get("correct") is not True or hist[-1].get("self") == "schwer"

@@ -132,9 +132,12 @@ def _render_v2(cfg: dict, module: dict, lecs: list[dict]) -> None:
                 st.markdown(f"**{t['title']}**")
                 st.markdown(progress.chips_html(data, active), unsafe_allow_html=True)
             if not entry:
-                st.button("Nacharbeiten", key=f"ws_open_{lec['id']}", on_click=open_unit, args=(module_id, lec["id"]))
+                st.button("Upload", key=f"ws_open_{lec['id']}", on_click=open_unit, args=(module_id, lec["id"]))
             elif not sessions.is_legacy(data, lec["id"]) and not sessions.check_done(data, lec["id"]):
-                st.caption("Vorlesungs-Check noch offen")
+                st.caption("Check 1 noch offen")
+            elif not sessions.is_legacy(data, lec["id"]) and sessions.halves(data, lec["id"])[1] \
+                    and not sessions.check_done(data, lec["id"], 2):
+                st.caption("Check 2 noch offen")
     st.divider()
     st.markdown("#### :material/history_edu: Altklausuren")
     exams.altklausuren(cfg, module_id)

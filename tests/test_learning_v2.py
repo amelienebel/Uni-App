@@ -242,18 +242,84 @@ def test_plan_check_and_training_priorities(monkeypatch):
     cfg, data, lec, lecs, _ = _setup()
     monkeypatch.setattr(sessions.ai, "complete_json", _fake_topics)
     topics.create_topics(cfg, "invfin", lec, lecs)
-    slots = sessions.plan_check(data, lec["id"], {})
-    assert len(slots) == sessions.CHECK_SIZE  # genau 15, auch bei wenig Minithemen
-    assert sum(sessions.qb.MINUTES[s["type"]] for s in slots) <= sessions.CHECK_MINUTES
-    assert {s["mt"]["id"] for s in slots} == {m["id"] for m in topics.minitopics(data, lec["id"])}
     mts = topics.minitopics(data, lec["id"])
-    # Nach einem Check: nicht abgefragte Minithemen haben im Training Vorrang
+    first, second = sessions.halves(data, lec["id"])
+    assert [m["id"] for m in first + second] == [m["id"] for m in mts] and first and second
+    slots = sessions.plan_check(data, lec["id"], {}, 1)
+    assert {s["mt"]["id"] for s in slots} == {m["id"] for m in first}  # nur die erste Hälfte, jedes Minithema
+    assert len(slots) == min(sessions.CHECK_SIZE, 3 * len(first))
+    assert {s["mt"]["id"] for s in sessions.plan_check(data, lec["id"], {}, 2)} == {m["id"] for m in second}
+    # Nacharbeit „nicht verstanden“ → Einstieg Single Choice und eine zweite Frage im Check
+    mastery.apply_nacharbeit(data, first[0], "unklar", "Formel verwechselt")
+    assert mastery.current_level(data, first[0]) == "sc"
+    many = [{**first[0], "id": f"x{i}", "title": f"X{i}"} for i in range(20)]
+    monkeypatch.setattr(sessions, "part_minitopics", lambda d, lid, part: [first[0]] + many)
+    big = sessions.plan_check(data, lec["id"], {}, 1)
+    assert len(big) == 22  # 21 Minithemen + zweite Frage zum schwachen – mehr als 15 ist erlaubt
+    assert sum(1 for s in big if s["mt"]["id"] == first[0]["id"]) == 2
+    monkeypatch.undo()
+    # Nach Check 1: Probleme aus dem Check haben im Training Vorrang, dann offene Minithemen
     data["sessions"] = [{"id": "s", "kind": "check", "lecture_id": lec["id"], "finished_at": "2026-11-01T10:00",
-                         "items": []}]
-    mastery.record(data, mts[0], True, "einfach", source="check", question_id="q", level_asked="sc")
+                         "part": 1, "part_ids": [m["id"] for m in first], "items": []}]
+    assert sessions.check_done(data, lec["id"], 1) and not sessions.check_done(data, lec["id"], 2)
+    mastery.record(data, first[0], True, "einfach", source="check", question_id="q", level_asked="sc")
+    mastery.record(data, first[1], False, "schwer", source="check", question_id="q", level_asked="sc")
     held = [x for x in lecs if x["date"] <= lec["date"]]
-    plan = sessions.plan_training(data, held, 2, {})
-    assert {s["mt"]["id"] for s in plan} == {mts[1]["id"], mts[2]["id"]}
+    plan = sessions.plan_training(data, held, 1, {})
+    assert [s["mt"]["id"] for s in plan] == [first[1]["id"]]
+    assert not mastery.has_open_nacharbeit(data, first[0])  # sicher richtig beantwortet → erledigt
+
+
+def test_nacharbeit_summary_maps_to_minitopics(monkeypatch):
+    from utils import mastery, nacharbeit, sessions, topics
+
+    cfg, data, lec, lecs, _ = _setup()
+    monkeypatch.setattr(sessions.ai, "complete_json", _fake_topics)
+    topics.create_topics(cfg, "invfin", lec, lecs)
+    mts = topics.minitopics(data, lec["id"])
+    nacharbeit.save("invfin", lec["id"], "SICHER:\n- [Folie 2] Kapitalwert\n\nWACKELIG:\n- [Folie 3] Barwert")
+    assert nacharbeit.needs_mapping(data, lec["id"])
+    monkeypatch.setattr(nacharbeit.ai, "complete_json", lambda *a, **k: {"links": [
+        {"category": "sicher", "text": "Kapitalwert", "minitopics": [1]},
+        {"category": "wackelig", "text": "Barwert – Vorzeichen", "minitopics": [2]},
+        {"category": "ueben", "text": "Barwert mit anderen Zinsen", "minitopics": [2]}]})
+    assert nacharbeit.map_summary(cfg, "invfin", lec["id"]) == 3
+    assert mastery.nacharbeit_rating(data, mts[0]) == "sicher" and mastery.current_level(data, mts[0]) == "mc"
+    assert mastery.has_open_nacharbeit(data, mts[1])
+    assert any("anderen Zinsen" in n for n in mastery.weak_notes(data, mts[1]))
+    assert not nacharbeit.needs_mapping(data, lec["id"])
+
+
+def test_long_documents_are_split(monkeypatch):
+    from utils import ai, topics
+
+    cfg, data, lec, lecs, _ = _setup()
+    doc = data["documents"][-1]
+    from utils import storage
+
+    storage.set_document_pages(doc, [f"Seite {i} Inhalt Kapitalwert Barwert Zins" for i in range(1, 151)], "text")
+    doc["n_pages"] = 150
+    doc["figure_pages"] = [5, 6, 7]
+    storage.save_module("invfin")
+    assert topics.parse_pages("1-3, 7; 10–11, 99", 20) == [1, 2, 3, 7, 10, 11]
+    assert topics.format_pages([1, 2, 3, 7, 10, 11]) == "1-3, 7, 10-11"
+    topics.set_read("invfin", lec["id"], doc["id"], "figures", [6])
+    assert topics.unread_pages(storage.load_module("invfin"), lec)[doc["id"]] == [5, 7]
+    topics.set_read("invfin", lec["id"], doc["id"], "all", list(range(1, 141)))
+    calls = []
+
+    def fake(prompt, schema, system=None, **kw):
+        calls.append(prompt.count("--- Seite"))
+        if calls[-1] > 30:
+            raise ai.TruncatedError("zu lang")
+        nr = len(calls)
+        return {"topics": [{"title": f"Thema {nr}", "minitopics": [
+            {"nr": 1, "title": f"Mini {nr}", "kind": "wissen", "importance": "normal", "summary": "…",
+             "definition_term": "", "definition": "", "doc": 1, "pages": [1]}]}], "no_minitopic": [], "card_links": []}
+
+    monkeypatch.setattr(ai, "complete_json", fake)
+    n = topics.create_topics(cfg, "invfin", lec, lecs)
+    assert max(calls) <= topics.TOPIC_CHUNK_PAGES and n == sum(1 for c in calls if c <= 30)
 
 
 # ---------------------------------------------------------------------------
@@ -271,15 +337,16 @@ def test_check_session_end_to_end(monkeypatch):
     topics.create_topics(cfg, "invfin", lec, lecs)
     monkeypatch.setattr(ai, "complete_json", _fake_questions)
     session = sessions.start_check(cfg, "invfin", lec, {})
-    assert session["label"].endswith("I&F Check") and len(session["items"]) == 15
-    assert len({it["question_id"] for it in session["items"]}) == 15
+    n = len(session["items"])
+    assert session["label"].endswith("I&F Check 1") and session["part"] == 1 and n >= 4
+    assert len({it["question_id"] for it in session["items"]}) == n
 
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
     at.session_state["nav"] = PAGES["cards"]
     at.session_state["v2_session"] = {"mid": "invfin", "sid": session["id"]}
     _run(at)
     assert not at.sidebar.button  # Fokus-Modus ohne Seitenleiste
-    for _ in range(15):
+    for _ in range(n):
         data = at.session_state["_module_invfin"]
         sess = sessions.find_session(data, session["id"])
         idx = sessions.current_index(sess)
@@ -318,8 +385,9 @@ def test_check_session_end_to_end(monkeypatch):
     assert any("geschafft" in m.value for m in at.markdown)
     data = at.session_state["_module_invfin"]
     assert sessions.check_done(data, lec["id"])
+    assert not sessions.check_done(data, lec["id"], 2)
     mts = topics.minitopics(data, lec["id"])
-    assert all(mastery.covered(data, m) for m in mts)
+    assert all(mastery.covered(data, m) for m in sessions.part_minitopics(data, lec["id"], 1))
     assert at.session_state["_todos"].get(planner.lecture_key("invfin", lec["date"], "check")) is True
     # die erste Frage wurde mit Tipp beantwortet → zählt wie schwer, Stufe bleibt
     first = next(m for m in mts if m["id"] == sess["items"][0]["minitopic_id"])
@@ -342,36 +410,17 @@ def test_todos_in_fixed_order_and_training_window():
     todos = [t for t in planner.generate_todos(cfg, modules_data, storage.get_schedule(cfg), monday, sem_start,
                                                sem_end, {}, storage.lecture_breaks(cfg)) if t["module_id"] == "invfin"]
     kinds = [t["kind"] for t in todos]
-    assert "Nacharbeiten" in kinds and "Vorlesungs-Check" in kinds and "Wiederholung" not in kinds
-    assert kinds.index("Nacharbeiten") < kinds.index("Vorlesungs-Check")
+    assert {"Upload", "Nacharbeit", "Check 1"} <= set(kinds) and "Wiederholung" not in kinds
+    assert kinds.index("Upload") < kinds.index("Nacharbeit") < kinds.index("Check 1")
+    lec_todos = planner.lecture_steps_todos(cfg, module, modules_data["invfin"], lec, 3, storage.get_schedule(cfg),
+                                            storage.lecture_breaks(cfg))
+    assert [t["kind"] for t in lec_todos] == ["Upload", "Nacharbeit", "Check 1", "Check 2"]
+    assert lec_todos[-1]["due"] > lec_todos[0]["due"]  # Check 2 nach dem Übungsblatt
     windows = planner.training_windows(cfg, module, storage.get_schedule(cfg), storage.lecture_breaks(cfg))
     lectures = [x["date"] for x in planner.lectures_of(module)]
     for w in windows[:4]:
         nxt = next((d for d in lectures if d > w["ex_due"]), None)
         assert w["due"] >= w["ex_due"] and (nxt is None or w["due"] <= max(w["ex_due"], nxt - timedelta(days=1)))
-
-
-def test_catchup_orders_backlog_by_rank_and_budget():
-    from utils import catchup
-
-    today = date(2026, 11, 9)  # Montag
-    unit = lambda d, ch="c": {"kind": "lecture", "date": d, "chapter_id": ch, "id": f"vl:{d}"}  # noqa: E731
-    tasks = [
-        {"module_id": "vwl", "step": 1, "due": today - timedelta(days=5), "unit": unit(date(2026, 11, 1)),
-         "minutes": 60, "order_date": date(2026, 11, 1)},
-        {"module_id": "rewe", "step": 2, "due": today - timedelta(days=2), "unit": unit(date(2026, 11, 5)),
-         "minutes": 30, "order_date": date(2026, 11, 5)},
-        {"module_id": "rewe", "step": 1, "due": today - timedelta(days=2), "unit": unit(date(2026, 11, 5)),
-         "minutes": 60, "order_date": date(2026, 11, 5)},
-        {"module_id": "mathe", "step": 3, "due": today + timedelta(days=1), "minutes": 180,
-         "unit": {"kind": "exercise", "session": today + timedelta(days=1), "chapter_id": "m1"},
-         "order_date": today + timedelta(days=1)},
-    ]
-    ordered = catchup.prioritize(tasks, today)
-    assert [(t["module_id"], t["step"]) for t in ordered] == [("mathe", 3), ("rewe", 1), ("rewe", 2), ("vwl", 1)]
-    plan = catchup.schedule(ordered, today)
-    assert plan[0]["used"] <= max(catchup.DEFAULT_BUDGET[0], 180)  # Montag: 2 h (Blatt passt allein)
-    assert sum(len(d["items"]) for d in plan) == 4
 
 
 def test_v2_pages_open():
@@ -484,14 +533,14 @@ def test_priority_and_grouping():
 
     todos = [{"key": "a", "kind": "Wochentraining", "due": date(2026, 11, 2), "module_id": "m"},
              {"key": "b", "kind": "Übungsblatt", "due": date(2026, 11, 3), "module_id": "m"},
-             {"key": "c", "kind": "Nacharbeiten", "due": date(2026, 11, 5), "module_id": "m"},
-             {"key": "d", "kind": "Nacharbeiten", "due": date(2026, 11, 1), "module_id": "m"},
+             {"key": "c", "kind": "Upload", "due": date(2026, 11, 5), "module_id": "m"},
+             {"key": "d", "kind": "Upload", "due": date(2026, 11, 1), "module_id": "m"},
              {"key": "e", "kind": "Eigenes", "due": date(2026, 11, 1), "module_id": None}]
     common._cycle_prio("c")  # → 1
     assert common.prio_of("c") == 1
     groups = common.grouped(todos)
     # Vorgenommenes (mit Priorität) steht oben, der Rest darunter nach Kategorie
-    assert [g for g, _ in groups] == ["Als Nächstes", "Nacharbeiten", "Übungsblatt", "Wochentraining", "Sonstiges"]
+    assert [g for g, _ in groups] == ["Als Nächstes", "Upload", "Übungsblatt", "Wochentraining", "Sonstiges"]
     assert [t["key"] for t in groups[0][1]] == ["c"] and [t["key"] for t in groups[1][1]] == ["d"]
     common._cycle_prio("a")
     common._cycle_prio("a")  # → 2

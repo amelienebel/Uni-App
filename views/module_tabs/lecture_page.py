@@ -62,7 +62,7 @@ def _header(cfg: dict, module_id: str, lec: dict, lecs: list[dict], exs: list[di
     state = load_todos()
     c1, c2 = st.columns(2)
     prep, review = planner.prep_due(module, lec["date"]), planner.review_due(module, lec["date"])
-    review_label = (f"{'Nachgearbeitet' if planner.LEARNING_V2 else 'Nachbereitet'} "
+    review_label = (f"{'Upload erledigt' if planner.LEARNING_V2 else 'Nachbereitet'} "
                     f"(bis {WEEKDAYS[review.weekday()][:2]} {review:%d.%m.})")
     checks = [(c1, "vorbereitet", f"Vorbereitet (bis {WEEKDAYS[prep.weekday()][:2]} {prep:%d.%m.})"),
               (c2, "nachbereitet", review_label)] if planner.PREP_ENABLED else [(c1, "nachbereitet", review_label)]
@@ -518,6 +518,7 @@ _TAB_VIEWS = {"files": lambda cfg, module_id, lec, lecs, exs: _files_tab(cfg, mo
               "nachbereitet": lambda cfg, module_id, lec, lecs, exs: (
                   nacharbeiten.render(cfg, module_id, lec, lecs) if planner.LEARNING_V2
                   else _review_tab(cfg, module_id, lec)),
+              "nacharbeit": lambda cfg, module_id, lec, lecs, exs: nacharbeiten.nacharbeit_tab(cfg, module_id, lec),
               "check": lambda cfg, module_id, lec, lecs, exs: nacharbeiten.check_tab(cfg, module_id, lec),
               "learn": lambda cfg, module_id, lec, lecs, exs: _learn_tab(cfg, module_id, lec)}
 

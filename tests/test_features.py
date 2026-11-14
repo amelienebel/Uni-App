@@ -249,7 +249,7 @@ def test_exercise_deadlines_and_next_session():
 
     cfg = load_config()
     schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
-    for mid, weekday in (("mathe", 5), ("statistik", 5), ("invfin", 2)):
+    for mid, weekday in (("mathe", 6), ("statistik", 2), ("invfin", 0)):
         module = get_module(cfg, mid)
         for ex in planner.exercises_of(module)[1:4]:
             assert planner.exercise_due(module, ex, schedule, breaks).weekday() == weekday, (mid, ex["title"])

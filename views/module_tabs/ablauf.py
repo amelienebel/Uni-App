@@ -45,7 +45,7 @@ def _lecture_row_v2(cfg: dict, module: dict, data: dict, lec: dict, exs: list[di
                 progress.step_buttons(module_id, lec, progress.lecture_steps(cfg, module, data, lec, exs, state),
                                       key=f"abl_{module_id}_{lec['id'].replace(':', '_')}")
         else:
-            c1.caption(f"Upload bis {_due(planner.review_due(module, lec['date']))}")
+            c1.caption(f"Upload bis {_due(planner.step_due(module, lec['date'], 'upload'))}")
         if total:
             c2.progress(asked / total, text=f"{asked}/{total}")
 

@@ -80,7 +80,7 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   kommt dran (auch > 15 Fragen), Schwaches aus Nacharbeit/Übung bekommt eine zweite Frage, bei wenig Stoff bis 15
   aufgefüllt (max. 3 je Minithema). Session hat `part`; alte Checks ohne `part` = ganze Vorlesung
   (`sessions.single_check` → keine Nacharbeit-/Check-2-To-dos). Check 2 fällig am Tag nach dem Übungsblatt
-  (`planner.check2_due`).
+  (`planner.check2_due` = `step_due(…, "check2")`).
 - **Wissensstand je Minithema** (`utils/mastery.py`): FSRS je Minithema, Leiter Single → Multiple Choice → Freitext
   (Rechen-Minithemen enden bei MC/Zahl), falsch → Stufe runter, Tipp benutzt → zählt wie schwer, Übungs-Rückmeldung
   „schlecht“ → sofort fällig (`sessions.map_feedback`, Haiku). Archiv nur Hinweis (Reihenfolge, Einstieg MC bei
@@ -98,9 +98,21 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   `views/training_center.py` (PAGES["quiz"]).
 - **To-dos** (`planner.generate_todos` → `planner.lecture_steps_todos`, `units.open_tasks`): je VL in fester
   Reihenfolge Upload (step 1, Schlüssel `…:nachbereitet`), Nacharbeit (2, `…:nacharbeit`), „Vorlesung X [Modul]
-  Check 1“ (3, `…:check`), alle drei mit gleicher Frist, Übungsblatt (4), Check 2 (5, `…:check2`), Wochentraining (6,
-  `planner.training_windows`: nach dem Blatt, spätestens Tag vor der nächsten VL; erst ab Umstellung; ein Training
-  hakt alle offenen Trainings-To-dos des Moduls ab).
+  Check 1“ (3, `…:check`), Übungsblatt (4), Check 2 (5, `…:check2`), Wochentraining (6, je Vorlesung, Schlüssel am
+  Blatt `…:ex:…:training`, ohne Blatt `…:vl:…:training`; erst ab Umstellung; ein Training hakt alle offenen
+  Trainings-To-dos des Moduls ab, die schon begonnen haben).
+- **Fristen** (seit 14.11.2026, `planner.step_due`, `STEP_DAYS`): Upload am festen Upload-Tag
+  (`deadlines.upload_weekday`: Mathe/ExRW Mo, VWL/I&F Di, Statistik Do), dann +2 Nacharbeit, +4 Check 1,
+  +6 Übungsblatt, +8 Check 2, +10 Wochentraining (Mathe: Mi, Fr, So, Di, Do der Folgewoche). Blatt ↔ Vorlesung:
+  `planner.sheet_lectures` (mit Kapitel: erste freie VL desselben Kapitels vor der Besprechung; ohne Kapitel: letzte
+  freie VL vor der Besprechungswoche, z. B. I&F Blatt 1 → VL 27.10.); Blätter ohne Vorlesung behalten die alte Frist
+  (`_old_exercise_due`, alte Wochentage `review_weekday`/`exercise_weekday` nur noch fürs alte System).
+- **Frühere Vorlesungen** (`legacy_lectures`, vor der Umstellung nachbereitet): Nacharbeit und Check 1/2 freiwillig
+  möglich (Schritt-Pille „optional“, gepunktet, anklickbar; Seite Checks → Abschnitt „Frühere Vorlesungen“), ohne
+  To-do und ohne Frist.
+- **Übungs-Rückmeldung** (`sessions.map_feedback`): Haiku bekommt alle Minithemen bis zur Vorlesung des Blatts (die
+  des Blatts mit *), damit Schwächen auch früheren Minithemen zugeordnet werden; Neuzuordnung ersetzt alte Zuordnungen
+  des Blatts (`FEEDBACK_MAP_VERSION` 2 → einmal alles neu zuordnen).
 - Modul: Ablauf mit anklickbaren Schritt-Pillen je VL (`progress.step_buttons`, 6 Schritte: Upload/Nacharbeit/Check 1/2
   öffnen den Reiter der Vorlesung, ein angefangener Check läuft direkt weiter, Übungsblatt öffnet das Blatt, Wochentraining die Seite), auch
   im Kopf der Vorlesungsseite; Reiter „Wissensstand“ (statt Lernen & Klausur, mit Altklausuren). Keine Emojis in der
@@ -115,9 +127,8 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   „Weiter ab Folie x“ an → `doc.shared_units` + Bereich ab x (`topics.accept_carry`, `is_shared`); Raster zeigt bei
   übernommenen Dateien erst ab dieser Folie; Wiederholungs-Erkennung vergleicht eine Datei nie mit sich selbst.
 - Mathe: Blatt n gehört zu Einheit/Vorlesung n (Blatt 3 → Einheit 3 Selbststudium); `exercise_chapters_version` in
-  config.json verwirft einmalig von Hand gesetzte Blatt-Kapitel. Fristen eine Woche früher
-  (`deadlines.exercise_shift_days: -7`, `planner.exercise_due`), aber nie vor der zugehörigen Vorlesung
-  (Blatt 4 → 31.10., Blatt 5 → 7.11.; Blatt 8–10 bleiben, weil ihre Vorlesung erst kurz davor ist).
+  config.json verwirft einmalig von Hand gesetzte Blatt-Kapitel. Blatt-Frist = Sonntag der Vorlesungswoche (siehe
+  Fristen; `exercise_shift_days: -7` gilt nur noch für Blätter ohne Vorlesung und im alten System).
 - Quiz-Antworten: jede Option als eigener Block (`quiz_center.option_breakdown`, CSS `opt_hit/wrong/missed/neutral`),
   Erklärung in Absätzen (`quiz_center.paragraphs`; Prompt verlangt 2–4 Absätze). Feedback je Frage
   (`session_ui._feedback` → `sessions.question_feedback`): „Fehler“ lässt Claude die Frage gegen die Folien prüfen,

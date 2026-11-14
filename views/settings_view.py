@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta
 
 import pandas as pd
 import requests
@@ -209,6 +209,17 @@ def _card_params(cfg: dict, learning: dict) -> None:
 
 def _deadlines_caption(cfg: dict) -> None:
     days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    lines = [f"- **{m['short']}**: Upload, Nacharbeit, Check 1 {days[m['deadlines']['review_weekday']]} · Übungsblatt "
-             f"{days[m['deadlines']['exercise_weekday']]}" for m in cfg["modules"] if m.get("deadlines")]
+    names = (("upload", "Upload"), ("nacharbeit", "Nacharbeit"), ("check1", "Check 1"), ("uebung", "Übungsblatt"),
+             ("check2", "Check 2"), ("training", "Wochentraining"))
+    lines = []
+    for m in cfg["modules"]:
+        wd = m.get("deadlines", {}).get("upload_weekday")
+        if wd is None:
+            continue
+        start = date(2026, 11, 2) + timedelta(days=int(wd))
+        parts = []
+        for step, name in names:
+            d = planner.step_due(m, start, step)
+            parts.append(f"{name} {days[d.weekday()]}" + (" (Folgewoche)" if d >= date(2026, 11, 9) else ""))
+        lines.append(f"- **{m['short']}**: " + " · ".join(parts))
     st.caption("Feste Fristen (in config.json → deadlines):\n" + "\n".join(lines))

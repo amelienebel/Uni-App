@@ -405,7 +405,7 @@ def test_todos_in_fixed_order_and_training_window():
     module = get_module(cfg, "invfin")
     modules_data = {m["id"]: storage.load_module(m["id"]) for m in cfg["modules"]}
     lec = planner.lectures_of(module)[2]
-    monday = planner.monday_of(planner.review_due(module, lec["date"]))
+    monday = planner.monday_of(planner.step_due(module, lec["date"], "upload"))
     sem_start, sem_end = storage.semester_dates(cfg)
     todos = [t for t in planner.generate_todos(cfg, modules_data, storage.get_schedule(cfg), monday, sem_start,
                                                sem_end, {}, storage.lecture_breaks(cfg)) if t["module_id"] == "invfin"]
@@ -417,10 +417,8 @@ def test_todos_in_fixed_order_and_training_window():
     assert [t["kind"] for t in lec_todos] == ["Upload", "Nacharbeit", "Check 1", "Check 2"]
     assert lec_todos[-1]["due"] > lec_todos[0]["due"]  # Check 2 nach dem Übungsblatt
     windows = planner.training_windows(cfg, module, storage.get_schedule(cfg), storage.lecture_breaks(cfg))
-    lectures = [x["date"] for x in planner.lectures_of(module)]
-    for w in windows[:4]:
-        nxt = next((d for d in lectures if d > w["ex_due"]), None)
-        assert w["due"] >= w["ex_due"] and (nxt is None or w["due"] <= max(w["ex_due"], nxt - timedelta(days=1)))
+    for w in windows[:4]:  # Wochentraining 4 Tage nach der Blatt-Frist, zählt ab dem Tag davor
+        assert w["due"] == w["ex_due"] + timedelta(days=4) and w["start"] == w["ex_due"] - timedelta(days=1)
 
 
 def test_v2_pages_open():
@@ -490,17 +488,67 @@ def test_unfinished_tasks_carry_into_current_week():
     assert carried[0]["key"] not in {t["key"] for t in again}
 
 
-def test_mathe_deadlines_one_week_earlier():
+def test_step_deadlines_per_module():
     from utils import planner, storage
     from utils.config import get_module, load_config
 
     cfg = load_config()
+    schedule, breaks = storage.get_schedule(cfg), storage.lecture_breaks(cfg)
+    # Upload · Nacharbeit · Check 1 · Übungsblatt · Check 2 · Wochentraining (0 = Mo … 6 = So)
+    expected = {"mathe": [0, 2, 4, 6, 1, 3], "rewe": [0, 2, 4, 6, 1, 3], "vwl": [1, 3, 5, 0, 2, 4],
+                "invfin": [1, 3, 5, 0, 2, 4], "statistik": [3, 5, 0, 2, 4, 6]}
+    for mid, days in expected.items():
+        module = get_module(cfg, mid)
+        lec = next(x for x in planner.lectures_of(module) if x["date"] >= date(2026, 11, 2))
+        dues = [planner.step_due(module, lec["date"], s) for s in planner.STEP_DAYS]
+        assert [d.weekday() for d in dues] == days, mid
+        assert dues[0] == lec["date"] and (dues[-1] - dues[0]).days == 10
+        todos = planner.lecture_steps_todos(cfg, module, {}, {**lec}, 1, schedule, breaks)
+        assert [t["due"] for t in todos] == [dues[0], dues[1], dues[2], dues[4]]
+        sheet = planner.lecture_sheet(module, lec, schedule, breaks)
+        assert sheet and planner.exercise_due(module, sheet, schedule, breaks) == dues[3]
+        window = next(w for w in planner.training_windows(cfg, module, schedule, breaks)
+                      if w["lecture_date"] == lec["date"])
+        assert window["due"] == dues[5]
     module = get_module(cfg, "mathe")
-    due = {ex["title"].split(" –")[0]: planner.exercise_due(module, ex, storage.get_schedule(cfg),
-                                                             storage.lecture_breaks(cfg))
+    due = {ex["title"].split(" –")[0]: planner.exercise_due(module, ex, schedule, breaks)
            for ex in planner.exercises_of(module)}
-    assert due["Übungsblatt 4"] == date(2026, 10, 31) and due["Übungsblatt 5"] == date(2026, 11, 7)
-    assert due["Übungsblatt 1"] == date(2026, 10, 17)  # nie vor der zugehörigen Vorlesung
+    assert due["Übungsblatt 4"] == date(2026, 11, 1) and due["Übungsblatt 5"] == date(2026, 11, 8)
+    # VWL/Statistik: Blatt der Folgewoche gehört zur Vorlesung davor
+    vwl = get_module(cfg, "vwl")
+    pairs = planner.sheet_lectures(vwl, schedule, breaks)
+    ex = next(e for e in planner.exercises_of(vwl) if e["week_of"] == date(2026, 11, 16))
+    assert pairs[ex["index"]]["date"] == date(2026, 11, 10)
+
+
+def test_exercise_feedback_maps_to_earlier_lectures(monkeypatch):
+    from utils import ai, mastery, planner, sessions, storage, topics, units
+    from utils.config import get_module
+
+    cfg, data, lec, lecs, exs = _setup()
+    monkeypatch.setattr(ai, "complete_json", _fake_topics)
+    monkeypatch.setattr(ai, "complete", lambda *a, **k: "Profil")
+    topics.create_topics(cfg, "invfin", lec, lecs)
+    # Blatt 3 gehört zu einer späteren Vorlesung, fragt aber Stoff der ersten ab
+    ex = next(e for e in exs if e["title"] == "Übungsblatt 3")
+    pair = planner.sheet_lectures(get_module(cfg, "invfin"), storage.get_schedule(cfg),
+                                  storage.lecture_breaks(cfg))[ex["index"]]
+    assert pair["date"] > lec["date"]
+    data = storage.load_module("invfin")
+    units.exercise_feedback(data, ex["id"])["bad"] = "Kapitalwert-Definition vergessen"
+    seen = {}
+
+    def fake(prompt, schema, **kw):
+        seen["prompt"] = prompt
+        return {"links": [{"kind": "schlecht", "text": "Kapitalwert-Definition vergessen", "minitopics": [1]}]}
+
+    monkeypatch.setattr(ai, "complete_json", fake)
+    assert sessions.map_feedback(cfg, "invfin", ex) == 1
+    assert "Definition Kapitalwert" in seen["prompt"] and "früheren Vorlesung" in seen["prompt"]
+    data = storage.load_module("invfin")
+    mt = next(m for m in topics.minitopics(data, lec["id"]) if m["title"] == "Definition Kapitalwert")
+    assert mastery.has_open_flag(data, mt)
+    assert data["exercise_feedback"][ex["id"]]["map_version"] == sessions.FEEDBACK_MAP_VERSION
 
 
 def test_question_feedback_corrects_and_regrades(monkeypatch):
@@ -578,3 +626,25 @@ def test_move_lecture_to_other_module(monkeypatch):
     state = storage.load_todos()
     assert state.get(planner.lecture_key("vwl", vwl_lec["date"], "nachbereitet"))
     assert not state.get(planner.lecture_key("invfin", lec["date"], "nachbereitet"))
+
+
+def test_legacy_lecture_checks_and_nacharbeit_optional(monkeypatch):
+    from utils import ai, storage, topics
+    from utils.config import get_module
+    from views import progress
+    from views.common import PAGES
+
+    cfg, data, lec, lecs, exs = _setup()
+    monkeypatch.setattr(ai, "complete_json", _fake_topics)
+    monkeypatch.setattr(ai, "complete", lambda *a, **k: "Profil")
+    topics.create_topics(cfg, "invfin", lec, lecs)
+    data = storage.load_module("invfin")
+    data["legacy_lectures"] = [lec["id"]]
+    storage.save_module("invfin")
+    steps = {name: state for name, state, _ in progress.lecture_steps(cfg, get_module(cfg, "invfin"), data, lec,
+                                                                       exs, {})}
+    assert steps["Nacharbeit"] == "optional" and steps["Check 1"] == "optional"
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["cards"]
+    _run(at)
+    assert any(s.value.startswith("Frühere Vorlesungen") for s in at.subheader)

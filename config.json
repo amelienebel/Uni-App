@@ -272,6 +272,7 @@
       "syllabus_version": 2,
       "exam_note": "Klausur 12.02.2027. Die Lösungsvorschläge werden meist freitags um 14:00 Uhr in Moodle freigeschaltet.",
       "deadlines": {
+        "upload_weekday": 0,
         "prep_weekday": 6,
         "review_weekday": 2,
         "exercise_weekday": 5,
@@ -562,6 +563,7 @@
       "literature": "Skript auf Moodle (zuerst die „Gebrauchsanweisung“ lesen!) · Pellens/Fülbier/Gassen/Sellhorn: Internationale Rechnungslegung · Coenenberg/Haller/Mattner/Schultze: Einführung in das Rechnungswesen",
       "exam_note": "Klausur 15.02.2027, 15:30–17:30 Uhr (120 min, closed book). Raum laut ISC-Hörsaalplan (wird kurz vorher veröffentlicht).",
       "deadlines": {
+        "upload_weekday": 0,
         "prep_weekday": 6,
         "review_weekday": 2,
         "exercise_weekday": 2
@@ -791,6 +793,7 @@
         }
       ],
       "deadlines": {
+        "upload_weekday": 1,
         "prep_weekday": 0,
         "review_weekday": 3,
         "exercise_weekday": 2
@@ -1080,6 +1083,7 @@
       ],
       "tasks": [],
       "deadlines": {
+        "upload_weekday": 1,
         "prep_weekday": 0,
         "review_weekday": 3,
         "exercise_weekday": 2
@@ -1337,6 +1341,7 @@
       ],
       "tasks": [],
       "deadlines": {
+        "upload_weekday": 3,
         "prep_weekday": 2,
         "review_weekday": 5,
         "exercise_weekday": 5

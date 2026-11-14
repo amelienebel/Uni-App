@@ -25,7 +25,7 @@ def _row(cfg: dict, module: dict, data: dict, lec: dict, state: dict, part: int)
     asked, total = mastery.coverage(data, mts)
     done = sessions.check_done(data, lec["id"], part)
     review_done = bool(state.get(planner.lecture_key(module_id, lec["date"], "nachbereitet")))
-    due = planner.review_due(module, lec["date"])
+    due = planner.step_due(module, lec["date"], "upload")
     with st.container(border=True, key=f"ckrow_{module_id}_{lec['id'].replace(':', '_')}_{part}"):
         c1, c2 = st.columns([3, 2], vertical_alignment="center")
         c1.markdown(f"{micon(module)} **{sessions.check_label(module, lec, part)}**  \n"
@@ -57,17 +57,18 @@ def render(cfg: dict) -> None:
     st.title(":material/fact_check: Checks")
     state = load_todos()
     modules = sorted(cfg["modules"], key=lambda m: MODULE_RANK.get(m["id"], 3))
-    open_rows, done_rows = [], []
+    open_rows, done_rows, optional_rows = [], [], []
     for module in modules:
         data = load_module(module["id"])
         for lec in sessions.held_lectures(cfg, module["id"], data):
-            if sessions.is_legacy(data, lec["id"]) and not sessions.finished(data, "check", lec["id"]):
-                continue
+            legacy = sessions.is_legacy(data, lec["id"])
             parts = [1] if sessions.single_check(data, lec["id"]) or not sessions.halves(data, lec["id"])[1] \
                 else [1, 2]
             for part in parts:
-                (done_rows if sessions.check_done(data, lec["id"], part) else open_rows).append(
-                    (module, data, lec, part))
+                if sessions.check_done(data, lec["id"], part):
+                    done_rows.append((module, data, lec, part))
+                else:  # frühere Vorlesungen (vor dem neuen System): freiwillig
+                    (optional_rows if legacy else open_rows).append((module, data, lec, part))
     st.subheader(f"Offen ({len(open_rows)})")
     if not open_rows:
         st.caption("Alle Checks erledigt.")
@@ -78,10 +79,12 @@ def render(cfg: dict) -> None:
             with st.container(key=f"ckhead_{module['id']}"):
                 st.markdown(f"#### {micon(module)} {module['name']}")
         _row(cfg, module, data, lec, state, part)
-    if done_rows:
-        st.subheader(f"Erledigt ({len(done_rows)})")
+    for title, rows_all in (("Frühere Vorlesungen", optional_rows), ("Erledigt", done_rows)):
+        if not rows_all:
+            continue
+        st.subheader(f"{title} ({len(rows_all)})")
         for module in modules:
-            rows = [r for r in done_rows if r[0]["id"] == module["id"]]
+            rows = [r for r in rows_all if r[0]["id"] == module["id"]]
             if not rows:
                 continue
             with st.expander(f"{module['short']} · {len(rows)} Checks", icon=micon(get_module(cfg, module["id"]))):

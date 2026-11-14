@@ -154,6 +154,8 @@ st.markdown("""
   [class*="st-key-stp_overdue_"] button { background: rgba(214, 69, 93, 0.10); color: #d6455d;
     border: 1px solid rgba(214, 69, 93, 0.55); }
   [class*="st-key-stp_na_"] button { opacity: 0.4; text-decoration: line-through; }
+  [class*="st-key-stp_optional_"] button { background: transparent; opacity: 0.6;
+    border: 1.5px dotted rgba(128, 128, 128, 0.55); }
   [class*="st-key-stp_"] button:hover:not(:disabled) { filter: brightness(0.95); border-style: solid; }
   [class*="st-key-nextbox_"] { background: rgba(28, 131, 225, 0.09); border-color: rgba(28, 131, 225, 0.35) !important; }
   [class*="st-key-nextbox_"] h4 { padding: 0.2rem 0 0 0; }
@@ -200,6 +202,7 @@ st.markdown("""
   .step-open { border: 1.5px dashed rgba(128, 128, 128, 0.55); opacity: 0.85; }
   .step-late { background: rgba(214, 69, 93, 0.10); color: #d6455d; border-color: rgba(214, 69, 93, 0.55); }
   .step-na { opacity: 0.4; text-decoration: line-through; border: 1px solid rgba(128, 128, 128, 0.3); }
+  .step-optional { opacity: 0.6; border: 1.5px dotted rgba(128, 128, 128, 0.55); }
   .mt-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.2rem 0 0.5rem 0; }
   .mt-chip { border: 1px solid; border-radius: 999px; padding: 0.08rem 0.55rem; font-size: 0.8rem; }
   .mt-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.45rem; }

@@ -450,7 +450,9 @@ def _mark_todos(cfg: dict, module_id: str, session: dict) -> None:
 
 FEEDBACK_PROMPT = """Ordne die Rückmeldung der Studentin zu einem Übungsblatt den Minithemen unten zu.
 Jede Zeile der Rückmeldung (getrennt nach „gut“ und „schlecht“) bekommt die Nummern ALLER Minithemen, um die es
-geht (meist 1–3). Passt keine, minitopics leer lassen.
+geht (meist 1–3). Übungsblätter greifen oft auf Stoff früherer Vorlesungen zurück: Geht es um ein Thema einer
+früheren Vorlesung, ordne es dem Minithema dieser früheren Vorlesung zu (nicht dem ähnlichsten Thema des
+Blatts). Minithemen mit * gehören zur Vorlesung des Blatts. Passt keine, minitopics leer lassen.
 
 <rueckmeldung>
 LIEF GUT:
@@ -464,33 +466,50 @@ LIEF SCHLECHT:
 {mts}
 </minithemen>"""
 
+FEEDBACK_MAP_VERSION = 2  # 2: auch Minithemen früherer Vorlesungen (einmal neu zuordnen)
+
 FEEDBACK_SCHEMA = ai._obj({"links": {"type": "array", "items": ai._obj({
     "kind": {"type": "string", "enum": ["gut", "schlecht"]}, "text": ai._STR,
     "minitopics": {"type": "array", "items": ai._INT}})}})
 
 
 def map_feedback(cfg: dict, module_id: str, ex: dict) -> int:
-    """Rückmeldung einer Übung den Minithemen der zugehörigen (sonst aller bisherigen) Vorlesungen zuordnen."""
+    """Rückmeldung einer Übung den Minithemen der zugehörigen und aller früheren Vorlesungen zuordnen."""
     data = load_module(module_id)
     fb = units.exercise_feedback(data, ex["id"])
     if not (fb.get("good") or fb.get("bad") or "").strip():
         return 0
     lecs = lectures(cfg, module_id, data)
     related = {lec["id"] for lec in units.related_lectures(ex, lecs)}
-    mts = [m for m in topics.minitopics(data) if m["lecture_id"] in related] or topics.minitopics(data)
+    pair = planner.sheet_lectures(get_module(cfg, module_id), get_schedule(cfg), lecture_breaks(cfg)).get(
+        ex.get("index"))
+    if pair:
+        related.add(units.lecture_unit_id(pair["date"]))
+    # alle Minithemen bis zur Vorlesung des Blatts (Blätter beziehen sich oft auf frühere Vorlesungen)
+    last = max([lec["date"] for lec in lecs if lec["id"] in related] or [ex.get("session") or today()])
+    held = {lec["id"]: lec for lec in lecs if lec["date"] <= last}
+    mts = [m for m in topics.minitopics(data) if m["lecture_id"] in held] or topics.minitopics(data)
     if not mts:
         return 0
+    names = {lid: f"VL {lec['nr']}" for lid, lec in held.items()}
     result = ai.complete_json(FEEDBACK_PROMPT.format(
         good=fb.get("good") or "–", bad=fb.get("bad") or "–",
-        mts="\n".join(f"[{i}] {m['topic']}: {m['title']}" for i, m in enumerate(mts, start=1))),
+        mts="\n".join(f"[{i}]{'*' if m['lecture_id'] in related else ''} {names.get(m['lecture_id'], '')} · "
+                      f"{m['topic']}: {m['title']}" for i, m in enumerate(mts, start=1))),
         FEEDBACK_SCHEMA, max_tokens=4000, effort="low", task="check")
-    linked = 0
+    linked, keep = 0, set()
     for link in result.get("links", []):
         for nr in link["minitopics"]:
             if 1 <= nr <= len(mts):
                 mastery.apply_exercise_flag(data, mts[nr - 1], ex["id"], link["kind"], link["text"].strip())
+                keep.add((mts[nr - 1]["id"], link["kind"], link["text"].strip()))
                 linked += 1
+    for mt_id, e in (data.get("mastery") or {}).items():  # alte Zuordnungen dieses Blatts, die nicht mehr passen
+        flags = e.get("exercise_flags") or []
+        e["exercise_flags"] = [f for f in flags if f.get("exercise_id") != ex["id"]
+                               or (mt_id, f.get("kind"), f.get("text")) in keep]
     fb["mapped_at"] = now_iso()
+    fb["map_version"] = FEEDBACK_MAP_VERSION
     save_module(module_id)
     return linked
 
@@ -504,7 +523,8 @@ def ensure_feedback_mapped(cfg: dict, module_id: str) -> None:
         fb = (data.get("exercise_feedback") or {}).get(ex["id"])
         if not fb or not units.has_feedback(data, ex["id"]) or not topics.minitopics(data):
             continue
-        if fb.get("mapped_at") and fb.get("updated_at", "") <= fb["mapped_at"]:
+        if fb.get("mapped_at") and fb.get("updated_at", "") <= fb["mapped_at"] \
+                and fb.get("map_version", 1) >= FEEDBACK_MAP_VERSION:
             continue
         try:
             map_feedback(cfg, module_id, ex)

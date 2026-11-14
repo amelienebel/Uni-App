@@ -358,8 +358,6 @@ def _part_header(data: dict, lec: dict, part: int, mts: list[dict]) -> None:
 
 def check_tab(cfg: dict, module_id: str, lec: dict) -> None:
     data = load_module(module_id)
-    if sessions.is_legacy(data, lec["id"]):
-        st.caption("Diese Vorlesung lag vor dem neuen System – sie wird im Wochentraining abgefragt.")
     if sessions.single_check(data, lec["id"]):
         st.markdown("#### :material/check_circle: Check (ganze Vorlesung)")
         check_panel(cfg, module_id, lec, key=f"ck_{lec['id']}", part=1)

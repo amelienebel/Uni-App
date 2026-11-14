@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import html
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 import streamlit as st
 
@@ -11,8 +11,10 @@ from utils import mastery, planner, sessions, topics
 from utils.storage import get_schedule, lecture_breaks, today
 
 STEP_NAMES = ("Upload", "Nacharbeit", "Check 1", "Übungsblatt", "Check 2", "Wochentraining")
-_STEP_CSS = {"done": "step-done", "open": "step-open", "overdue": "step-late", "na": "step-na"}
-_STEP_ICON = {"done": "check", "open": "radio_button_unchecked", "overdue": "schedule", "na": "remove"}
+_STEP_CSS = {"done": "step-done", "open": "step-open", "overdue": "step-late", "na": "step-na",
+             "optional": "step-optional"}
+_STEP_ICON = {"done": "check", "open": "radio_button_unchecked", "overdue": "schedule", "na": "remove",
+              "optional": "radio_button_unchecked"}
 
 
 def _finished_dates(data: dict, kind: str) -> list[date]:
@@ -32,41 +34,43 @@ def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict
 
     now = today()
     module_id = module["id"]
-    review = planner.review_due(module, lec["date"])
     schedule, breaks = get_schedule(cfg), lecture_breaks(cfg)
 
-    def status(done: bool, due: date | None) -> str:
+    def due(step: str) -> date:
+        return planner.step_due(module, lec["date"], step)
+
+    def status(done: bool, due_: date | None, optional: bool = False) -> str:
         if done:
             return "done"
-        return "overdue" if due and due < now else "open"
+        if optional:  # frühere Vorlesung: freiwillig, ohne Frist
+            return "optional"
+        return "overdue" if due_ and due_ < now else "open"
 
     def key(field: str) -> bool:
         return bool(state.get(planner.lecture_key(module_id, lec["date"], field)))
 
     legacy = sessions.is_legacy(data, lec["id"])
     whole = sessions.single_check(data, lec["id"])
-    steps = [("Upload", status(key("nachbereitet"), review), ("lecture", "nachbereitet"))]
-    steps.append(("Nacharbeit", "na" if legacy or whole else
-                  status(key("nacharbeit") or nacharbeit.has_summary(data, lec["id"]), review),
-                  ("lecture", "nacharbeit")))
-    steps.append(("Check 1", "na" if legacy else status(key("check") or sessions.check_done(data, lec["id"], 1),
-                                                         review), ("check", 1)))
-    related = [ex for ex in exs if ex.get("chapter_id") and ex["chapter_id"] == lec.get("chapter_id")]
-    ex_due = None
-    if related:
-        ex = related[-1]
-        ex_due = planner.exercise_due(module, ex, schedule, breaks)
-        steps.append(("Übungsblatt", status(bool(state.get(ex["plan_key"])), ex_due), ("exercise", ex["id"])))
+    steps = [("Upload", status(key("nachbereitet"), due("upload")), ("lecture", "nachbereitet"))]
+    steps.append(("Nacharbeit", status(key("nacharbeit") or nacharbeit.has_summary(data, lec["id"]),
+                                       due("nacharbeit"), legacy or whole), ("lecture", "nacharbeit")))
+    steps.append(("Check 1", status(key("check") or sessions.check_done(data, lec["id"], 1), due("check1"), legacy),
+                  ("check", 1)))
+    sheet = planner.lecture_sheet(module, lec, schedule, breaks)
+    ex = next((e for e in exs if sheet and e.get("index") == sheet["index"]), None)
+    if ex:
+        steps.append(("Übungsblatt", status(bool(state.get(ex["plan_key"])), due("uebung")), ("exercise", ex["id"])))
     else:
         steps.append(("Übungsblatt", "na", None))
-    no_second = legacy or whole or (topics.minitopics(data, lec["id"]) and not sessions.halves(data, lec["id"])[1])
-    steps.append(("Check 2", "na" if no_second else
-                  status(key("check2") or sessions.check_done(data, lec["id"], 2),
-                         planner.check2_due(module, lec, schedule, breaks)), ("check", 2)))
-    if ex_due:
-        trained = any(d >= ex_due - timedelta(days=3) for d in _finished_dates(data, "training"))
-        nxt = next((w for w in planner.training_windows(cfg, module, schedule, breaks) if w["due"] >= ex_due), None)
-        steps.append(("Wochentraining", status(trained, nxt["due"] if nxt else None), ("training", None)))
+    no_second = topics.minitopics(data, lec["id"]) and not sessions.halves(data, lec["id"])[1]
+    steps.append(("Check 2", "na" if no_second or (whole and not sessions.check_done(data, lec["id"], 2)) else
+                  status(key("check2") or sessions.check_done(data, lec["id"], 2), due("check2"), legacy),
+                  ("check", 2)))
+    window = next((w for w in planner.training_windows(cfg, module, schedule, breaks)
+                   if w.get("lecture_date") == lec["date"]), None)
+    if window:
+        trained = bool(state.get(window["key"])) or any(d >= window["start"] for d in _finished_dates(data, "training"))
+        steps.append(("Wochentraining", status(trained, window["due"]), ("training", None)))
     else:
         steps.append(("Wochentraining", "na", ("training", None)))
     return steps

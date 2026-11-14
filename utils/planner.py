@@ -119,7 +119,70 @@ def review_due(module_cfg: dict, lecture_date: date) -> date:
         else lecture_date + timedelta(days=REVIEW_DAYS_AFTER)
 
 
+# Neues Lernsystem: Fristen je Vorlesung in Tagen nach dem Upload-Tag (config.json → deadlines.upload_weekday,
+# z. B. Mathe Mo → Nacharbeit Mi, Check 1 Fr, Blatt So, Check 2 Di, Wochentraining Do der Folgewoche).
+STEP_DAYS = {"upload": 0, "nacharbeit": 2, "check1": 4, "uebung": 6, "check2": 8, "training": 10}
+
+
+def upload_day(module_cfg: dict, lecture_date: date) -> date | None:
+    """Upload-Frist: der feste Upload-Wochentag am Vorlesungstag oder danach (None = kein fester Tag)."""
+    weekday = module_cfg.get("deadlines", {}).get("upload_weekday")
+    if weekday is None:
+        return None
+    return lecture_date + timedelta(days=(int(weekday) - lecture_date.weekday()) % 7)
+
+
+def step_due(module_cfg: dict, lecture_date: date, step: str) -> date:
+    """Frist eines Schritts (upload, nacharbeit, check1, uebung, check2, training) einer Vorlesung."""
+    start = upload_day(module_cfg, lecture_date)
+    days = {**STEP_DAYS, **(module_cfg.get("deadlines", {}).get("step_days") or {})}
+    if start is None:  # ohne festen Upload-Tag: alte Regel (alles bis zur Nachbereitungsfrist)
+        start = review_due(module_cfg, lecture_date)
+        days = {"upload": 0, "nacharbeit": 0, "check1": 0, "uebung": 4, "check2": 7, "training": 9}
+    return start + timedelta(days=int(days[step]))
+
+
+def sheet_lectures(module_cfg: dict, schedule: list[dict], breaks=()) -> dict[int, dict]:
+    """Übungsblatt (Index in config.json) → Vorlesung, zu der es gehört.
+
+    Mit Kapitel: die erste noch freie Vorlesung desselben Kapitels vor der Besprechung (Mathe Blatt n → VL n,
+    ExRW gleiche Woche, Statistik/VWL Vorwoche). Ohne Kapitel: die letzte freie Vorlesung vor der Woche der
+    Besprechung (I&F Blatt 1 → VL am Dienstag davor). Kein Treffer → Blatt behält seine alte Frist."""
+    lecs = [lec for lec in lectures_of(module_cfg) if not break_for(lec["date"], breaks)]
+    taken: set[date] = set()
+    out: dict[int, dict] = {}
+    for ex in sorted(exercises_of(module_cfg), key=lambda e: e["week_of"]):
+        session = exercise_session(module_cfg["id"], ex, schedule, breaks)
+        if ex.get("chapter_id"):
+            pool = [lec for lec in lecs if lec.get("chapter_id") == ex["chapter_id"] and lec["date"] < session]
+            free = [lec for lec in pool if lec["date"] not in taken]
+            chosen = free[0] if free else None
+        else:
+            free = [lec for lec in lecs if lec["date"] < monday_of(session) and lec["date"] not in taken]
+            chosen = free[-1] if free else None
+        if chosen:
+            taken.add(chosen["date"])
+            out[ex["index"]] = chosen
+    return out
+
+
+def lecture_sheet(module_cfg: dict, lec: dict, schedule: list[dict], breaks=()) -> dict | None:
+    """Übungsblatt (aus exercises_of) zur Vorlesung laut sheet_lectures."""
+    pairs = sheet_lectures(module_cfg, schedule, breaks)
+    idx = next((i for i, l in pairs.items() if l["date"] == lec["date"]), None)
+    return next((ex for ex in exercises_of(module_cfg) if ex["index"] == idx), None) if idx is not None else None
+
+
 def exercise_due(module_cfg: dict, ex: dict, schedule: list[dict], breaks=()) -> date:
+    """Frist „Übungsblatt lösen“: im neuen Lernsystem 6 Tage nach dem Upload der zugehörigen Vorlesung."""
+    if LEARNING_V2 and module_cfg.get("deadlines", {}).get("upload_weekday") is not None:
+        lec = sheet_lectures(module_cfg, schedule, breaks).get(ex.get("index"))
+        if lec:
+            return step_due(module_cfg, lec["date"], "uebung")
+    return _old_exercise_due(module_cfg, ex, schedule, breaks)
+
+
+def _old_exercise_due(module_cfg: dict, ex: dict, schedule: list[dict], breaks=()) -> date:
     """Frist „Übungsblatt lösen“ – ggf. um exercise_shift_days verschoben (Mathe: eine Woche früher), aber nie vor
     der Vorlesung, zu der das Blatt gehört."""
     base = _exercise_due(module_cfg, ex, schedule, breaks)
@@ -381,14 +444,18 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
     return todos
 
 
-def lecture_exercise(module: dict, lec: dict) -> dict | None:
-    """Übungsblatt zur Vorlesung (gleiches Kapitel; bei mehreren das letzte)."""
+def lecture_exercise(module: dict, lec: dict, schedule: list[dict] | None = None, breaks=()) -> dict | None:
+    """Übungsblatt zur Vorlesung (laut sheet_lectures; ohne Stundenplan: gleiches Kapitel, bei mehreren das letzte)."""
+    if schedule is not None:
+        return lecture_sheet(module, lec, schedule, breaks)
     related = [ex for ex in exercises_of(module) if ex.get("chapter_id") and ex["chapter_id"] == lec.get("chapter_id")]
     return related[-1] if related else None
 
 
 def check2_due(module: dict, lec: dict, schedule: list[dict], breaks=()) -> date:
-    """Check 2 nach dem Übungsblatt der Vorlesung (Tag nach der Blatt-Frist), ohne Blatt eine Woche nach dem Upload."""
+    """Check 2: 8 Tage nach dem Upload-Tag (ohne festen Upload-Tag: Tag nach der Blatt-Frist)."""
+    if module.get("deadlines", {}).get("upload_weekday") is not None:
+        return step_due(module, lec["date"], "check2")
     ex = lecture_exercise(module, lec)
     if ex is None:
         return review_due(module, lec["date"]) + timedelta(days=7)
@@ -407,7 +474,7 @@ def lecture_steps_todos(cfg: dict, module: dict, module_data: dict, lec: dict, n
     """To-dos einer Vorlesung in fester Reihenfolge: 1 Upload · 2 Nacharbeit · 3 Check 1 · 5 Check 2
     (4 Übungsblatt und 6 Wochentraining kommen je Blatt bzw. Woche dazu)."""
     module_id = module["id"]
-    due = review_due(module, lec["date"])
+    due = step_due(module, lec["date"], "upload")
     label = f"{lec['date']:%d.%m.}: {lec['topic']}"
     base = {"module_id": module_id, "chapter_id": lec.get("chapter_id"), "status_field": None}
     short = f"Vorlesung {nr}: {lec['topic']}"
@@ -419,10 +486,10 @@ def lecture_steps_todos(cfg: dict, module: dict, module_data: dict, lec: dict, n
     whole = single_check(module_data, lec)
     if not whole:
         todos.append({**base, "key": lecture_key(module_id, lec["date"], "nacharbeit"), "step": 2,
-                      "kind": "Nacharbeit", "due": due, "short": short, "chip": f"VL {nr} Nacharbeit",
+                      "kind": "Nacharbeit", "due": step_due(module, lec["date"], "nacharbeit"), "short": short, "chip": f"VL {nr} Nacharbeit",
                       "title": f"Vorlesung {nr} nacharbeiten (Tutor-Chat, Zusammenfassung einfügen) – {label}"})
     todos.append({**base, "key": lecture_key(module_id, lec["date"], "check"), "step": 3, "kind": "Check 1",
-                  "due": due, "title": f"Vorlesung {nr} {module['short']} Check 1",
+                  "due": step_due(module, lec["date"], "check1"), "title": f"Vorlesung {nr} {module['short']} Check 1",
                   "short": f"Vorlesung {nr} {module['short']} Check 1", "chip": f"VL {nr} Check 1"})
     if not whole:
         todos.append({**base, "key": lecture_key(module_id, lec["date"], "check2"), "step": 5, "kind": "Check 2",
@@ -465,6 +532,28 @@ def v2_start(module_data: dict) -> date | None:
 
 
 def training_windows(cfg: dict, module: dict, schedule: list[dict], breaks=()) -> list[dict]:
+    """Wochentraining je Vorlesung: fällig 10 Tage nach dem Upload-Tag (Donnerstag der Folgewoche bei Mathe).
+    start = ab wann ein abgeschlossenes Training dafür zählt (Tag vor der Blatt-Frist). Schlüssel wie bisher am
+    Übungsblatt, damit schon erledigte Trainings erledigt bleiben."""
+    if module.get("deadlines", {}).get("upload_weekday") is None:
+        return _old_training_windows(cfg, module, schedule, breaks)
+    sheet_of = {lec["date"]: idx for idx, lec in sheet_lectures(module, schedule, breaks).items()}
+    exs = {ex["index"]: ex for ex in exercises_of(module)}
+    windows = []
+    for lec in lectures_of(module):
+        if break_for(lec["date"], breaks):
+            continue
+        idx = sheet_of.get(lec["date"])
+        key = exercise_key(module["id"], exs[idx]) + ":training" if idx is not None \
+            else lecture_key(module["id"], lec["date"], "training")
+        windows.append({"key": key, "start": step_due(module, lec["date"], "uebung") - timedelta(days=1),
+                        "due": step_due(module, lec["date"], "training"),
+                        "ex_due": step_due(module, lec["date"], "uebung"), "lecture_date": lec["date"]})
+    windows.sort(key=lambda w: w["due"])
+    return windows
+
+
+def _old_training_windows(cfg: dict, module: dict, schedule: list[dict], breaks=()) -> list[dict]:
     """Wochentraining je Modul: einmal pro Woche, nach dem Übungsblatt, spätestens am Tag vor der nächsten
     Vorlesung des Moduls. start = ab wann ein abgeschlossenes Training dafür zählt."""
     lectures = [lec["date"] for lec in lectures_of(module) if not break_for(lec["date"], breaks)]

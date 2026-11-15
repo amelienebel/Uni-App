@@ -304,6 +304,11 @@ def render(cfg: dict) -> None:
         except (KeyError, ValueError):
             continue
 
+    if planner.LEARNING_V2:  # je Modul: wo stehe ich im Wochenablauf (Upload bis Wochentraining)
+        from views import progress
+
+        progress.week_boards(cfg, monday, key=f"w{monday:%Y%m%d}")
+
     if "dash_list_view" not in st.session_state:  # auf dem Handy automatisch als Liste
         st.session_state["dash_list_view"] = is_mobile()
     list_view = st.toggle("Listenansicht (fürs Handy)", key="dash_list_view")

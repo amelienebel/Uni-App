@@ -86,7 +86,10 @@ def render(cfg: dict) -> None:
                   help=f"{sum(p['reviews'] for p in card_plan.values())} Wiederholungen + "
                   f"{sum(p['new'] for p in card_plan.values())} neue Karten")
 
-    left, right = st.columns([3, 2], gap="large")
+    if planner.LEARNING_V2:  # ohne Lernstand-Spalte: Termine und To-dos über die ganze Breite
+        left, right = st.container(key="todaymain"), None
+    else:
+        left, right = st.columns([3, 2], gap="large")
     with left:
         # --- Termine ---------------------------------------------------------------
         st.subheader(":material/event: Termine heute")
@@ -138,10 +141,9 @@ def render(cfg: dict) -> None:
             st.button("Ganzen Plan ansehen", key="today_plan", type="tertiary", icon=":material/arrow_forward:",
                       on_click=goto, args=("examplan",))
 
+    if right is None:
+        return
     with right:
-        if planner.LEARNING_V2:
-            _learning_status(cfg, modules_data)
-            return
         # --- Karteikarten ------------------------------------------------------------
         st.subheader(":material/style: Karteikarten")
         if not any(due_cards.values()):
@@ -156,32 +158,3 @@ def render(cfg: dict) -> None:
                                 + (f" + {p['new']} neu" if p["new"] else ""))
                     c2.button("Lernen", key=f"learn_{module['id']}", on_click=cards_center.learn_due, args=(cfg, module["id"]),
                               width="stretch")
-
-
-def _learning_status(cfg: dict, modules_data: dict) -> None:
-    """Rechte Spalte im neuen System: je Modul offene Checks, Abdeckung und Start Wochentraining."""
-    from utils import sessions, topics
-    from views import progress
-    from views.common import open_training
-
-    st.subheader(":material/insights: Lernstand")
-    for module in cfg["modules"]:
-        data = modules_data[module["id"]]
-        held = sessions.held_lectures(cfg, module["id"], data)
-        open_checks = [(lec, part) for lec in held if topics.minitopics(data, lec["id"])
-                       and not sessions.is_legacy(data, lec["id"]) for part in (1, 2)
-                       if not sessions.check_done(data, lec["id"], part)
-                       and (part == 1 or (sessions.halves(data, lec["id"])[1] and not sessions.single_check(data, lec["id"])))]
-        stats = progress.module_stats(data, {lec["id"] for lec in held})
-        with st.container(key=f"tdrow_{module['id']}_learn"):
-            c1, c2 = st.columns([3, 2], vertical_alignment="center")
-            c1.markdown(f"{micon(module)} **{module['short']}** · {stats['asked']}/{stats['total']} abgedeckt"
-                        + (f" · {len(open_checks)} Check offen" if open_checks else ""))
-            if stats["total"]:
-                c1.markdown(progress.status_bar_html(stats["counts"]), unsafe_allow_html=True)
-            if open_checks:
-                c2.button("Check", key=f"tdcheck_{module['id']}", icon=":material/fact_check:", width="stretch",
-                          on_click=goto, args=("cards",))
-            else:
-                c2.button("Training", key=f"tdtrain_{module['id']}", icon=":material/fitness_center:",
-                          width="stretch", on_click=open_training, args=(module["id"],))

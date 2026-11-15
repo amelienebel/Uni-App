@@ -200,6 +200,29 @@ def apply_exercise_flag(data: dict, mt: dict, exercise_id: str, kind: str, text:
             e["fsrs"]["due"] = today.isoformat()
 
 
+def set_exercise_hits(data: dict, exercise_id: str, hits: dict[str, list[str]]) -> None:
+    """Aufgaben eines Übungsblatts je Minithema (ersetzt die frühere Zuordnung dieses Blatts)."""
+    for mt_id, e in (data.get("mastery") or {}).items():
+        if e.get("exercise_hits"):
+            e["exercise_hits"] = [h for h in e["exercise_hits"] if h.get("exercise_id") != exercise_id]
+    for mt_id, tasks in hits.items():
+        entry(data, mt_id).setdefault("exercise_hits", []).append({"exercise_id": exercise_id, "tasks": tasks})
+
+
+def exercise_hits(data: dict, mt: dict) -> list[dict]:
+    """Übungsblätter (mit Aufgaben), in denen das Minithema dran kam."""
+    return peek(data, mt["id"]).get("exercise_hits") or []
+
+
+def exercise_tasks(data: dict, mt: dict, exercise_id: str) -> list[str]:
+    return [t for h in exercise_hits(data, mt) if h.get("exercise_id") == exercise_id for t in h.get("tasks", [])]
+
+
+def in_exercise(data: dict, mt: dict) -> bool:
+    """Minithema kam in einem Übungsblatt dran → klausurrelevanter (wird stärker gewichtet)."""
+    return bool(exercise_hits(data, mt))
+
+
 def has_open_flag(data: dict, mt: dict) -> bool:
     return any(f["kind"] == "schlecht" and f.get("open") for f in peek(data, mt["id"]).get("exercise_flags", []))
 

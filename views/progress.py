@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import html
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import streamlit as st
 
@@ -127,8 +127,11 @@ def chips_html(data: dict, mts: list[dict], limit: int | None = None) -> str:
     for mt in mts[:limit] if limit else mts:
         s = mastery.status(data, mt)
         color = mastery.STATUS_COLORS[s]
+        ex = mastery.in_exercise(data, mt)  # kam im Übungsblatt dran → Symbol
         out.append(f"<span class='mt-chip' style='border-color:{color};background:{color}1f' "
-                   f"title='{html.escape(s)}'>{html.escape(mt['title'])}</span>")
+                   f"title='{html.escape(s)}{' · im Übungsblatt' if ex else ''}'>"
+                   + ("<span class='material-symbols-rounded mt-ex'>assignment</span>" if ex else "")
+                   + f"{html.escape(mt['title'])}</span>")
     return "<div class='mt-chips'>" + "".join(out) + "</div>"
 
 
@@ -160,3 +163,103 @@ def render_status(data: dict, lec_ids: set[str] | None = None) -> None:
     if not stats["total"]:
         return
     st.markdown(status_bar_html(stats["counts"]) + legend_html(), unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# Wochenablauf je Modul (Modulseite und Wochenübersicht)
+# ---------------------------------------------------------------------------
+
+def week_cycle(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dict], state: dict,
+               monday: date) -> dict:
+    """Vorlesungen, deren Schritte in die Woche ab `monday` fallen (Upload dieser Woche und der Vorwoche, deren
+    Check 2 und Wochentraining jetzt dran sind), plus Liegengebliebenes aus früheren Vorlesungen."""
+    sunday = monday + timedelta(days=6)
+    current, stuck = [], []
+    for lec in lecs:
+        if lec["is_break"]:
+            continue
+        start = planner.step_due(module, lec["date"], "upload")
+        end = planner.step_due(module, lec["date"], "training")
+        if start > sunday:
+            continue
+        steps = lecture_steps(cfg, module, data, lec, exs, state)
+        if end >= monday:
+            current.append((lec, steps))
+        elif monday <= today() + timedelta(days=6):  # nur bis zur aktuellen Woche: was ist hängen geblieben?
+            late = [s for s in steps if s[1] == "overdue"]
+            if late:
+                stuck.append((lec, late))
+    return {"current": current, "stuck": stuck}
+
+
+def _cycle_counts(cycle: dict) -> tuple[int, int, int]:
+    steps = [s for _, ss in cycle["current"] for s in ss if s[1] not in ("na", "optional")]
+    done = sum(1 for s in steps if s[1] == "done")
+    return done, len(steps), sum(len(ss) for _, ss in cycle["stuck"])
+
+
+def _lecture_label(lec: dict) -> str:
+    from utils.config import WEEKDAYS_SHORT
+
+    return f"VL {lec['nr']} · {WEEKDAYS_SHORT[lec['date'].weekday()]} {lec['date']:%d.%m.}"
+
+
+def week_board(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[dict], state: dict, monday: date,
+               key: str, with_title: bool = True) -> None:
+    """Karte: wo stehe ich im Wochenablauf (Upload bis Wochentraining) – alles anklickbar."""
+    from views.common import micon, open_unit
+
+    module_id = module["id"]
+    cycle = week_cycle(cfg, module, data, lecs, exs, state, monday)
+    done, total, late = _cycle_counts(cycle)
+    with st.container(border=True, key=f"board_{module_id}_{key}"):
+        h1, h2 = st.columns([3, 2], vertical_alignment="center")
+        if with_title:
+            h1.button(f"**{module['short']}**", key=f"bdhead_{module_id}_{key}", type="tertiary", icon=micon(module),
+                      on_click=open_unit, args=(module_id, None), help=module["name"])
+        else:
+            h1.markdown(f"<div class='board-title'>Diese Woche · {monday:%d.%m.} – "
+                        f"{monday + timedelta(days=6):%d.%m.}</div>", unsafe_allow_html=True)
+        badge = f"{done}/{total} erledigt" if total else "frei"
+        h2.markdown(f"<div class='board-count'>{badge}"
+                    + (f"<span class='board-late'>{late} hängt</span>" if late else "") + "</div>",
+                    unsafe_allow_html=True)
+        if total:
+            st.markdown(f"<div class='board-bar'><i style='width:{done / total * 100:.0f}%'></i></div>",
+                        unsafe_allow_html=True)
+        if not cycle["current"]:
+            st.caption("Diese Woche keine Vorlesung.")
+        for lec, steps in cycle["current"]:
+            safe = lec["id"].replace(":", "_")
+            with st.container(key=f"bdlec_{module_id}_{key}_{safe}"):
+                st.button(f"{_lecture_label(lec)}  \n{lec['topic']}", key=f"bdopen_{module_id}_{key}_{safe}",
+                          type="tertiary", on_click=open_unit, args=(module_id, lec["id"]), help=lec["topic"])
+                step_buttons(module_id, lec, steps, key=f"bd_{module_id}_{key}_{safe}")
+        if cycle["stuck"]:
+            with st.container(key=f"bdstuck_{module_id}_{key}"):
+                with st.expander(f"Aus früheren Wochen · {late} offen", icon=":material/history:",
+                                 expanded=late <= 4):
+                    for lec, steps in cycle["stuck"]:
+                        safe = lec["id"].replace(":", "_")
+                        with st.container(horizontal=True, gap="small", vertical_alignment="center",
+                                          key=f"bdold_{module_id}_{key}_{safe}"):
+                            st.button(f"VL {lec['nr']}", key=f"bdoldopen_{module_id}_{key}_{safe}", type="tertiary",
+                                      on_click=open_unit, args=(module_id, lec["id"]), help=lec["topic"])
+                            for i, (name, state_, target) in enumerate(steps):
+                                st.button(name, key=f"stp_{state_}_bdo_{module_id}_{key}_{safe}_{i}",
+                                          icon=f":material/{STEP_ICONS[name]}:", width="content",
+                                          on_click=_go if target else None,
+                                          args=(module_id, lec["id"], target) if target else None)
+
+
+def week_boards(cfg: dict, monday: date, key: str) -> None:
+    """Alle Module nebeneinander (umbrechend) – oben in der Wochenübersicht."""
+    from utils import units
+    from utils.storage import load_module, load_todos
+
+    state = load_todos()
+    with st.container(horizontal=True, gap="medium", key=f"wkboards_{key}"):
+        for module in cfg["modules"]:
+            data = load_module(module["id"])
+            lecs, exs = units.all_units(cfg, module, data)
+            week_board(cfg, module, data, lecs, exs, state, monday, key)

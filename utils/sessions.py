@@ -150,8 +150,8 @@ def _next_level(level: str, mt: dict) -> str:
 
 
 def plan_check(data: dict, lec_id: str, settings: dict, part: int = 1) -> list[dict]:
-    """Jedes Minithema der Hälfte mindestens einmal; was beim Nacharbeiten oder in der Übung gehakt hat, bekommt eine
-    zweite Frage eine Stufe höher; bei wenig Minithemen bis 15 auffüllen (höchstens 3 Fragen je Minithema)."""
+    """Jedes Minithema der Hälfte mindestens einmal; was beim Nacharbeiten oder in der Übung gehakt hat oder im
+    Übungsblatt dran kam, bekommt eine zweite Frage eine Stufe höher; bei wenig Minithemen bis 15 auffüllen (höchstens 3 Fragen je Minithema)."""
     mts = part_minitopics(data, lec_id, part)
     if not mts:
         return []
@@ -170,12 +170,17 @@ def plan_check(data: dict, lec_id: str, settings: dict, part: int = 1) -> list[d
             free += 1
     for mt in weak:
         slots.append({"mt": mt, "level": _next_level(mastery.current_level(data, mt), mt)})
-    # Wenig Minithemen: weitere Fragen auf der nächsten Stufe, wichtige und Anwendungen zuerst
+    # Was im Übungsblatt dran kam, ist klausurrelevant: zweite Frage (solange der Check nicht ausufert)
+    for mt in mts:
+        if mastery.in_exercise(data, mt) and mt["id"] not in weak_ids and len(slots) < CHECK_SIZE + 5:
+            slots.append({"mt": mt, "level": _next_level(mastery.current_level(data, mt), mt)})
+    # Wenig Minithemen: weitere Fragen auf der nächsten Stufe – Übungsstoff, wichtige und Anwendungen zuerst
     target = min(CHECK_SIZE, 3 * len(mts))
     rounds = 0
     while len(slots) < target and rounds < 3:
         rounds += 1
-        extra = sorted(mts, key=lambda m: (_IMPORTANCE_RANK.get(m.get("importance"), 1),
+        extra = sorted(mts, key=lambda m: (not mastery.in_exercise(data, m),
+                                           _IMPORTANCE_RANK.get(m.get("importance"), 1),
                                            m.get("kind") != "anwendung"))
         for mt in extra:
             if len(slots) >= target:
@@ -204,12 +209,14 @@ def open_from_checks(data: dict) -> list[dict]:
 
 
 def training_focus(data: dict, mts: list[dict]) -> dict[str, list[dict]]:
-    """Schwerpunkte fürs Wochentraining: Probleme aus Checks, Übung, Nacharbeit, offen aus Checks."""
+    """Schwerpunkte fürs Wochentraining: Probleme aus Checks, Übung, Nacharbeit, Übungsstoff (noch nicht sicher),
+    offen aus Checks."""
     done = checked_ids(data)
     return {"checks": [m for m in mts if mastery.is_problem(data, m, "check")],
             "training": [m for m in mts if mastery.is_problem(data, m)],
             "uebung": [m for m in mts if mastery.has_open_flag(data, m)],
             "nacharbeit": [m for m in mts if mastery.has_open_nacharbeit(data, m) and m["id"] in done],
+            "blatt": [m for m in mts if mastery.in_exercise(data, m) and mastery.status(data, m) != "sicher"],
             "offen": [m for m in mts if m["id"] in done and not mastery.covered(data, m)]}
 
 
@@ -231,20 +238,26 @@ def plan_training(data: dict, held: list[dict], n: int, settings: dict, day: dat
                 ids.add(m["id"])
                 chosen.append(m)
 
-    newest = lambda m: (-order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))  # noqa: E731
-    for key in ("checks", "uebung", "nacharbeit", "offen", "training"):
+    def newest(m: dict) -> tuple:
+        return (not mastery.in_exercise(data, m), -order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))
+
+    keys = ("checks", "uebung", "nacharbeit", "blatt", "offen", "training")
+    for key in keys:
         take(sorted(focus[key], key=newest), n - reserve)
     take(sorted(mastery.next_due(data, mts, day),
-                key=lambda m: (mastery.retrievability(mastery.peek(data, m["id"]), day) or 0.0)), n)
+                key=lambda m: (not mastery.in_exercise(data, m),
+                               mastery.retrievability(mastery.peek(data, m["id"]), day) or 0.0)), n)
     legacy_new = [m for m in mts if m["id"] not in done and not mastery.covered(data, m)
                   and is_legacy(data, m["lecture_id"])]
     take(sorted(legacy_new, key=lambda m: (_HINT_RANK.get((mastery.archive_hint(data, m["id"]) or {}).get("label")),
                                            order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))), n)
     asked = [m for m in mts if mastery.covered(data, m)]
-    take(sorted(asked, key=lambda m: (mastery.score(data, m, day), order[m["lecture_id"]])), n)
-    for key in ("checks", "uebung", "nacharbeit", "offen", "training"):
+    take(sorted(asked, key=lambda m: (mastery.score(data, m, day) + (-0.15 if mastery.in_exercise(data, m) else 0),
+                                      order[m["lecture_id"]])), n)
+    for key in keys:
         take(sorted(focus[key], key=newest), n)
-    take(sorted(mts, key=lambda m: (_IMPORTANCE_RANK.get(m.get("importance"), 1), mastery.score(data, m, day))), n)
+    take(sorted(mts, key=lambda m: (not mastery.in_exercise(data, m), _IMPORTANCE_RANK.get(m.get("importance"), 1),
+                                    mastery.score(data, m, day))), n)
     # nicht mehr als zwei Fragen derselben Vorlesung hintereinander
     result: list[dict] = []
     pool = list(chosen)
@@ -448,11 +461,20 @@ def _mark_todos(cfg: dict, module_id: str, session: dict) -> None:
 # Übungs-Rückmeldung → Minithemen
 # ---------------------------------------------------------------------------
 
-FEEDBACK_PROMPT = """Ordne die Rückmeldung der Studentin zu einem Übungsblatt den Minithemen unten zu.
-Jede Zeile der Rückmeldung (getrennt nach „gut“ und „schlecht“) bekommt die Nummern ALLER Minithemen, um die es
-geht (meist 1–3). Übungsblätter greifen oft auf Stoff früherer Vorlesungen zurück: Geht es um ein Thema einer
-früheren Vorlesung, ordne es dem Minithema dieser früheren Vorlesung zu (nicht dem ähnlichsten Thema des
-Blatts). Minithemen mit * gehören zur Vorlesung des Blatts. Passt keine, minitopics leer lassen.
+FEEDBACK_PROMPT = """Ordne ein Übungsblatt und die Rückmeldung der Studentin dazu den Minithemen unten zu.
+
+1. tasks: Jede Aufgabe bzw. Teilaufgabe des Blatts (kurz benannt, z. B. „A2b: Kapitalwert berechnen“) bekommt die
+   Nummern ALLER Minithemen, deren Stoff man dafür braucht – meist 1–3, auch aus verschiedenen Vorlesungen.
+   Übungsblätter greifen oft auf Stoff der Vorwoche oder noch früherer Vorlesungen zurück: Gehört der Inhalt zu einem
+   Minithema einer früheren Vorlesung, ordne ihn DIESEM zu (nicht dem ähnlichsten Thema der Blatt-Vorlesung).
+   Entscheidend ist der Inhalt, nicht die Nummer der Vorlesung. Ohne Blatttext: tasks leer.
+2. links: Jede Zeile der Rückmeldung (getrennt nach „gut“ und „schlecht“) bekommt die Nummern aller Minithemen, um
+   die es geht. Nennt sie eine Aufgabe („A3 lief schlecht“), nimm die Minithemen dieser Aufgabe.
+Minithemen mit * gehören zur Vorlesung des Blatts. Passt keine, minitopics leer lassen.
+
+<uebungsblatt>
+{sheet}
+</uebungsblatt>
 
 <rueckmeldung>
 LIEF GUT:
@@ -466,39 +488,77 @@ LIEF SCHLECHT:
 {mts}
 </minithemen>"""
 
-FEEDBACK_MAP_VERSION = 2  # 2: auch Minithemen früherer Vorlesungen (einmal neu zuordnen)
+# 2: auch Minithemen früherer Vorlesungen · 3: Inhalt des Blatts (Aufgaben → Minithemen) – einmal neu zuordnen
+FEEDBACK_MAP_VERSION = 3
+SHEET_CHARS = 18000
 
-FEEDBACK_SCHEMA = ai._obj({"links": {"type": "array", "items": ai._obj({
-    "kind": {"type": "string", "enum": ["gut", "schlecht"]}, "text": ai._STR,
-    "minitopics": {"type": "array", "items": ai._INT}})}})
+FEEDBACK_SCHEMA = ai._obj({
+    "tasks": {"type": "array", "items": ai._obj({"task": ai._STR, "minitopics": {"type": "array", "items": ai._INT}})},
+    "links": {"type": "array", "items": ai._obj({
+        "kind": {"type": "string", "enum": ["gut", "schlecht"]}, "text": ai._STR,
+        "minitopics": {"type": "array", "items": ai._INT}})}})
 
 
-def map_feedback(cfg: dict, module_id: str, ex: dict) -> int:
-    """Rückmeldung einer Übung den Minithemen der zugehörigen und aller früheren Vorlesungen zuordnen."""
-    data = load_module(module_id)
-    fb = units.exercise_feedback(data, ex["id"])
-    if not (fb.get("good") or fb.get("bad") or "").strip():
-        return 0
+def sheet_docs(data: dict, ex: dict) -> list[dict]:
+    """Übungsblatt und Musterlösung des Termins (mit gelesenem Text)."""
+    return [d for d in units.unit_docs(data, ex) if d["doc_type"] in ("uebung", "loesung")]
+
+
+def _sheet_text(data: dict, ex: dict) -> str:
+    from utils.storage import get_document_text
+
+    parts = []
+    for doc in sheet_docs(data, ex):
+        try:
+            text = get_document_text(doc).strip()
+        except Exception:  # noqa: BLE001 – Text fehlt (z. B. Foto ohne Texterkennung)
+            text = ""
+        if text:
+            parts.append(f"[{'Übungsblatt' if doc['doc_type'] == 'uebung' else 'Musterlösung'}: {doc['filename']}]"
+                         f"\n{text}")
+    return "\n\n".join(parts)[:SHEET_CHARS]
+
+
+def exercise_scope(cfg: dict, module_id: str, data: dict, ex: dict) -> tuple[list[dict], set[str], dict[str, str]]:
+    """Minithemen bis zur Vorlesung des Blatts (Blätter beziehen sich oft auf frühere Vorlesungen), die Vorlesungen
+    des Blatts und Kurznamen „VL n“."""
     lecs = lectures(cfg, module_id, data)
     related = {lec["id"] for lec in units.related_lectures(ex, lecs)}
     pair = planner.sheet_lectures(get_module(cfg, module_id), get_schedule(cfg), lecture_breaks(cfg)).get(
         ex.get("index"))
     if pair:
         related.add(units.lecture_unit_id(pair["date"]))
-    # alle Minithemen bis zur Vorlesung des Blatts (Blätter beziehen sich oft auf frühere Vorlesungen)
     last = max([lec["date"] for lec in lecs if lec["id"] in related] or [ex.get("session") or today()])
     held = {lec["id"]: lec for lec in lecs if lec["date"] <= last}
     mts = [m for m in topics.minitopics(data) if m["lecture_id"] in held] or topics.minitopics(data)
+    return mts, related, {lid: f"VL {lec['nr']}" for lid, lec in held.items()}
+
+
+def map_feedback(cfg: dict, module_id: str, ex: dict) -> int:
+    """Übungsblatt (Aufgaben) und Rückmeldung den Minithemen der zugehörigen und aller früheren Vorlesungen
+    zuordnen: Aufgaben → mastery „exercise_hits“ (zählt als klausurrelevant), Rückmeldung → „exercise_flags“."""
+    data = load_module(module_id)
+    fb = units.exercise_feedback(data, ex["id"])
+    sheet = _sheet_text(data, ex)
+    has_fb = bool((fb.get("good") or fb.get("bad") or "").strip())
+    if not has_fb and not sheet:
+        return 0
+    mts, related, names = exercise_scope(cfg, module_id, data, ex)
     if not mts:
         return 0
-    names = {lid: f"VL {lec['nr']}" for lid, lec in held.items()}
     result = ai.complete_json(FEEDBACK_PROMPT.format(
-        good=fb.get("good") or "–", bad=fb.get("bad") or "–",
+        sheet=sheet or "–", good=fb.get("good") or "–", bad=fb.get("bad") or "–",
         mts="\n".join(f"[{i}]{'*' if m['lecture_id'] in related else ''} {names.get(m['lecture_id'], '')} · "
-                      f"{m['topic']}: {m['title']}" for i, m in enumerate(mts, start=1))),
-        FEEDBACK_SCHEMA, max_tokens=4000, effort="low", task="check")
+                      f"{m['topic']}: {m['title']} – {m.get('summary', '')[:140]}" for i, m in enumerate(mts, start=1))),
+        FEEDBACK_SCHEMA, max_tokens=8000, effort="low", task="check")
+    hits: dict[str, list[str]] = {}
+    for task in result.get("tasks", []) if sheet else []:
+        for nr in sorted(set(task["minitopics"])):
+            if 1 <= nr <= len(mts):
+                hits.setdefault(mts[nr - 1]["id"], []).append(task["task"].strip())
+    mastery.set_exercise_hits(data, ex["id"], hits)
     linked, keep = 0, set()
-    for link in result.get("links", []):
+    for link in result.get("links", []) if has_fb else []:
         for nr in link["minitopics"]:
             if 1 <= nr <= len(mts):
                 mastery.apply_exercise_flag(data, mts[nr - 1], ex["id"], link["kind"], link["text"].strip())
@@ -510,8 +570,22 @@ def map_feedback(cfg: dict, module_id: str, ex: dict) -> int:
                                or (mt_id, f.get("kind"), f.get("text")) in keep]
     fb["mapped_at"] = now_iso()
     fb["map_version"] = FEEDBACK_MAP_VERSION
+    fb["mapped_docs"] = sorted(d["id"] for d in sheet_docs(data, ex))
     save_module(module_id)
-    return linked
+    return linked + sum(len(v) for v in hits.values())
+
+
+def needs_exercise_mapping(data: dict, ex: dict) -> bool:
+    """Rückmeldung geändert, Blatt/Lösung neu hochgeladen oder ältere Zuordnung → neu zuordnen."""
+    if not topics.minitopics(data):
+        return False
+    fb = (data.get("exercise_feedback") or {}).get(ex["id"]) or {}
+    docs = sorted(d["id"] for d in sheet_docs(data, ex))
+    if not docs and not units.has_feedback(data, ex["id"]):
+        return False
+    if not fb.get("mapped_at") or fb.get("map_version", 1) < FEEDBACK_MAP_VERSION:
+        return True
+    return fb.get("updated_at", "") > fb["mapped_at"] or docs != fb.get("mapped_docs", [])
 
 
 def ensure_feedback_mapped(cfg: dict, module_id: str) -> None:
@@ -520,16 +594,18 @@ def ensure_feedback_mapped(cfg: dict, module_id: str) -> None:
     data = load_module(module_id)
     _, exs = units.all_units(cfg, get_module(cfg, module_id), data)
     for ex in exs:
-        fb = (data.get("exercise_feedback") or {}).get(ex["id"])
-        if not fb or not units.has_feedback(data, ex["id"]) or not topics.minitopics(data):
-            continue
-        if fb.get("mapped_at") and fb.get("updated_at", "") <= fb["mapped_at"] \
-                and fb.get("map_version", 1) >= FEEDBACK_MAP_VERSION:
+        if not needs_exercise_mapping(data, ex):
             continue
         try:
             map_feedback(cfg, module_id, ex)
         except ai.AIError:
             continue
+        data = load_module(module_id)
+
+
+def exercise_minitopics(cfg: dict, module_id: str, data: dict, ex: dict) -> list[tuple[dict, list[str]]]:
+    """[(Minithema, Aufgaben)] – was in diesem Übungsblatt dran kam (Folienreihenfolge)."""
+    return [(m, tasks) for m in topics.minitopics(data) if (tasks := mastery.exercise_tasks(data, m, ex["id"]))]
 
 
 # ---------------------------------------------------------------------------

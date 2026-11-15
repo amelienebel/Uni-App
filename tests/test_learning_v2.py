@@ -648,3 +648,62 @@ def test_legacy_lecture_checks_and_nacharbeit_optional(monkeypatch):
     at.session_state["nav"] = PAGES["cards"]
     _run(at)
     assert any(s.value.startswith("Frühere Vorlesungen") for s in at.subheader)
+
+
+def test_sheet_content_maps_across_lectures_and_counts_more(monkeypatch):
+    from utils import ai, mastery, sessions, storage, topics, units
+
+    cfg, data, lec, lecs, exs = _setup()
+    monkeypatch.setattr(ai, "complete_json", _fake_topics)
+    monkeypatch.setattr(ai, "complete", lambda *a, **k: "Profil")
+    topics.create_topics(cfg, "invfin", lec, lecs)
+    ex = next(e for e in exs if e["title"] == "Übungsblatt 3")
+    data = storage.load_module("invfin")
+    doc = {"id": "sheet3", "filename": "Blatt3.pdf", "doc_type": "uebung", "unit": ex["id"], "path": "x/B3.pdf",
+           "n_pages": 1}
+    data["documents"].append(doc)
+    storage.set_document_pages(doc, ["Aufgabe 1: Berechnen Sie den Barwert einer Zahlung von 110 in einem Jahr."],
+                               "text")
+    storage.save_module("invfin")
+    assert sessions.needs_exercise_mapping(data, ex)
+    seen = {}
+
+    def fake(prompt, schema, **kw):
+        seen["prompt"] = prompt
+        return {"tasks": [{"task": "A1: Barwert berechnen", "minitopics": [2]}], "links": []}
+
+    monkeypatch.setattr(ai, "complete_json", fake)
+    sessions.map_feedback(cfg, "invfin", ex)
+    assert "Berechnen Sie den Barwert" in seen["prompt"]
+    data = storage.load_module("invfin")
+    assert not sessions.needs_exercise_mapping(data, ex)
+    hits = sessions.exercise_minitopics(cfg, "invfin", data, ex)
+    assert [m["title"] for m, _ in hits] == ["Barwert berechnen"] and hits[0][1] == ["A1: Barwert berechnen"]
+    mt = hits[0][0]
+    assert mt["lecture_id"] == lec["id"] and mastery.in_exercise(data, mt)
+    # Übungsstoff zählt mehr: zweite Frage im Check, Schwerpunkt im Wochentraining
+    slots = sessions.plan_check(data, lec["id"], {}, 1 if mt in sessions.part_minitopics(data, lec["id"], 1) else 2)
+    assert sum(1 for s in slots if s["mt"]["id"] == mt["id"]) >= 2
+    assert mt in sessions.training_focus(data, topics.minitopics(data))["blatt"]
+    assert units.unit_docs(data, ex)
+
+
+def test_week_boards_show_cycle_and_stuck_steps():
+    from utils import planner, storage, units
+    from utils.config import get_module, load_config
+    from views import progress
+    from views.common import PAGES
+
+    cfg = load_config()
+    module = get_module(cfg, "mathe")
+    data = storage.load_module("mathe")
+    lecs, exs = units.all_units(cfg, module, data)
+    monday = date(2026, 11, 9)
+    cycle = progress.week_cycle(cfg, module, data, lecs, exs, {}, monday)
+    assert [lec["date"] for lec, _ in cycle["current"]] == [date(2026, 11, 2), date(2026, 11, 9)]
+    assert all(lec["date"] < date(2026, 11, 2) for lec, _ in cycle["stuck"])
+    assert planner.monday_of(monday) == monday
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["nav"] = PAGES["week"]
+    _run(at)
+    assert any(b.key and b.key.startswith("bdhead_mathe_") for b in at.button)

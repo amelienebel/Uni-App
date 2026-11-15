@@ -110,9 +110,19 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
 - **Frühere Vorlesungen** (`legacy_lectures`, vor der Umstellung nachbereitet): Nacharbeit und Check 1/2 freiwillig
   möglich (Schritt-Pille „optional“, gepunktet, anklickbar; Seite Checks → Abschnitt „Frühere Vorlesungen“), ohne
   To-do und ohne Frist.
-- **Übungs-Rückmeldung** (`sessions.map_feedback`): Haiku bekommt alle Minithemen bis zur Vorlesung des Blatts (die
-  des Blatts mit *), damit Schwächen auch früheren Minithemen zugeordnet werden; Neuzuordnung ersetzt alte Zuordnungen
-  des Blatts (`FEEDBACK_MAP_VERSION` 2 → einmal alles neu zuordnen).
+- **Übungsblatt + Rückmeldung → Minithemen** (`sessions.map_feedback`, eine Haiku-Anfrage): Text von Blatt und
+  Musterlösung (`sheet_docs`, max. 18 000 Zeichen) + Rückmeldung + alle Minithemen bis zur Vorlesung des Blatts (die
+  des Blatts mit *, `exercise_scope`). Aufgaben → `mastery.set_exercise_hits` (mastery[mt]["exercise_hits"]), auch über
+  mehrere Vorlesungen hinweg; Rückmeldung → `exercise_flags`. Neu zuordnen, wenn Rückmeldung oder Dateien sich ändern
+  oder `FEEDBACK_MAP_VERSION` (3) steigt (`needs_exercise_mapping`, beim Check-/Trainingsstart und Knopf auf der
+  Übungsseite, Kasten „Kommt im Blatt dran“). Übungsstoff zählt mehr (`mastery.in_exercise`): zweite Frage im Check,
+  zuerst beim Auffüllen, Schwerpunkt „blatt“ im Wochentraining (nicht sicher), bevorzugt bei Wiederholung; neue
+  Fragen im Stil der Aufgaben (`question_bank.generate`); Symbol in den Wissensstand-Chips.
+- **Wochenablauf-Karten** (`progress.week_board`/`week_boards`/`week_cycle`): je Modul die Vorlesungen, deren Schritte
+  in die Woche fallen (Upload diese Woche und Vorwoche), Schritt-Pillen anklickbar, Zähler erledigt/hängt, „Aus
+  früheren Wochen“ (überfällige Schritte älterer VL, aufklappbar). Modulseite: statt Kasten „Nächstes To-do /
+  Nächster Termin“; Wochenübersicht: alle 5 Module über dem Stundenplan (umbrechend, CSS `wkboards_`, `board_`).
+- Heute ohne Lernstand-Spalte (volle Breite, `todaymain`). Bulk-Upload archiviert (nicht in `PAGES`, Code bleibt).
 - Modul: Ablauf mit anklickbaren Schritt-Pillen je VL (`progress.step_buttons`, 6 Schritte: Upload/Nacharbeit/Check 1/2
   öffnen den Reiter der Vorlesung, ein angefangener Check läuft direkt weiter, Übungsblatt öffnet das Blatt, Wochentraining die Seite), auch
   im Kopf der Vorlesungsseite; Reiter „Wissensstand“ (statt Lernen & Klausur, mit Altklausuren). Keine Emojis in der

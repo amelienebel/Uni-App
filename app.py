@@ -205,6 +205,8 @@ st.markdown("""
   .step-optional { opacity: 0.6; border: 1.5px dotted rgba(128, 128, 128, 0.55); }
   .mt-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.2rem 0 0.5rem 0; }
   .mt-chip { border: 1px solid; border-radius: 999px; padding: 0.08rem 0.55rem; font-size: 0.8rem; }
+  .mt-chip .mt-ex { font-family: "Material Symbols Rounded"; font-size: 0.85rem; vertical-align: -0.15em;
+    margin-right: 0.2rem; color: #E08A1E; }
   .mt-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.45rem; }
   .mt-legend { display: flex; flex-wrap: wrap; gap: 0.8rem; font-size: 0.78rem; opacity: 0.8; margin-bottom: 0.6rem; }
   .mt-legend i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.3rem; }
@@ -248,6 +250,47 @@ st.markdown("""
   [class*="st-key-opt_missed_"] { border-color: #e08a1e; background: rgba(224, 138, 30, 0.08); }
   [class*="st-key-opt_neutral_"] { border-color: rgba(128, 128, 128, 0.45); background: rgba(127, 127, 127, 0.04); }
   [class*="st-key-qcard_"] h4 { line-height: 1.45; }
+  /* Wochenablauf je Modul: Karten nebeneinander (umbrechend), alles anklickbar */
+  [class*="st-key-wkboards_"] { flex-wrap: wrap !important; gap: 0.9rem !important; margin: 0.3rem 0 1.4rem 0;
+    align-items: stretch !important; }
+  [class*="st-key-wkboards_"] > div { flex: 1 1 330px !important; min-width: 290px; width: auto !important;
+    max-width: 100%; }
+  [class*="st-key-wkboards_"] > div > [class*="st-key-board_"] { height: 100%; }
+  [class*="st-key-board_"] { border-radius: 0.95rem !important; padding: 0.85rem 1rem 0.9rem 1rem !important;
+    gap: 0.5rem !important; box-shadow: 0 1px 3px rgba(20, 30, 60, 0.06); }
+  [class*="st-key-board_"] [data-testid="stHorizontalBlock"] { gap: 0.5rem; }
+  .board-count { text-align: right; font-size: 0.8rem; font-weight: 600; opacity: 0.8; white-space: nowrap; }
+  .board-late { margin-left: 0.45rem; color: #d6455d; background: rgba(214, 69, 93, 0.12); padding: 0.08rem 0.5rem;
+    border-radius: 999px; }
+  .board-bar { height: 0.32rem; border-radius: 999px; background: rgba(127, 127, 127, 0.15); overflow: hidden;
+    margin: 0.1rem 0 0.15rem 0; }
+  .board-bar i { display: block; height: 100%; background: #2e9d5b; border-radius: 999px; transition: width 0.3s; }
+  .board-sub, .board-title { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6;
+    font-weight: 700; }
+  [class*="st-key-bdhead_"] button { padding: 0; min-height: 0; justify-content: flex-start; }
+  [class*="st-key-bdhead_"] button p { font-size: 1.08rem; }
+  [class*="st-key-bdlec_"] { gap: 0.2rem !important; padding-top: 0.45rem;
+    border-top: 1px solid rgba(127, 127, 127, 0.14); }
+  [class*="st-key-bdstuck_"] details { border-color: rgba(214, 69, 93, 0.3); background: rgba(214, 69, 93, 0.04); }
+  [class*="st-key-bdstuck_"] summary p { font-size: 0.82rem; font-weight: 600; color: #d6455d; }
+  [class*="st-key-bdold_"] { gap: 0.3rem !important; flex-wrap: wrap; margin-bottom: 0.2rem; }
+  [class*="st-key-bdopen_"] button, [class*="st-key-bdoldopen_"] button { padding: 0; min-height: 0;
+    justify-content: flex-start; text-align: left; }
+  [class*="st-key-bdopen_"] button div { justify-content: flex-start; text-align: left; }
+  [class*="st-key-bdopen_"] button p { font-size: 0.84rem; line-height: 1.35; text-align: left; }
+  [class*="st-key-bdopen_"] button p strong, [class*="st-key-bdopen_"] button p:first-line { font-weight: 600; }
+  [class*="st-key-bdoldopen_"] button p { font-size: 0.8rem; font-weight: 700; }
+  [class*="st-key-board_"] [class*="st-key-steps_"] { gap: 0.3rem !important; }
+  [class*="st-key-board_"] [class*="st-key-stp_"] button { min-height: 1.55rem !important; padding: 0 0.55rem; }
+  [class*="st-key-board_"] [class*="st-key-stp_"] button p { font-size: 0.76rem; }
+  [class*="st-key-board_"][class*="_mod"] { margin-bottom: 0.6rem; }
+  /* Allgemein: ruhigere Karten, Überschriften, Abstände */
+  [data-testid="stVerticalBlockBorderWrapper"], [class*="st-key-"][data-testid="stVerticalBlock"] { border-radius: 0.8rem; }
+  h1 { letter-spacing: -0.01em; font-weight: 700; }
+  h2, h3 { letter-spacing: -0.005em; margin-top: 0.4rem; }
+  [data-testid="stSidebar"] { border-right: 1px solid rgba(127, 127, 127, 0.14); }
+  [data-testid="stProgress"] > div > div { border-radius: 999px; }
+  .st-key-todaymain { max-width: 1100px; }
   /* Handy: weniger Rand, kleinere Überschriften, Reiter horizontal scrollbar, Zeilen kompakt nebeneinander */
   @media (max-width: 640px) {
     .block-container { padding: 2.8rem 0.7rem 4rem 0.7rem !important; }
@@ -305,6 +348,10 @@ for _m in cfg["modules"]:
         f"[class*='st-key-chip_open_{_id}_'] strong, [class*='st-key-chip_done_{_id}_'] strong, "
         f"[class*='st-key-tdrow_{_id}_'] strong {{color: {_c};}}",
         f".st-key-modhead_{_id} {{border-bottom: 3px solid {_c}; padding-bottom: 0.3rem; margin-bottom: 0.4rem;}}",
+        # Wochenablauf-Karten in Modulfarbe
+        f"[class*='st-key-board_{_id}_'] {{border-left: 5px solid {_c} !important; background: {_c}0b;}}",
+        f"[class*='st-key-board_{_id}_'] .board-bar i {{background: {_c};}}",
+        f"[class*='st-key-bdhead_{_id}_'] [data-testid='stIconMaterial'] {{color: {_c};}}",
         # Vorlesungs-Check, Wochentraining und Frage-Ansicht in den Farben des Moduls
         f"[class*='st-key-ckrow_{_id}_'] {{border-left: 5px solid {_c} !important; background: {_c}0d;}}",
         f"[class*='st-key-ckrow_{_id}_'] [data-testid='stIconMaterial'], "
@@ -396,7 +443,7 @@ elif page == PAGES["module"]:
     module_view.render(cfg, module_id)
 elif page == PAGES["examplan"]:
     exam_plan_view.render(cfg)
-elif page == PAGES["bulk"]:
+elif page == PAGES.get("bulk"):  # Bulk-Upload archiviert (nicht mehr in der Navigation)
     bulk_upload.render(cfg)
 elif page == PAGES["cards"]:
     (check_center if planner.LEARNING_V2 else cards_center).render(cfg)

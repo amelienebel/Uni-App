@@ -247,12 +247,17 @@ def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, le
         from utils.sessions import feedback_notes
 
         notes = feedback_notes(data, mt["id"])
+        from utils.mastery import exercise_hits
+
+        tasks = [t for h in exercise_hits(data, mt) for t in h.get("tasks", [])][:4]
         lines.append(f"[{i}] type={r['type']} · Minithema: {mt['title']} (Thema: {mt['topic']}; "
                      f"{lec_names.get(mt['lecture_id'], '')}) · Art: {mt.get('kind', 'wissen')}\n"
                      f"    Kerninhalt: {mt.get('summary', '')}"
                      + (f"\n    Hat gehakt (Nacharbeit/Übung – gezielt abfragen): {' | '.join(flags)}" if flags else "")
                      + (f"\n    Feedback der Studentin zu früheren Fragen (beachten!): {' | '.join(notes)}"
-                        if notes else ""))
+                        if notes else "")
+                     + (f"\n    Kam im Übungsblatt dran (klausurrelevant – im Stil dieser Aufgaben fragen): "
+                        f"{' | '.join(tasks)}" if tasks else ""))
     lec_ids = sorted({r["mt"]["lecture_id"] for r in requests})
     prompt = QUESTIONS_USER.format(exam_format=exam_format(module)["label"], calc=calc_rule(settings),
                                    hints=_lecture_hints(data, lec_ids, lec_names), requests="\n".join(lines),

@@ -61,6 +61,51 @@ def _map_feedback(module_id: str, ex: dict) -> None:
         pass
 
 
+def _remap(module_id: str, ex: dict) -> None:
+    from utils import ai, sessions
+    from utils.config import load_config
+
+    with st.spinner("Ordne das Blatt den Minithemen zu …"):
+        try:
+            sessions.map_feedback(load_config(), module_id, ex)
+        except ai.AIError as exc:
+            st.error(str(exc))
+
+
+def _sheet_topics(cfg: dict, module_id: str, ex: dict, lecs: list[dict]) -> None:
+    """Welche Minithemen (auch aus früheren Vorlesungen) im Blatt dran kamen."""
+    from utils import ai, mastery, sessions
+    from views import progress
+
+    if not planner.LEARNING_V2:
+        return
+    data = load_module(module_id)
+    hits = sessions.exercise_minitopics(cfg, module_id, data, ex)
+    pending = sessions.needs_exercise_mapping(data, ex)
+    if not hits and not pending:
+        return
+    names = {lec["id"]: f"VL {lec['nr']} · {lec['topic']}" for lec in lecs}
+    with st.container(border=True, key=f"sheettopics_{ex['id'].replace(':', '_')}"):
+        h1, h2 = st.columns([4, 1], vertical_alignment="center")
+        h1.markdown(f"#### :material/hub: Kommt im Blatt dran · {len(hits)} Minithemen")
+        if h2.button("Neu zuordnen" if hits else "Zuordnen", key=f"remap_{ex['id']}", icon=":material/auto_awesome:",
+                     type="secondary" if hits and not pending else "primary", width="stretch",
+                     disabled=not ai.is_available()):
+            _remap(module_id, ex)
+            st.rerun()
+        by_lec: dict[str, list] = {}
+        for mt, tasks in hits:
+            by_lec.setdefault(mt["lecture_id"], []).append((mt, tasks))
+        for lec_id in sorted(by_lec, key=lambda lid: next((x["date"] for x in lecs if x["id"] == lid), lid)):
+            st.markdown(f"<div class='small-muted'>{names.get(lec_id, lec_id)}</div>", unsafe_allow_html=True)
+            items = by_lec[lec_id]
+            st.markdown(progress.chips_html(data, [m for m, _ in items]), unsafe_allow_html=True)
+            flags = [f"{m['title']}: {f['text']}" for m, _ in items for f in mastery.peek(data, m["id"])["exercise_flags"]
+                     if f.get("exercise_id") == ex["id"] and f["kind"] == "schlecht"]
+            for line in flags:
+                st.markdown(f"<span class='mt-dot' style='background:#D6455D'></span>{line}", unsafe_allow_html=True)
+
+
 def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict]) -> None:
     data = load_module(module_id)
     state = load_todos()
@@ -113,6 +158,7 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
                      allow_images=True)
 
     _feedback(module_id, ex)
+    _sheet_topics(cfg, module_id, ex, lecs)
 
     st.markdown("#### Fragen fürs Tutorium / die Übung")
     question_list(module_id, data, key_prefix=f"exq_{ex['id']}", unit=ex["id"])

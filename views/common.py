@@ -19,7 +19,7 @@ PAGES = {
     "cards": ":material/fact_check: Checks" if _V2 else ":material/style: Karteikarten",
     "quiz": ":material/fitness_center: Wochentraining" if _V2 else ":material/quiz: Quiz",
     "examplan": ":material/event_note: Klausur-Lernplan",
-    "bulk": ":material/cloud_upload: Bulk-Upload",
+    # "bulk": ":material/cloud_upload: Bulk-Upload",  archiviert (views/bulk_upload.py bleibt erhalten)
     "settings": ":material/settings: Einstellungen",
     "module": ":material/school: Module",  # nicht in der Navigation – Module stehen direkt in der Seitenleiste
 }

@@ -468,8 +468,10 @@ FEEDBACK_PROMPT = """Ordne ein Übungsblatt und die Rückmeldung der Studentin d
    Übungsblätter greifen oft auf Stoff der Vorwoche oder noch früherer Vorlesungen zurück: Gehört der Inhalt zu einem
    Minithema einer früheren Vorlesung, ordne ihn DIESEM zu (nicht dem ähnlichsten Thema der Blatt-Vorlesung).
    Entscheidend ist der Inhalt, nicht die Nummer der Vorlesung. Ohne Blatttext: tasks leer.
-2. links: Jede Zeile der Rückmeldung (getrennt nach „gut“ und „schlecht“) bekommt die Nummern aller Minithemen, um
-   die es geht. Nennt sie eine Aufgabe („A3 lief schlecht“), nimm die Minithemen dieser Aufgabe.
+2. links: Jede Aussage der Rückmeldung bekommt kind (gut / mittel / schlecht – wie die Studentin sie eingeordnet hat;
+   steht unter „lief gut“ etwas Einschränkendes wie „mit Hilfe“ oder „Flüchtigkeitsfehler“, nimm mittel) und die
+   Nummern aller Minithemen, um die es geht. Nennt sie eine Aufgabe („A3 lief schlecht“), nimm die Minithemen dieser
+   Aufgabe (laut tasks). text: kurz, was genau gut lief bzw. was falsch war und warum (aus ihren Worten).
 Minithemen mit * gehören zur Vorlesung des Blatts. Passt keine, minitopics leer lassen.
 
 <uebungsblatt>
@@ -480,6 +482,9 @@ Minithemen mit * gehören zur Vorlesung des Blatts. Passt keine, minitopics leer
 LIEF GUT:
 {good}
 
+GING SO:
+{mid}
+
 LIEF SCHLECHT:
 {bad}
 </rueckmeldung>
@@ -488,14 +493,14 @@ LIEF SCHLECHT:
 {mts}
 </minithemen>"""
 
-# 2: auch Minithemen früherer Vorlesungen · 3: Inhalt des Blatts (Aufgaben → Minithemen) – einmal neu zuordnen
-FEEDBACK_MAP_VERSION = 3
+# 2: auch Minithemen früherer Vorlesungen · 3: Inhalt des Blatts (Aufgaben → Minithemen) · 4: gut/mittel/schlecht
+FEEDBACK_MAP_VERSION = 4
 SHEET_CHARS = 18000
 
 FEEDBACK_SCHEMA = ai._obj({
     "tasks": {"type": "array", "items": ai._obj({"task": ai._STR, "minitopics": {"type": "array", "items": ai._INT}})},
     "links": {"type": "array", "items": ai._obj({
-        "kind": {"type": "string", "enum": ["gut", "schlecht"]}, "text": ai._STR,
+        "kind": {"type": "string", "enum": ["gut", "mittel", "schlecht"]}, "text": ai._STR,
         "minitopics": {"type": "array", "items": ai._INT}})}})
 
 
@@ -540,14 +545,14 @@ def map_feedback(cfg: dict, module_id: str, ex: dict) -> int:
     data = load_module(module_id)
     fb = units.exercise_feedback(data, ex["id"])
     sheet = _sheet_text(data, ex)
-    has_fb = bool((fb.get("good") or fb.get("bad") or "").strip())
+    has_fb = units.has_feedback(data, ex["id"])
     if not has_fb and not sheet:
         return 0
     mts, related, names = exercise_scope(cfg, module_id, data, ex)
     if not mts:
         return 0
     result = ai.complete_json(FEEDBACK_PROMPT.format(
-        sheet=sheet or "–", good=fb.get("good") or "–", bad=fb.get("bad") or "–",
+        sheet=sheet or "–", good=fb.get("good") or "–", mid=fb.get("mid") or "–", bad=fb.get("bad") or "–",
         mts="\n".join(f"[{i}]{'*' if m['lecture_id'] in related else ''} {names.get(m['lecture_id'], '')} · "
                       f"{m['topic']}: {m['title']} – {m.get('summary', '')[:140]}" for i, m in enumerate(mts, start=1))),
         FEEDBACK_SCHEMA, max_tokens=8000, effort="low", task="check")
@@ -570,6 +575,7 @@ def map_feedback(cfg: dict, module_id: str, ex: dict) -> int:
                                or (mt_id, f.get("kind"), f.get("text")) in keep]
     fb["mapped_at"] = now_iso()
     fb["map_version"] = FEEDBACK_MAP_VERSION
+    fb["sheet_read"] = bool(sheet)
     fb["mapped_docs"] = sorted(d["id"] for d in sheet_docs(data, ex))
     save_module(module_id)
     return linked + sum(len(v) for v in hits.values())

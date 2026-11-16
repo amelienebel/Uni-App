@@ -41,9 +41,10 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Formelsammlung entfernt (keine Seite, Modul-Reiter heißt nur „Notizen“, kein Formel-Schritt; `formulas.py`/
   `formulas_tab.py` und die Daten bleiben ungenutzt erhalten), `settings_view.py` (mit Reitern
   Export und Backup aus `export_view.py`), Abhak-Knöpfe statt Kästchen (`common.done_button`: grün mit Haken / gestrichelt offen; Ablauf, Vorlesungs- und
-  Übungsseite). Übungsseite nur Blatt, Musterlösung, „Rückmeldung aus dem Chat“ (Lief gut / Lief schlecht,
-  `units.exercise_feedback`, data["exercise_feedback"][unit_id]; Popover mit Frage zum Kopieren für den Claude-Chat),
-  Fragen (keine eigene Lösung, keine Karten). Die Rückmeldung fließt über `learning.feedback_block` in Karten,
+  Übungsseite). Übungsseite nur Blatt, Musterlösung, „Rückmeldung zum Blatt“ (Lief gut / Ging so / Lief schlecht,
+  Felder good/mid/bad, `units.exercise_feedback`, data["exercise_feedback"][unit_id]; kein Chat-Prompt, keine Fragen
+  fürs Tutorium, keine eigene Lösung, keine Karten), Kasten „Kommt im Blatt dran“ je Minithema mit Aufgaben und
+  Bewertung (Punkt grün/orange/rot, `mastery.exercise_rating`; Warnung, wenn der Blatttext nicht lesbar ist). Die Rückmeldung fließt über `learning.feedback_block` in Karten,
   Ausdünnen und Quiz ein und über `exams.weak_points` in die Korrektur (Quiz-Freitext, Klausuraufgaben). Priorität einer Karte
   direkt an der Karte umstellbar (`study.priority_picker`: Focus Mode und Durchsehen). `module_view.py` (Reiter Ablauf / Lernen & Klausur /
   Definitionen / Dateien / Notizen), `module_tabs/` (Vorlesungs- und Übungsseiten, Lernen mit Reiter Klausuraufgaben (`exam_tasks_tab`: echte
@@ -113,8 +114,10 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
 - **Übungsblatt + Rückmeldung → Minithemen** (`sessions.map_feedback`, eine Haiku-Anfrage): Text von Blatt und
   Musterlösung (`sheet_docs`, max. 18 000 Zeichen) + Rückmeldung + alle Minithemen bis zur Vorlesung des Blatts (die
   des Blatts mit *, `exercise_scope`). Aufgaben → `mastery.set_exercise_hits` (mastery[mt]["exercise_hits"]), auch über
-  mehrere Vorlesungen hinweg; Rückmeldung → `exercise_flags`. Neu zuordnen, wenn Rückmeldung oder Dateien sich ändern
-  oder `FEEDBACK_MAP_VERSION` (3) steigt (`needs_exercise_mapping`, beim Check-/Trainingsstart und Knopf auf der
+  mehrere Vorlesungen hinweg; Rückmeldung → `exercise_flags` (kind gut/mittel/schlecht: schlecht → sofort fällig, max. Single Choice;
+  mittel → in 2 Tagen fällig, max. MC; beide offen bis zur sicheren richtigen Antwort; gut → Einstieg MC). Übungsstoff
+  kommt häufiger dran: Abstand nach jeder Antwort × `mastery.EXERCISE_INTERVAL` (0,6). Neu zuordnen, wenn Rückmeldung oder Dateien sich ändern
+  oder `FEEDBACK_MAP_VERSION` (4) steigt (`needs_exercise_mapping`, beim Check-/Trainingsstart und Knopf auf der
   Übungsseite, Kasten „Kommt im Blatt dran“). Übungsstoff zählt mehr (`mastery.in_exercise`): zweite Frage im Check,
   zuerst beim Auffüllen, Schwerpunkt „blatt“ im Wochentraining (nicht sicher), bevorzugt bei Wiederholung; neue
   Fragen im Stil der Aufgaben (`question_bank.generate`); Symbol in den Wissensstand-Chips.

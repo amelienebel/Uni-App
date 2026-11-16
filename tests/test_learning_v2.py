@@ -216,7 +216,21 @@ def test_grade_conversion_and_ladder():
     assert mastery.current_level(data, calc) == "mc"  # Rechnen nie als Freitext
     assert mastery.fsrs_grade(True, "einfach", hints_used=1) == 1  # Tipp benutzt → zählt wie schwer
     mastery.apply_exercise_flag(data, mt, "ex1", "schlecht", "Vorzeichen vertauscht")
-    assert mastery.has_open_flag(data, mt)
+    assert mastery.has_open_flag(data, mt) and mastery.current_level(data, mt) == "sc"
+    mastery.apply_exercise_flag(data, mt, "ex1", "gut", "Formel sicher")
+    assert mastery.exercise_rating(data, mt, "ex1") == "schlecht"  # schwächste Rückmeldung zählt
+    other = {"id": "m3", "kind": "wissen"}
+    mastery.apply_exercise_flag(data, other, "ex1", "gut", "sicher")
+    assert mastery.start_level(data, other) == "mc" and not mastery.has_open_flag(data, other)
+    mastery.apply_exercise_flag(data, other, "ex2", "mittel", "mit Hilfe")
+    assert mastery.has_open_flag(data, other) and mastery.exercise_rating(data, other) == "mittel"
+    # Übungsstoff kommt öfter dran: kürzerer Abstand als ohne Blatt
+    plain, sheet = {"id": "p1", "kind": "wissen"}, {"id": "p2", "kind": "wissen"}
+    mastery.set_exercise_hits(data, "ex1", {"p2": ["A1"]})
+    for m in (plain, sheet):
+        for _ in range(3):
+            mastery.record(data, m, True, "einfach", source="check", question_id="q", level_asked="mc")
+    assert data["mastery"]["p2"]["fsrs"]["interval"] < data["mastery"]["p1"]["fsrs"]["interval"]
 
 
 def test_question_reuse_rules_and_number_parsing():

@@ -1,4 +1,4 @@
-"""Seite einer einzelnen Übung (inkl. Tutorium): Blatt, Musterlösung, Fragen."""
+"""Seite einer einzelnen Übung (inkl. Tutorium): Blatt, Musterlösung, Rückmeldung, Minithemen."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from utils.storage import now_iso
 from utils.units import exercise_feedback, related_lectures, session_text, short_label, unit_docs
 from views.common import done_button, open_unit
 from views.module_tabs.files import file_list, show_messages, uploader
-from views.module_tabs.notes import question_list
 
 def _set_chapter(module_id: str, unit_id: str, widget_key: str) -> None:
     data = load_module(module_id)
@@ -19,46 +18,43 @@ def _set_chapter(module_id: str, unit_id: str, widget_key: str) -> None:
     save_module(module_id)
 
 
-CHAT_PROMPT = ("Fasse kurz für meine Lern-App zusammen, wie diese Übung gelaufen ist – in zwei Teilen:\n"
-               "Lief gut: welche Aufgaben/Themen/Rechenschritte ich sicher konnte (Stichpunkte).\n"
-               "Lief schlecht: wo ich Fehler gemacht habe oder Hilfe brauchte – jeweils Thema, konkreter Fehler "
-               "und warum (Stichpunkte, mit Aufgabennummer).")
-
-
 def _feedback(module_id: str, ex: dict) -> None:
-    """Rückmeldung aus dem Claude-Chat: was gut und was schlecht lief → fließt in Karten, Quiz und Korrektur ein."""
+    """Rückmeldung aus der Übung (gut / ging so / schlecht) → wird den Minithemen zugeordnet."""
     data = load_module(module_id)
     fb = exercise_feedback(data, ex["id"])
     with st.container(border=True, key=f"fbbox_{ex['id'].replace(':', '_')}"):
-        h1, h2 = st.columns([4, 1], vertical_alignment="center")
-        h1.markdown("#### :material/forum: Rückmeldung aus dem Chat")
-        with h2.popover("Frage für den Chat", icon=":material/content_copy:", width="stretch"):
-            st.code(CHAT_PROMPT, language=None, wrap_lines=True)
+        st.markdown("#### :material/forum: Rückmeldung zum Blatt")
         with st.form(f"exfb_{module_id}_{ex['id']}", border=False):
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             good = c1.text_area(":green[:material/thumb_up:] Lief gut", fb["good"], height=150)
-            bad = c2.text_area(":red[:material/thumb_down:] Lief schlecht", fb["bad"], height=150)
+            mid = c2.text_area(":orange[:material/thumbs_up_down:] Ging so", fb["mid"], height=150)
+            bad = c3.text_area(":red[:material/thumb_down:] Lief schlecht", fb["bad"], height=150)
             if st.form_submit_button("Speichern", type="primary", width="stretch"):
-                fb.update({"good": good.strip(), "bad": bad.strip(), "updated_at": now_iso()})
+                fb.update({"good": good.strip(), "mid": mid.strip(), "bad": bad.strip(), "updated_at": now_iso()})
                 save_module(module_id)
-                _map_feedback(module_id, ex)
-                st.toast("Rückmeldung gespeichert", icon=":material/check:")
+                if _map_feedback(module_id, ex):
+                    st.toast("Rückmeldung gespeichert und zugeordnet", icon=":material/check:")
         if fb.get("updated_at"):
             st.caption(f"Gespeichert am {fb['updated_at'][:16].replace('T', ' um ')}")
 
 
-def _map_feedback(module_id: str, ex: dict) -> None:
+def _map_feedback(module_id: str, ex: dict) -> bool:
     """Rückmeldung gleich den Minithemen zuordnen (fürs Wochentraining); klappt es nicht, beim Trainingsstart."""
     from utils import ai, planner, sessions
     from utils.config import load_config
 
-    if not planner.LEARNING_V2 or not ai.is_available():
-        return
+    if not planner.LEARNING_V2:
+        return True
+    if not ai.is_available():
+        st.warning("Gespeichert – zugeordnet wird, sobald die KI verfügbar ist.")
+        return False
     try:
-        with st.spinner("Ordne die Rückmeldung den Minithemen zu …"):
+        with st.spinner("Ordne Blatt und Rückmeldung den Minithemen zu …"):
             sessions.map_feedback(load_config(), module_id, ex)
-    except ai.AIError:
-        pass
+    except ai.AIError as exc:
+        st.error(f"Zuordnen hat nicht geklappt: {exc}")
+        return False
+    return True
 
 
 def _remap(module_id: str, ex: dict) -> None:
@@ -73,37 +69,55 @@ def _remap(module_id: str, ex: dict) -> None:
 
 
 def _sheet_topics(cfg: dict, module_id: str, ex: dict, lecs: list[dict]) -> None:
-    """Welche Minithemen (auch aus früheren Vorlesungen) im Blatt dran kamen."""
-    from utils import ai, mastery, sessions
+    """Welche Minithemen (auch aus früheren Vorlesungen) im Blatt dran kamen und wie es dabei lief."""
+    from utils import ai, mastery, sessions, topics
     from views import progress
 
     if not planner.LEARNING_V2:
         return
     data = load_module(module_id)
-    hits = sessions.exercise_minitopics(cfg, module_id, data, ex)
+    hits = {m["id"]: tasks for m, tasks in sessions.exercise_minitopics(cfg, module_id, data, ex)}
+    rated = {m["id"]: r for m in topics.minitopics(data) if (r := mastery.exercise_rating(data, m, ex["id"]))}
     pending = sessions.needs_exercise_mapping(data, ex)
-    if not hits and not pending:
+    fb = (data.get("exercise_feedback") or {}).get(ex["id"]) or {}
+    mts = [m for m in topics.minitopics(data) if m["id"] in hits or m["id"] in rated]
+    if not mts and not pending:
         return
     names = {lec["id"]: f"VL {lec['nr']} · {lec['topic']}" for lec in lecs}
     with st.container(border=True, key=f"sheettopics_{ex['id'].replace(':', '_')}"):
         h1, h2 = st.columns([4, 1], vertical_alignment="center")
-        h1.markdown(f"#### :material/hub: Kommt im Blatt dran · {len(hits)} Minithemen")
-        if h2.button("Neu zuordnen" if hits else "Zuordnen", key=f"remap_{ex['id']}", icon=":material/auto_awesome:",
-                     type="secondary" if hits and not pending else "primary", width="stretch",
+        h1.markdown(f"#### :material/hub: Kommt im Blatt dran · {len(mts)} Minithemen")
+        if h2.button("Neu zuordnen" if mts else "Zuordnen", key=f"remap_{ex['id']}", icon=":material/auto_awesome:",
+                     type="secondary" if mts and not pending else "primary", width="stretch",
                      disabled=not ai.is_available()):
             _remap(module_id, ex)
             st.rerun()
+        if fb.get("mapped_at") and not fb.get("sheet_read", True) and sessions.sheet_docs(data, ex):
+            st.warning("Text des Blatts nicht lesbar (Foto?) – als PDF hochladen, dann neu zuordnen.")
+        if not mts:
+            return
+        counts = {k: sum(1 for r in rated.values() if r == k) for k in mastery.EXERCISE_KINDS}
+        st.markdown(" ".join(f"<span class='mt-dot' style='background:{mastery.EXERCISE_COLORS[k]}'></span>"
+                             f"{label} {counts[k]}" for k, label in mastery.EXERCISE_KINDS.items()),
+                    unsafe_allow_html=True)
         by_lec: dict[str, list] = {}
-        for mt, tasks in hits:
-            by_lec.setdefault(mt["lecture_id"], []).append((mt, tasks))
+        for mt in mts:
+            by_lec.setdefault(mt["lecture_id"], []).append(mt)
         for lec_id in sorted(by_lec, key=lambda lid: next((x["date"] for x in lecs if x["id"] == lid), lid)):
             st.markdown(f"<div class='small-muted'>{names.get(lec_id, lec_id)}</div>", unsafe_allow_html=True)
             items = by_lec[lec_id]
-            st.markdown(progress.chips_html(data, [m for m, _ in items]), unsafe_allow_html=True)
-            flags = [f"{m['title']}: {f['text']}" for m, _ in items for f in mastery.peek(data, m["id"])["exercise_flags"]
-                     if f.get("exercise_id") == ex["id"] and f["kind"] == "schlecht"]
-            for line in flags:
-                st.markdown(f"<span class='mt-dot' style='background:#D6455D'></span>{line}", unsafe_allow_html=True)
+            st.markdown(progress.chips_html(data, items), unsafe_allow_html=True)
+            for mt in items:
+                rating = rated.get(mt["id"])
+                color = mastery.EXERCISE_COLORS.get(rating, "#9AA3AF")
+                texts = [f["text"] for f in mastery.peek(data, mt["id"])["exercise_flags"]
+                         if f.get("exercise_id") == ex["id"] and f["kind"] == rating and f.get("text")]
+                tasks = ", ".join(t.split(":")[0] for t in hits.get(mt["id"], []))
+                line = f"**{mt['title']}**" + (f" · {tasks}" if tasks else "")
+                if rating:
+                    line += f" · {mastery.EXERCISE_KINDS[rating]}" + (f": {' | '.join(texts)}" if texts else "")
+                st.markdown(f"<span class='mt-dot' style='background:{color}'></span>{line}",
+                            unsafe_allow_html=True)
 
 
 def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict]) -> None:
@@ -159,6 +173,3 @@ def render(cfg: dict, module_id: str, ex: dict, lecs: list[dict], exs: list[dict
 
     _feedback(module_id, ex)
     _sheet_topics(cfg, module_id, ex, lecs)
-
-    st.markdown("#### Fragen fürs Tutorium / die Übung")
-    question_list(module_id, data, key_prefix=f"exq_{ex['id']}", unit=ex["id"])

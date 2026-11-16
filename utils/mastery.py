@@ -83,6 +83,9 @@ def start_level(data: dict, mt: dict) -> str:
     rating = nacharbeit_rating(data, mt)
     if rating:
         return "mc" if rating == "sicher" else "sc"
+    ex = exercise_rating(data, mt)
+    if ex:
+        return "mc" if ex == "gut" else "sc"
     hint = archive_hint(data, mt["id"])
     return "mc" if hint and hint["label"] == "sicher" else "sc"
 
@@ -107,7 +110,7 @@ def status(data: dict, mt: dict, today: date | None = None) -> str:
         return "neu"
     r = retrievability(e, today) or 0.0
     last = e["history"][-1] if e.get("history") else {}
-    if last.get("correct") is False or r < 0.6 or any(f["kind"] == "schlecht" and f.get("open")
+    if last.get("correct") is False or r < 0.6 or any(f["kind"] in WEAK_KINDS and f.get("open")
                                                       for f in e.get("exercise_flags", [])):
         return "unsicher"
     if current_level(data, mt) == top_level(mt) and r >= 0.85 and e["asked"] >= 2 and last.get("correct") is True:
@@ -164,6 +167,9 @@ def record(data: dict, mt: dict, correct, self_grade: str, *, source: str, quest
     fsrs["priority"] = _PRIORITY.get(mt.get("importance"), "normal")
     stable_before = (fsrs.get("stability") or 0) >= 7
     sr.review(fsrs, fsrs_grade(correct, self_grade, hints_used), days_to_exam, today)
+    if e.get("exercise_hits") and fsrs.get("interval", 0) > 1:  # kam im Übungsblatt dran → klausurrelevant → öfter
+        fsrs["interval"] = max(1, round(fsrs["interval"] * EXERCISE_INTERVAL))
+        fsrs["due"] = (today + timedelta(days=fsrs["interval"])).isoformat()
     top = LEVELS.index(top_level(mt))
     idx = LEVELS.index(level_asked) if level_asked in LEVELS else 0
     if correct is False:
@@ -184,20 +190,41 @@ def record(data: dict, mt: dict, correct, self_grade: str, *, source: str, quest
     return e
 
 
+EXERCISE_KINDS = {"gut": "Lief gut", "mittel": "Ging so", "schlecht": "Lief schlecht"}
+EXERCISE_COLORS = {"gut": "#2E9D5B", "mittel": "#E08A1E", "schlecht": "#D6455D"}
+WEAK_KINDS = ("mittel", "schlecht")
+EXERCISE_INTERVAL = 0.6  # Abstand bis zur nächsten Abfrage bei Übungsstoff (kürzer = häufiger)
+_EX_ORDER = ["schlecht", "mittel", "gut"]
+
+
 def apply_exercise_flag(data: dict, mt: dict, exercise_id: str, kind: str, text: str,
                         today: date | None = None) -> None:
-    """Rückmeldung aus der Übung: „schlecht“ → sofort fällig, höchstens Multiple Choice; „gut“ → nur vermerkt."""
+    """Rückmeldung aus der Übung: „schlecht“ → sofort fällig, höchstens Single Choice; „mittel“ → in zwei Tagen
+    fällig, höchstens Multiple Choice; beide bleiben offen bis zu einer sicheren richtigen Antwort. „gut“ → Einstieg
+    Multiple Choice, sonst nur vermerkt."""
     today = today or date.today()
     e = entry(data, mt["id"])
     if any(f["exercise_id"] == exercise_id and f["kind"] == kind and f["text"] == text for f in e["exercise_flags"]):
         return
     e["exercise_flags"].append({"exercise_id": exercise_id, "kind": kind, "text": text, "date": today.isoformat(),
-                                "open": kind == "schlecht"})
-    if kind == "schlecht":
-        if e.get("level") == "freitext":
-            e["level"] = "mc"
-        if e.get("asked"):
-            e["fsrs"]["due"] = today.isoformat()
+                                "open": kind in WEAK_KINDS})
+    if kind not in WEAK_KINDS:
+        return
+    cap = "sc" if kind == "schlecht" else "mc"
+    if e.get("level") and LEVELS.index(e["level"]) > LEVELS.index(cap):
+        e["level"] = cap
+    if e.get("asked"):
+        soon = today + timedelta(days=0 if kind == "schlecht" else 2)
+        due = (e.get("fsrs") or {}).get("due")
+        if not due or date.fromisoformat(due) > soon:
+            e["fsrs"]["due"] = soon.isoformat()
+
+
+def exercise_rating(data: dict, mt: dict, exercise_id: str | None = None) -> str | None:
+    """Schwächste Rückmeldung aus den Übungen (optional nur aus einem Blatt): schlecht > mittel > gut."""
+    kinds = {f["kind"] for f in peek(data, mt["id"]).get("exercise_flags", [])
+             if exercise_id is None or f.get("exercise_id") == exercise_id}
+    return next((k for k in _EX_ORDER if k in kinds), None)
 
 
 def set_exercise_hits(data: dict, exercise_id: str, hits: dict[str, list[str]]) -> None:
@@ -224,7 +251,7 @@ def in_exercise(data: dict, mt: dict) -> bool:
 
 
 def has_open_flag(data: dict, mt: dict) -> bool:
-    return any(f["kind"] == "schlecht" and f.get("open") for f in peek(data, mt["id"]).get("exercise_flags", []))
+    return any(f["kind"] in WEAK_KINDS and f.get("open") for f in peek(data, mt["id"]).get("exercise_flags", []))
 
 
 def next_due(data: dict, mts: list[dict], today: date | None = None) -> list[dict]:
@@ -273,7 +300,8 @@ def has_open_nacharbeit(data: dict, mt: dict) -> bool:
 def weak_notes(data: dict, mt: dict) -> list[str]:
     """Was beim Nacharbeiten und in der Übung gehakt hat (fließt in neue Fragen und die Korrektur ein)."""
     e = peek(data, mt["id"])
-    out = [f["text"] for f in e.get("exercise_flags", []) if f["kind"] == "schlecht" and f.get("open")]
+    out = [f"Übung ({EXERCISE_KINDS.get(f['kind'], '')}): {f['text']}" for f in e.get("exercise_flags", [])
+           if f["kind"] in WEAK_KINDS and f.get("open")]
     nach = e.get("nacharbeit") or {}
     if nach.get("open"):
         out.append(f"Nacharbeit ({NACH_RATINGS.get(nach['rating'], '')}): {nach.get('text', '')}".strip())

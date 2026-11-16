@@ -596,7 +596,7 @@ def test_exercise_feedback_flows_into_cards_quiz_and_grading(monkeypatch):
     at.session_state["unit_invfin"] = ex["id"]
     _run(at)
     at.text_area[0].input("Barwert sicher")
-    at.text_area[1].input("Annuität: Rentenbarwertfaktor falsch abgezinst")
+    at.text_area[2].input("Annuität: Rentenbarwertfaktor falsch abgezinst")
     _button(at, "Speichern").click()
     _run(at)
     fb = at.session_state["_module_invfin"]["exercise_feedback"][ex["id"]]

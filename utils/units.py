@@ -150,7 +150,7 @@ def has_notes(data: dict, unit_id: str) -> bool:
 
 
 # Rückmeldung zu einer Übung (aus dem Claude-Chat): was gut und was schlecht lief
-FEEDBACK_FIELDS = (("good", "Lief gut"), ("bad", "Lief schlecht / Schwierigkeiten"))
+FEEDBACK_FIELDS = (("good", "Lief gut"), ("mid", "Ging so"), ("bad", "Lief schlecht / Schwierigkeiten"))
 
 
 def exercise_feedback(data: dict, unit_id: str) -> dict:

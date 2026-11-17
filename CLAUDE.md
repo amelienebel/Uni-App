@@ -31,7 +31,7 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   `spaced_repetition.py` (FSRS mit Klausurtermin: Zielquote, Endspurt, neue Karten pro Tag), `ai.py` (Anthropic, Modell pro Aufgabe in `TASKS`),
   `textbook.py` (Lehrbuch, nur für Tutor), `exam_tasks.py` (Aufgaben aus Altklausuren auslesen, je Aufgabe die
   nötigen Vorlesungen), `script.py` (ganzes Skript im Reiter Dateien → je Vorlesung ihr Teil laut
-  „Skript 1.1–1.4“ im Thema; fließt in die Vorbereitung ein, ohne Folien Vorbereitung nur aus dem Skript), `definitions.py`, `exam_plan.py` (Klausur-Lernplan ab 26.12.), `weakness.py`, `notify.py` (ntfy-Push).
+  „Skript 1.1–1.4“ im Thema; fließt in die Vorbereitung ein, ohne Folien Vorbereitung nur aus dem Skript), `definitions.py`, `exam_plan.py` (Klausur-Lernplan ab 26.12. – vorerst nicht anfassen, wird später gemeinsam angesehen), `weakness.py`, `notify.py` (ntfy-Push).
 - `views/` – `today_view.py` (ohne Klausur-Countdown und Schwachstellen) und `dashboard.py` (Wochenübersicht mit eigener
   Zeile „Karteikarten“, ohne Lernfahrplan; beide mit eigenen To-dos in todos.json → `_custom`),
   `cards_center.py` (Karteikarten: Lernstand, Empfehlung, freie Auswahl mit Filtern wie „schwach“, Liste aller Karten
@@ -159,7 +159,8 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
 - **I&F-Blätter eine Vorlesung später** (`deadlines.sheet_lecture_offset: 1` → `planner.sheet_lectures`, Blatt 2 → VL
   10.11., Frist 16.11.); `training_windows` nutzt `shifted=False`, damit die Trainings-Schlüssel gleich bleiben.
   VWL-Übungstitel ohne „/Tutorium“.
-- Blatt/Musterlösung hochladen → sofort `sessions.map_feedback` (`files.uploader`).
+- Blatt/Musterlösung hochladen ordnet NICHT automatisch zu (Nutzerin will erst Rückmeldung eintragen; Zuordnung beim
+  Speichern der Rückmeldung oder per Knopf „Zuordnen“).
 - Eigene Modellwahl „Fragen für Checks & Wochentraining“ (`ai.TASKS["questions"]`, `question_bank.generate`).
 - **Heute** zeigt nur heute Fälliges und Überfälliges (nichts für morgen).
 - **Zurückstellen** (`common.park_button`/`set_parked`/`parked_list`, todos.json → `_parked`, `planner.is_parked`):

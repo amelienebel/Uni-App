@@ -721,3 +721,50 @@ def test_week_boards_show_cycle_and_stuck_steps():
     at.session_state["nav"] = PAGES["week"]
     _run(at)
     assert any(b.key and b.key.startswith("bdhead_mathe_") for b in at.button)
+
+
+def test_vwl_tutorial_sheets_units_and_todos():
+    from utils import planner, storage, units
+    from utils.config import get_module, load_config
+
+    cfg = load_config()
+    module = get_module(cfg, "vwl")
+    data = storage.load_module("vwl")
+    _, exs = units.all_units(cfg, module, data)
+    tuts = [e for e in exs if e.get("tutorial")]
+    sheets = [e for e in exs if not e.get("tutorial")]
+    assert tuts and tuts[0]["tutorial_nr"] == 1 and tuts[0]["index"] == sheets[1]["index"]  # Tut 1 ↔ Übung 2
+    tut4 = next(t for t in tuts if t["tutorial_nr"] == 4)
+    assert tut4["index"] == sheets[4]["index"] and tut4["id"].startswith("tut:")  # Tut 4 zeitgleich mit Übung 5
+    sched, breaks = storage.get_schedule(cfg), storage.lecture_breaks(cfg)
+    assert planner.exercise_due(module, tut4, sched, breaks) == planner.exercise_due(module, sheets[4], sched, breaks)
+    due = planner.exercise_due(module, tut4, sched, breaks)
+    sem_start, sem_end = storage.semester_dates(cfg)
+    todos = planner.generate_todos(cfg, {m["id"]: storage.load_module(m["id"]) for m in cfg["modules"]}, sched,
+                                   planner.monday_of(due), sem_start, sem_end, storage.load_settings()["learning"],
+                                   breaks)
+    keys = {t["key"] for t in todos}
+    assert tut4["plan_key"] in keys and sheets[4]["plan_key"] in keys  # zwei getrennte To-dos
+    assert not any(e.get("tutorial") for e in units.all_units(cfg, get_module(cfg, "mathe"),
+                                                                storage.load_module("mathe"))[1])
+
+
+def test_parked_todos_hidden_from_today_and_week():
+    from utils import planner
+    from utils.config import get_module, load_config
+    from utils.storage import load_todos
+    from views.common import PAGES, set_parked
+
+    lec = planner.lectures_of(get_module(load_config(), "vwl"))[0]
+    key = planner.lecture_key("vwl", lec["date"], "nachbereitet")
+    assert not planner.is_parked(load_todos(), key)
+    set_parked(key, True)
+    assert planner.is_parked(load_todos(), key)
+    for page in ("today", "week"):
+        at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+        at.session_state["nav"] = PAGES[page]
+        _run(at)
+        assert any(e.label.startswith("Zurückgestellt · ") for e in at.expander)
+        assert not any(b.key == f"park_today_{key}" for b in at.button)
+    set_parked(key, False)
+    assert not planner.is_parked(load_todos(), key)

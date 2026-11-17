@@ -151,6 +151,18 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   darunter je Tag nach Kategorie (`common.grouped`: Nacharbeiten, Check, Übungsblatt, Wochentraining, Sonstiges;
   `common.prio_button`, todos.json → `_prio`, tippen schaltet 1 → 2 → 3 → keine). Stundenplan kompakt (Container
   `ttgrid`, eine Zeile „Modul Art / Zeit“, leere Zeitblöcke der Woche ausgeblendet, Raum nur beim Drüberfahren).
+- **VWL-Tutoriumsblätter** (`config.json` → `tutorial_sheets_from: 1`, `planner.tutorial_sheets`/`tutorial_key`/
+  `tutorial_title`): Tutoriumsblatt n gehört zum Übungsblatt mit Index n (Tut 1 ↔ Übung 2, Tut 4 ↔ Übung 5), eigene
+  Einheit `tut:<Woche>:<Index>` (`tutorial: True`, gleiche Vorlesung und Frist wie das Übungsblatt, Schlüssel
+  `…:ex:…:tut`), eigenes To-do (Etikett Übungsblatt, Chip „Tut n“), Seite wie Übungsblatt (Rückmeldung, Zuordnung zu
+  Minithemen). Schritt-Pille Übungsblatt ist erst erledigt, wenn beide Blätter gelöst sind.
+- **Heute** zeigt nur heute Fälliges und Überfälliges (nichts für morgen).
+- **Zurückstellen** (`common.park_button`/`set_parked`/`parked_list`, todos.json → `_parked`, `planner.is_parked`):
+  überfällige To-dos mit Pause-Knopf aus Heute und Wochenübersicht nehmen; dort unten aufklappbar „Zurückgestellt“
+  mit Zurückholen; im Modul bleiben sie als graue Schritt-Pille (Status `parked`) anklickbar und zählen nicht als „hängt“.
+- **Nacharbeit-Minithemen:** Popover „Minithemen für den Chat“ (`nacharbeit.minitopic_list`, MT 1, MT 2 … in der
+  gleichen Reihenfolge wie beim Zuordnen); der Tutor-Prompt verlangt [MT n · Folie X–Y] je Stichpunkt und jedes
+  Minithema genau einmal; `MAP_PROMPT` übernimmt MT-Nummern direkt. Nicht erwähnte Minithemen werden grau gelistet.
 - Falsch hochgeladene Vorlesung verschieben: Upload-Reiter → „In andere Vorlesung verschieben“ (`utils/move.py`:
   Dateien, Hinweise, Minithemen, Wissensstand, Fragen, Definitionen, Checks, Nacharbeit, Erledigt-Stand; Verweise alter Karten
   im Quellmodul werden gelöst).

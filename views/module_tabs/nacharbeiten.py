@@ -406,15 +406,18 @@ def nacharbeit_tab(cfg: dict, module_id: str, lec: dict) -> None:
         getattr(st, msg[0])(msg[1])
     item = nacharbeit.entry(data, lec["id"])
     done = bool(load_todos().get(planner.lecture_key(module_id, lec["date"], "nacharbeit")))
-    c1, c2 = st.columns(2, vertical_alignment="center")
+    c1, c1b, c2 = st.columns(3, vertical_alignment="center")
     with c1.popover("Prompt für den Tutor-Chat", icon=":material/content_copy:", width="stretch"):
         st.code(nacharbeit.TUTOR_PROMPT, language=None, wrap_lines=True)
+    with c1b.popover("Minithemen für den Chat", icon=":material/format_list_numbered:", width="stretch",
+                     disabled=not topics.minitopics(data, lec["id"])):
+        st.code(nacharbeit.minitopic_list(data, lec["id"]), language=None, wrap_lines=True)
     wkey = f"nach_done_{module_id}_{lec['id']}"
     done_button(c2, "Nacharbeit erledigt", done, None, wkey, callback=set_done,
                 args=(module_id, lec, "nacharbeit", not done))
     with st.form(f"nachform_{module_id}_{lec['id']}"):
         text = st.text_area("Zusammenfassung aus dem Chat", item.get("text", ""), height=260,
-                            placeholder="SICHER:\n- [Folie 3–5] …\n\nWACKELIG:\n- …")
+                            placeholder="SICHER:\n- [MT 1 · Folie 3–5] …\n\nWACKELIG:\n- …")
         if st.form_submit_button("Speichern & auswerten", type="primary", icon=":material/save:", width="stretch"):
             _save_summary(cfg, module_id, lec, text)
             st.rerun()
@@ -433,6 +436,12 @@ def nacharbeit_tab(cfg: dict, module_id: str, lec: dict) -> None:
                 extra = f" – {nach['text']}" if nach.get("text") and rating != "sicher" else ""
                 st.markdown(f"<span class='mt-dot' style='background:{color}'></span>{mt['title']}"
                             f"<span class='small-muted'>{extra}</span>", unsafe_allow_html=True)
+        if groups[None]:
+            st.markdown(f"**Nicht erwähnt** <span class='small-muted'>{len(groups[None])}</span>",
+                        unsafe_allow_html=True)
+            for mt in groups[None]:
+                st.markdown(f"<span class='mt-dot' style='background:#9AA3AF'></span>{mt['title']}",
+                            unsafe_allow_html=True)
     if done or nacharbeit.has_summary(data, lec["id"]):
         st.button("Weiter zu Check 1", key=f"tock1_{lec['id']}", type="primary", icon=":material/fact_check:",
                   width="stretch", on_click=_goto_tab, args=(lec["id"], "check"))

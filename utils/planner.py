@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from datetime import date, datetime, timedelta
 
 from utils import spaced_repetition as sr
@@ -266,6 +268,24 @@ def exercise_key(module_id: str, exercise: dict) -> str:
     return f"{module_id}:ex:{exercise['week_of'].isoformat()}:{exercise['index']}"
 
 
+def tutorial_key(module_id: str, exercise: dict) -> str:
+    return exercise_key(module_id, exercise) + ":tut"
+
+
+def tutorial_sheets(module_cfg: dict) -> list[dict]:
+    """Tutoriumsblätter (VWL): Blatt 1 gehört zum Übungsblatt mit Index tutorial_sheets_from, Blatt n zum n-ten
+    danach – gleiche Woche, gleiche Vorlesung, gleiche Frist, aber eigenes To-do."""
+    start = module_cfg.get("tutorial_sheets_from")
+    if start is None:
+        return []
+    return [{**ex, "tutorial_nr": ex["index"] - start + 1} for ex in exercises_of(module_cfg) if ex["index"] >= start]
+
+
+def tutorial_title(ex: dict) -> str:
+    topic = re.sub(r"^Übung(/Tutorium)?:\s*", "", ex["title"])
+    return f"Tutoriumsblatt {ex['tutorial_nr']} · {topic}"
+
+
 def current_chapter(cfg: dict, module_cfg: dict, module_data: dict, d: date, upcoming: bool = False) -> dict | None:
     """Kapitel der letzten (upcoming=False) bzw. nächsten (upcoming=True) Vorlesung laut Ablauf."""
     lectures = [lec for lec in lectures_of(module_cfg) if lec.get("chapter_id")]
@@ -401,6 +421,13 @@ def generate_todos(cfg: dict, modules_data: dict[str, dict], schedule: list[dict
                  "status_field": None, "sync": "uebung", "kind": "Übungsblatt", "step": 4,
                  "title": f"Übungsblatt lösen – {ex['title']}", "due": due, "short": ex["title"],
                  "chip": _sheet_chip(ex["title"])})
+        for ex in tutorial_sheets(module):
+            due = exercise_due(module, ex, schedule, breaks)
+            if monday <= due <= sunday:
+                add({"key": tutorial_key(module_id, ex), "module_id": module_id, "chapter_id": ex.get("chapter_id"),
+                     "status_field": None, "kind": "Übungsblatt", "step": 4, "due": due,
+                     "title": f"{tutorial_title(ex)} lösen", "short": tutorial_title(ex),
+                     "chip": f"Tut {ex['tutorial_nr']}"})
         if LEARNING_V2:
             since = v2_start(modules_data[module_id])
             for w in training_windows(cfg, module, schedule, breaks):
@@ -582,6 +609,11 @@ def custom_todos(todo_state: dict, start: date | None = None, end: date | None =
                           "status_field": None, "kind": "Eigenes", "title": item["title"], "due": due,
                           "custom": True})
     return todos
+
+
+def is_parked(todo_state: dict, key: str) -> bool:
+    """Überfälliges To-do zurückgestellt: nicht mehr bei Heute/Woche, im Modul weiter nachholbar."""
+    return key in (todo_state.get("_parked") or {})
 
 
 def todo_done(todo: dict, modules_data: dict[str, dict], todo_state: dict) -> bool:

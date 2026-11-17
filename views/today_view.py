@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from datetime import timedelta
 
 import streamlit as st
 
@@ -13,7 +12,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (in_timetable, days_until_exam, get_schedule, lecture_breaks, load_extra, load_module, load_settings,
                            load_todos, semester_dates, today)
 from views import cards_center
-from views.common import NEXT_GROUP, grouped, group_header, prio_button, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
+from views.common import park_button, parked_list, NEXT_GROUP, grouped, group_header, prio_button, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, open_unit, todo_module, toggle_todo
 
 
 def _safe(text: str) -> str:
@@ -33,7 +32,7 @@ def _todo_row(cfg: dict, t: dict, modules_data: dict, state: dict, now, with_kin
     key = f"today_{t['key']}"
     st.session_state[key] = planner.todo_done(t, modules_data, state)
     with st.container(key=f"tdrow_{module['id']}_today_{_safe(t['key'])}"):
-        c0, c1, c2, c3 = st.columns([0.5, 8, 3, 0.8], vertical_alignment="center")
+        c0, c1, c2, c3, c4 = st.columns([0.5, 8, 3, 0.8, 0.8], vertical_alignment="center")
         c0.checkbox("Erledigt", key=key, on_change=toggle_todo, args=(t, key), label_visibility="collapsed")
         c1.button(f"**{module['short']}** · " + (f"{kind_icon(t['kind'])} " if with_kind else "") + todo_text(t),
                   key=f"open_{key}", type="tertiary", icon=micon(module), on_click=open_todo, args=(t,),
@@ -43,6 +42,7 @@ def _todo_row(cfg: dict, t: dict, modules_data: dict, state: dict, now, with_kin
             c2.button("", key=f"del_{key}", icon=":material/delete:", type="tertiary", help="Löschen",
                       on_click=delete_custom_todo, args=(t["key"],))
         prio_button(c3, t["key"], key)
+        park_button(c4, t, key, now)
 
 
 def render(cfg: dict) -> None:
@@ -64,21 +64,21 @@ def render(cfg: dict) -> None:
                                    load_settings()["learning"], state, breaks)
     todos += planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end,
                                     load_settings()["learning"], breaks)
-    todos += planner.custom_todos(state, end=now + timedelta(days=1))
-    seen, open_todos = set(), []
+    todos += planner.custom_todos(state, end=now)
+    seen, open_todos, parked = set(), [], []
     for t in todos:
         if t["key"] in seen or t["kind"] in ("Wiederholung", "Klausurvorbereitung"):
             continue
         seen.add(t["key"])
-        if not planner.todo_done(t, modules_data, state) and t["due"] <= now + timedelta(days=1):
-            open_todos.append(t)
+        if not planner.todo_done(t, modules_data, state) and t["due"] <= now:
+            (parked if planner.is_parked(state, t["key"]) else open_todos).append(t)
     open_todos.sort(key=lambda t: (t["due"], t["module_id"] or "", t.get("step", 9)))
     new_min = int(load_settings()["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
     card_plan = {mid: sr.daily_plan(d["cards"], days_until_exam(mid), new_min) for mid, d in modules_data.items()}
     due_cards = {mid: p["reviews"] + p["new"] for mid, p in card_plan.items()}
     c1, c2, _ = st.container(key="kpis").columns(3)
     c1.metric("Offene To-dos", len(open_todos),
-              help="Überfällig, heute und morgen fällig")
+              help="Überfällig und heute fällig")
     if planner.LEARNING_V2:
         c2.metric("Überfällig", sum(1 for t in open_todos if t["due"] < now))
     else:
@@ -116,6 +116,7 @@ def render(cfg: dict) -> None:
             group_header(name, len(items))
             for t in items:
                 _todo_row(cfg, t, modules_data, state, now, with_kind=name == NEXT_GROUP)
+        parked_list(cfg, parked, "today")
 
         # --- Klausur-Lernplan --------------------------------------------------------
         conf = load_extra("exam_plan").get("settings", {})

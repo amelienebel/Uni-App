@@ -12,9 +12,9 @@ from utils.storage import get_schedule, lecture_breaks, today
 
 STEP_NAMES = ("Upload", "Nacharbeit", "Check 1", "Übungsblatt", "Check 2", "Wochentraining")
 _STEP_CSS = {"done": "step-done", "open": "step-open", "overdue": "step-late", "na": "step-na",
-             "optional": "step-optional"}
+             "optional": "step-optional", "parked": "step-optional"}
 _STEP_ICON = {"done": "check", "open": "radio_button_unchecked", "overdue": "schedule", "na": "remove",
-              "optional": "radio_button_unchecked"}
+              "optional": "radio_button_unchecked", "parked": "pause_circle"}
 
 
 def _finished_dates(data: dict, kind: str) -> list[date]:
@@ -39,38 +39,49 @@ def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict
     def due(step: str) -> date:
         return planner.step_due(module, lec["date"], step)
 
-    def status(done: bool, due_: date | None, optional: bool = False) -> str:
+    def status(done: bool, due_: date | None, optional: bool = False, todo_key: str | None = None) -> str:
         if done:
             return "done"
         if optional:  # frühere Vorlesung: freiwillig, ohne Frist
             return "optional"
-        return "overdue" if due_ and due_ < now else "open"
+        if due_ and due_ < now:
+            return "parked" if todo_key and planner.is_parked(state, todo_key) else "overdue"
+        return "open"
+
+    def lkey(field: str) -> str:
+        return planner.lecture_key(module_id, lec["date"], field)
 
     def key(field: str) -> bool:
-        return bool(state.get(planner.lecture_key(module_id, lec["date"], field)))
+        return bool(state.get(lkey(field)))
 
     legacy = sessions.is_legacy(data, lec["id"])
     whole = sessions.single_check(data, lec["id"])
-    steps = [("Upload", status(key("nachbereitet"), due("upload")), ("lecture", "nachbereitet"))]
+    steps = [("Upload", status(key("nachbereitet"), due("upload"), todo_key=lkey("nachbereitet")),
+              ("lecture", "nachbereitet"))]
     steps.append(("Nacharbeit", status(key("nacharbeit") or nacharbeit.has_summary(data, lec["id"]),
-                                       due("nacharbeit"), legacy or whole), ("lecture", "nacharbeit")))
-    steps.append(("Check 1", status(key("check") or sessions.check_done(data, lec["id"], 1), due("check1"), legacy),
-                  ("check", 1)))
+                                       due("nacharbeit"), legacy or whole, lkey("nacharbeit")), ("lecture", "nacharbeit")))
+    steps.append(("Check 1", status(key("check") or sessions.check_done(data, lec["id"], 1), due("check1"), legacy,
+                                    lkey("check")), ("check", 1)))
     sheet = planner.lecture_sheet(module, lec, schedule, breaks)
     ex = next((e for e in exs if sheet and e.get("index") == sheet["index"]), None)
     if ex:
-        steps.append(("Übungsblatt", status(bool(state.get(ex["plan_key"])), due("uebung")), ("exercise", ex["id"])))
+        sheets = [e for e in exs if e.get("index") == ex["index"]]  # mit Tutoriumsblatt (VWL): beide gelöst
+        undone = [e["plan_key"] for e in sheets if not state.get(e["plan_key"])]
+        parked = bool(undone) and all(planner.is_parked(state, k) for k in undone)
+        steps.append(("Übungsblatt", status(not undone, due("uebung"), todo_key=undone[0] if parked else None),
+                      ("exercise", next((e["id"] for e in sheets if not state.get(e["plan_key"])), ex["id"]))))
     else:
         steps.append(("Übungsblatt", "na", None))
     no_second = topics.minitopics(data, lec["id"]) and not sessions.halves(data, lec["id"])[1]
     steps.append(("Check 2", "na" if no_second or (whole and not sessions.check_done(data, lec["id"], 2)) else
-                  status(key("check2") or sessions.check_done(data, lec["id"], 2), due("check2"), legacy),
+                  status(key("check2") or sessions.check_done(data, lec["id"], 2), due("check2"), legacy,
+                         lkey("check2")),
                   ("check", 2)))
     window = next((w for w in planner.training_windows(cfg, module, schedule, breaks)
                    if w.get("lecture_date") == lec["date"]), None)
     if window:
         trained = bool(state.get(window["key"])) or any(d >= window["start"] for d in _finished_dates(data, "training"))
-        steps.append(("Wochentraining", status(trained, window["due"]), ("training", None)))
+        steps.append(("Wochentraining", status(trained, window["due"], todo_key=window["key"]), ("training", None)))
     else:
         steps.append(("Wochentraining", "na", ("training", None)))
     return steps
@@ -108,7 +119,7 @@ def step_buttons(module_id: str, lec: dict, steps: list[tuple], key: str) -> Non
     """Schritte als anklickbare Pillen: führt direkt zu Upload, Nacharbeit, Check 1/2, Übungsblatt, Wochentraining."""
     with st.container(horizontal=True, gap="small", key=f"steps_{key}"):
         for i, (name, state_, target) in enumerate(steps):
-            icon = "check" if state_ == "done" else "schedule" if state_ == "overdue" else STEP_ICONS[name]
+            icon = {"done": "check", "overdue": "schedule", "parked": "pause_circle"}.get(state_, STEP_ICONS[name])
             st.button(name, key=f"stp_{state_}_{key}_{i}", icon=f":material/{icon}:", width="content",
                       disabled=target is None or state_ == "na", on_click=_go if target else None,
                       args=(module_id, lec["id"], target) if target else None)
@@ -193,7 +204,7 @@ def week_cycle(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[
 
 
 def _cycle_counts(cycle: dict) -> tuple[int, int, int]:
-    steps = [s for _, ss in cycle["current"] for s in ss if s[1] not in ("na", "optional")]
+    steps = [s for _, ss in cycle["current"] for s in ss if s[1] not in ("na", "optional", "parked")]
     done = sum(1 for s in steps if s[1] == "done")
     return done, len(steps), sum(len(ss) for _, ss in cycle["stuck"])
 

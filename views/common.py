@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -102,6 +103,39 @@ def _cycle_prio(key: str) -> None:
     else:
         prios[key] = nxt
     save_todos()
+
+
+def set_parked(key: str, value: bool) -> None:
+    from utils.storage import load_todos, save_todos, today
+
+    parked = load_todos().setdefault("_parked", {})
+    if value:
+        parked[key] = today().isoformat()
+    else:
+        parked.pop(key, None)
+    save_todos()
+
+
+def park_button(container, todo: dict, widget_key: str, now) -> None:
+    """Überfällige Aufgabe zurückstellen (verschwindet aus Heute/Woche, bleibt im Modul nachholbar)."""
+    if todo["due"] < now and not todo.get("custom"):
+        container.button("", key=f"park_{widget_key}", icon=":material/pause_circle:", type="tertiary",
+                         help="Zurückstellen", on_click=set_parked, args=(todo["key"], True))
+
+
+def parked_list(cfg: dict, todos: list[dict], key: str) -> None:
+    """Aufklappbar: zurückgestellte Aufgaben, jederzeit öffnen oder zurückholen."""
+    if not todos:
+        return
+    with st.expander(f"Zurückgestellt · {len(todos)}", icon=":material/pause_circle:"):
+        for t in sorted(todos, key=lambda t: (t["due"], t.get("module_id") or "")):
+            module = todo_module(cfg, t)
+            with st.container(key=f"tdrow_{module['id']}_parked_{key}_{re.sub(r'[^0-9A-Za-z]', '_', t['key'])}"):
+                c1, c2 = st.columns([8, 2], vertical_alignment="center")
+                c1.button(f"**{module['short']}** · {todo_text(t)}", key=f"pkopen_{key}_{t['key']}",
+                          type="tertiary", icon=micon(module), on_click=open_todo, args=(t,), help=t["title"])
+                c2.button("Zurückholen", key=f"pkback_{key}_{t['key']}", icon=":material/play_circle:",
+                          type="tertiary", on_click=set_parked, args=(t["key"], False))
 
 
 def prio_button(container, todo_key: str, widget_key: str) -> None:
@@ -325,7 +359,7 @@ def open_todo(todo: dict) -> None:
         tab = {"check2": "check"}.get(parts[3], parts[3])
         st.session_state[f"ltab_next_{unit_id}"] = LECTURE_TAB.get(tab, LECTURE_TAB["nachbereitet"])
     elif len(parts) >= 4 and parts[1] == "ex":
-        unit_id = f"ex:{parts[2]}:{parts[3]}"
+        unit_id = f"{'tut' if parts[-1] == 'tut' else 'ex'}:{parts[2]}:{parts[3]}"
     elif todo.get("kind") in ("Wiederholung", "Klausurvorbereitung"):
         st.session_state[f"mtabs_{module_id}"] = MODULE_TABS[1]
     open_unit(module_id, unit_id)

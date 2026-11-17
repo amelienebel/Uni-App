@@ -12,7 +12,8 @@ TUTOR_PROMPT = """Du bist mein Tutor für mein BWL-Studium (LMU München, 1. Sem
 Mathematik, Investition und Finanzierung, Externes Rechnungswesen. Wir arbeiten gemeinsam eine Vorlesung nach,
 die ich verpasst oder kaum verstanden habe. Geh davon aus, dass ich den Stoff noch nicht kenne. Dazu hänge ich an:
 - die Vorlesungsfolien bzw. das Skript,
-- falls vorhanden meine Notizen oder Mitschriften.
+- falls vorhanden meine Notizen oder Mitschriften,
+- die Liste der Minithemen aus meiner Lern-App (MT 1, MT 2, …).
 
 Grundlage:
 - Halte dich an die Vorlesung: dieselben Begriffe, Formeln, Schreibweisen, Definitionen und Lösungswege wie auf
@@ -22,8 +23,9 @@ Grundlage:
 
 Start:
 - Gib mir einen kurzen Überblick (3–5 Stichpunkte): Worum geht es, wie hängen die Themen zusammen?
-- Teil die Vorlesung in Abschnitte (ein Konzept bzw. zusammengehörige Folien) und nenn mir die Liste mit
-  Foliennummern. Überspring reine Titel-, Gliederungs- und Organisationsfolien.
+- Teil die Vorlesung in Abschnitte entlang der Minithemen (ein Abschnitt = ein oder mehrere zusammengehörige
+  Minithemen) und nenn mir die Liste mit MT-Nummern und Foliennummern. Überspring reine Titel-, Gliederungs- und
+  Organisationsfolien.
 - Sag bei jedem neuen Abschnitt, wo wir stehen (z. B. „Abschnitt 3 von 7“).
 
 Pro Abschnitt:
@@ -57,20 +59,20 @@ Wenn ich „fertig“ schreibe, gibst du mir NUR diese Zusammenfassung aus, dami
 kopieren kann:
 
 SICHER:
-- [Folie X–Y] Thema – was ich konnte (z. B. Formel angewendet, Begriff erklärt)
+- [MT n · Folie X–Y] Thema – was ich konnte (z. B. Formel angewendet, Begriff erklärt)
 
 WACKELIG:
-- [Folie X–Y] Thema – wo es hakte – Ursache (z. B. Vorzeichen, Formel verwechselt, Begriff unklar,
+- [MT n · Folie X–Y] Thema – wo es hakte – Ursache (z. B. Vorzeichen, Formel verwechselt, Begriff unklar,
   Zusammenhang nicht gesehen) – Hilfe: Rückfrage / Hinweis / Beispiel / nächster Schritt
 
 NICHT VERSTANDEN:
-- [Folie X–Y] Thema – was genau unklar blieb – Ursache – Hilfe: nochmal erklärt / Lösung gezeigt
+- [MT n · Folie X–Y] Thema – was genau unklar blieb – Ursache – Hilfe: nochmal erklärt / Lösung gezeigt
 
 NICHT GESCHAFFT:
-- [Folie X–Y] Thema
+- [MT n · Folie X–Y] Thema
 
 ALS NÄCHSTES ÜBEN:
-- [Thema] – konkret was (z. B. „Kapitalwert mit unterschiedlichen Zinssätzen rechnen“)
+- [MT n] Thema – konkret was (z. B. „Kapitalwert mit unterschiedlichen Zinssätzen rechnen“)
 
 Einstufung:
 - SICHER: Kontrollfrage und Anwendung beim ersten Versuch richtig, höchstens eine Rückfrage.
@@ -78,6 +80,8 @@ Einstufung:
 - NICHT VERSTANDEN: auch nach Hilfe falsch, nochmal erklären nötig oder Lösung gezeigt.
 
 Regeln für die Zusammenfassung: Stichpunkte im Telegrammstil, ehrlich und genau, nichts beschönigen.
+Jedes Minithema der Liste kommt genau einmal in SICHER, WACKELIG, NICHT VERSTANDEN oder NICHT GESCHAFFT vor
+(mehrere Nummern pro Stichpunkt sind erlaubt, wenn sie gleich gut liefen).
 Leere Kategorien lässt du weg. Keine Einleitung und kein Schlusssatz."""
 
 CATEGORIES = {"sicher": "sicher", "wackelig": "wackelig", "unklar": "unklar", "offen": "offen", "ueben": "ueben"}
@@ -85,7 +89,8 @@ CATEGORIES = {"sicher": "sicher", "wackelig": "wackelig", "unklar": "unklar", "o
 MAP_PROMPT = """Ordne die Zusammenfassung einer Nacharbeit (Tutor-Chat zu einer Vorlesung) den Minithemen unten zu.
 Jeder Stichpunkt bekommt seine Kategorie (SICHER → sicher, WACKELIG → wackelig, NICHT VERSTANDEN → unklar,
 NICHT GESCHAFFT → offen, ALS NÄCHSTES ÜBEN → ueben), den Text des Stichpunkts und die Nummern ALLER Minithemen, um
-die es geht (Foliennummern und Inhalt vergleichen; meist 1–4). Ein Abschnitt über mehrere Folien betrifft oft mehrere
+die es geht. Stehen im Stichpunkt Nummern wie „MT 3“, sind das genau die Nummern der Liste unten – nimm sie. Sonst
+Foliennummern und Inhalt vergleichen (meist 1–4); ein Abschnitt über mehrere Folien betrifft oft mehrere
 Minithemen. Passt keins, minitopics leer lassen.
 
 <zusammenfassung>
@@ -123,6 +128,12 @@ def _pages(mt: dict, data: dict) -> str:
         if s.get("pages"):
             parts.append(f"{doc['filename'] if doc else 'Folien'} S. {topics.format_pages(s['pages'])}")
     return "; ".join(parts) or "–"
+
+
+def minitopic_list(data: dict, lec_id: str) -> str:
+    """Nummerierte Minithemen der Vorlesung zum Mitgeben in den Tutor-Chat (gleiche Nummern wie beim Zuordnen)."""
+    return "\n".join(f"MT {i} · {m['topic']}: {m['title']} ({_pages(m, data)})"
+                     for i, m in enumerate(topics.minitopics(data, lec_id), start=1))
 
 
 def map_summary(cfg: dict, module_id: str, lec_id: str) -> int:

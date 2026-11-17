@@ -14,7 +14,7 @@ from utils.config import WEEKDAYS, get_module
 from utils.storage import (in_timetable, days_until_exam, get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
 from views import cards_center
-from views.common import NEXT_GROUP, grouped, group_header, prio_button, prio_of, sort_todos, is_mobile, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
+from views.common import park_button, parked_list, NEXT_GROUP, grouped, group_header, prio_button, prio_of, sort_todos, is_mobile, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -133,6 +133,7 @@ def _todo_widget(t: dict, cfg: dict, modules_data: dict, todo_state: dict, monda
                    + (f" · geplant {SLOT_LABELS[slot]} Uhr" if slot else ""))
         with c3.container(horizontal=True, gap="small"):
             prio_button(st, t["key"], key)
+            park_button(st, t, key, now)
             _move_popover(t, monday, place)
 
 
@@ -290,6 +291,9 @@ def render(cfg: dict) -> None:
                   if not planner.todo_done(t, modules_data, todo_state)]
     todos += planner.custom_todos(todo_state, monday, monday + timedelta(days=6))
     todos = [t for t in todos if t["kind"] != "Wiederholung"]  # Karteikarten haben eine eigene Zeile
+    parked = [t for t in todos if planner.is_parked(todo_state, t["key"])
+              and not planner.todo_done(t, modules_data, todo_state)]
+    todos = [t for t in todos if t not in parked]
     new_min = int(settings["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
     card_counts = {day: ({} if planner.LEARNING_V2 else _card_counts(modules_data, day, now, new_min)) for day in
                    (monday + timedelta(days=i) for i in range(7))}
@@ -391,6 +395,7 @@ def render(cfg: dict) -> None:
                 for t in items:
                     _todo_widget(t, cfg, modules_data, todo_state, monday, now, place="list", compact=False,
                                  with_kind=name == NEXT_GROUP)
+    parked_list(cfg, parked, f"week_{monday.isoformat()}")
 
     st.divider()
     with st.expander("Kapitelstatus aller Module", expanded=False):

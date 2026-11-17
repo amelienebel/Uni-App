@@ -56,6 +56,7 @@ def exercises(cfg: dict, module_cfg: dict, data: dict, lecture_list: list[dict] 
     breaks = lecture_breaks(cfg)
     lecture_list = lecture_list if lecture_list is not None else lectures(cfg, module_cfg)
     overrides = data.get("exercise_chapters", {})
+    tutorials = {t["index"]: t for t in planner.tutorial_sheets(module_cfg)}
     result = []
     for ex in planner.exercises_of(module_cfg):
         uid = exercise_unit_id(ex)
@@ -64,9 +65,16 @@ def exercises(cfg: dict, module_cfg: dict, data: dict, lecture_list: list[dict] 
         if not chapter_id:
             before = [lec for lec in lecture_list if lec["date"] < session and lec.get("chapter_id")]
             chapter_id, auto = (before[-1]["chapter_id"] if before else None), True
-        result.append({**ex, "kind": "exercise", "id": uid, "session": session, "chapter_id": chapter_id,
-                       "chapter_auto": auto, "plan_key": planner.exercise_key(module_id, ex),
-                       "sessions": _sessions(module_id, ex, session, schedule, breaks)})
+        unit = {**ex, "kind": "exercise", "id": uid, "session": session, "chapter_id": chapter_id,
+                "chapter_auto": auto, "plan_key": planner.exercise_key(module_id, ex),
+                "sessions": _sessions(module_id, ex, session, schedule, breaks)}
+        result.append(unit)
+        tut = tutorials.get(ex["index"])
+        if tut:
+            sessions = [s for s in unit["sessions"] if s.get("type") == "Tutorium"] or unit["sessions"]
+            result.append({**unit, "id": "tut" + uid[2:], "tutorial": True, "tutorial_nr": tut["tutorial_nr"],
+                           "title": planner.tutorial_title(tut), "plan_key": planner.tutorial_key(module_id, ex),
+                           "sessions": sessions, "session": sessions[0]["date"]})
     return result
 
 
@@ -85,6 +93,8 @@ def unit_for_event(cfg: dict, module_cfg: dict, data: dict, ev_type: str, ev_dat
     lecs, exs = all_units(cfg, module_cfg, data)
     if ev_type == "Vorlesung":
         return next((lec["id"] for lec in lecs if lec["date"] == ev_date), None)
+    if ev_type == "Tutorium":
+        exs = sorted(exs, key=lambda ex: not ex.get("tutorial"))
     match = next((ex for ex in exs if ex["session"] == ev_date), None) \
         or next((ex for ex in exs if any(s["date"] == ev_date for s in ex["sessions"])), None)
     return match["id"] if match else None
@@ -97,7 +107,7 @@ def short_label(unit: dict) -> str:
             return f"Einheit {unit['nr']} · Selbststudium"
         return f"VL {unit['nr']} · {WEEKDAYS_SHORT[d.weekday()]} {d:%d.%m.}"
     d = unit["session"]
-    return f"Übung · {WEEKDAYS_SHORT[d.weekday()]} {d:%d.%m.}"
+    return f"{'Tutorium' if unit.get('tutorial') else 'Übung'} · {WEEKDAYS_SHORT[d.weekday()]} {d:%d.%m.}"
 
 
 def session_text(ex: dict) -> str:
@@ -246,7 +256,8 @@ def open_tasks(cfg: dict, module_cfg: dict, lecture_list: list[dict], exercise_l
     for ex in exercise_list:
         due = planner.exercise_due(module_cfg, ex, schedule, breaks)
         if due >= sem_start and not state.get(ex["plan_key"]):
-            tasks.append({"due": due, "unit": ex, "label": "Übungsblatt lösen", "about": ex["title"], "tab": None,
+            tasks.append({"due": due, "unit": ex, "label": "Tutoriumsblatt lösen" if ex.get("tutorial")
+                          else "Übungsblatt lösen", "about": ex["title"], "tab": None,
                           "step": 4, "kind": "Übungsblatt"})
     if planner.LEARNING_V2:
         since = planner.v2_start(data or {})

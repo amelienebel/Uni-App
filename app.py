@@ -154,7 +154,7 @@ st.markdown("""
   [class*="st-key-stp_overdue_"] button { background: rgba(214, 69, 93, 0.10); color: #d6455d;
     border: 1px solid rgba(214, 69, 93, 0.55); }
   [class*="st-key-stp_na_"] button { opacity: 0.4; text-decoration: line-through; }
-  [class*="st-key-stp_optional_"] button { background: transparent; opacity: 0.6;
+  [class*="st-key-stp_optional_"] button, [class*="st-key-stp_parked_"] button { background: transparent; opacity: 0.6;
     border: 1.5px dotted rgba(128, 128, 128, 0.55); }
   [class*="st-key-stp_"] button:hover:not(:disabled) { filter: brightness(0.95); border-style: solid; }
   [class*="st-key-nextbox_"] { background: rgba(28, 131, 225, 0.09); border-color: rgba(28, 131, 225, 0.35) !important; }

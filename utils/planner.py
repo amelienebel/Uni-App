@@ -144,7 +144,7 @@ def step_due(module_cfg: dict, lecture_date: date, step: str) -> date:
     return start + timedelta(days=int(days[step]))
 
 
-def sheet_lectures(module_cfg: dict, schedule: list[dict], breaks=()) -> dict[int, dict]:
+def sheet_lectures(module_cfg: dict, schedule: list[dict], breaks=(), shifted: bool = True) -> dict[int, dict]:
     """Übungsblatt (Index in config.json) → Vorlesung, zu der es gehört.
 
     Mit Kapitel: die erste noch freie Vorlesung desselben Kapitels vor der Besprechung (Mathe Blatt n → VL n,
@@ -165,6 +165,10 @@ def sheet_lectures(module_cfg: dict, schedule: list[dict], breaks=()) -> dict[in
         if chosen:
             taken.add(chosen["date"])
             out[ex["index"]] = chosen
+    offset = int(module_cfg.get("deadlines", {}).get("sheet_lecture_offset", 0)) if shifted else 0
+    if offset:  # z. B. I&F: Blatt n gehört zur Vorlesung eine Woche später (Blatt 2 → VL 10.11., Frist 16.11.)
+        pos = {lec["date"]: i for i, lec in enumerate(lecs)}
+        out = {idx: lecs[pos[lec["date"]] + offset] for idx, lec in out.items() if pos[lec["date"]] + offset < len(lecs)}
     return out
 
 
@@ -564,7 +568,8 @@ def training_windows(cfg: dict, module: dict, schedule: list[dict], breaks=()) -
     Übungsblatt, damit schon erledigte Trainings erledigt bleiben."""
     if module.get("deadlines", {}).get("upload_weekday") is None:
         return _old_training_windows(cfg, module, schedule, breaks)
-    sheet_of = {lec["date"]: idx for idx, lec in sheet_lectures(module, schedule, breaks).items()}
+    # Schlüssel nach der ursprünglichen Zuordnung, damit schon erledigte Trainings erledigt bleiben
+    sheet_of = {lec["date"]: idx for idx, lec in sheet_lectures(module, schedule, breaks, shifted=False).items()}
     exs = {ex["index"]: ex for ex in exercises_of(module)}
     windows = []
     for lec in lectures_of(module):

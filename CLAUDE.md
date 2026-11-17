@@ -156,6 +156,11 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   Einheit `tut:<Woche>:<Index>` (`tutorial: True`, gleiche Vorlesung und Frist wie das Übungsblatt, Schlüssel
   `…:ex:…:tut`), eigenes To-do (Etikett Übungsblatt, Chip „Tut n“), Seite wie Übungsblatt (Rückmeldung, Zuordnung zu
   Minithemen). Schritt-Pille Übungsblatt ist erst erledigt, wenn beide Blätter gelöst sind.
+- **I&F-Blätter eine Vorlesung später** (`deadlines.sheet_lecture_offset: 1` → `planner.sheet_lectures`, Blatt 2 → VL
+  10.11., Frist 16.11.); `training_windows` nutzt `shifted=False`, damit die Trainings-Schlüssel gleich bleiben.
+  VWL-Übungstitel ohne „/Tutorium“.
+- Blatt/Musterlösung hochladen → sofort `sessions.map_feedback` (`files.uploader`).
+- Eigene Modellwahl „Fragen für Checks & Wochentraining“ (`ai.TASKS["questions"]`, `question_bank.generate`).
 - **Heute** zeigt nur heute Fälliges und Überfälliges (nichts für morgen).
 - **Zurückstellen** (`common.park_button`/`set_parked`/`parked_list`, todos.json → `_parked`, `planner.is_parked`):
   überfällige To-dos mit Pause-Knopf aus Heute und Wochenübersicht nehmen; dort unten aufklappbar „Zurückgestellt“

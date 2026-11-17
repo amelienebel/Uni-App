@@ -768,3 +768,17 @@ def test_parked_todos_hidden_from_today_and_week():
         assert not any(b.key == f"park_today_{key}" for b in at.button)
     set_parked(key, False)
     assert not planner.is_parked(load_todos(), key)
+
+
+def test_invfin_sheets_due_one_lecture_later():
+    from utils import planner, storage
+    from utils.config import get_module, load_config
+
+    cfg = load_config()
+    module = get_module(cfg, "invfin")
+    sched, breaks = storage.get_schedule(cfg), storage.lecture_breaks(cfg)
+    sheets = planner.exercises_of(module)
+    assert planner.exercise_due(module, sheets[1], sched, breaks) == date(2026, 11, 16)  # Blatt 2 bis 16.11.
+    # Wochentraining-Schlüssel bleiben an der ursprünglichen Zuordnung (erledigte Trainings bleiben erledigt)
+    keys = {w["lecture_date"]: w["key"] for w in planner.training_windows(cfg, module, sched, breaks)}
+    assert keys[date(2026, 10, 27)] == planner.exercise_key("invfin", sheets[0]) + ":training"

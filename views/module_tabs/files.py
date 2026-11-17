@@ -279,6 +279,15 @@ def uploader(cfg: dict, module_id: str, unit: dict, doc_type: str, label: str, k
                     messages.append(("success", f"{f.name}: {run_analysis(cfg, module_id, doc)}"))
                 except ai.AIError as exc:
                     messages.append(("error", f"{f.name}: Zusammenfassung fehlgeschlagen – {exc}"))
+    if doc_type in ("uebung", "loesung") and unit.get("kind") == "exercise" and planner.LEARNING_V2 \
+            and ai.is_available():  # Blatt/Lösung neu → Aufgaben gleich den Minithemen zuordnen
+        from utils import sessions
+
+        with st.spinner("Ordne das Blatt den Minithemen zu …"):
+            try:
+                sessions.map_feedback(cfg, module_id, unit)
+            except ai.AIError as exc:
+                messages.append(("error", f"Zuordnen zu Minithemen fehlgeschlagen – {exc}"))
     st.session_state[counter_key] = st.session_state.get(counter_key, 0) + 1
     st.session_state[f"upmsg_{module_id}"] = messages or [("success", f"{len(files)} Datei(en) gespeichert.")]
     st.rerun()

@@ -264,7 +264,7 @@ def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, le
                                    material=_material(data, [r["mt"] for r in requests]))
     # Regeln + Stilprofil im Systemprompt: bleibt je Modul gleich und wird deshalb gecacht
     system = QUESTIONS_SYSTEM + f"\n\n<klausurstil_profil>\n{style}\n</klausurstil_profil>"
-    result = ai.complete_json(prompt, QUESTIONS_SCHEMA, system=system, max_tokens=48000, task="cards")
+    result = ai.complete_json(prompt, QUESTIONS_SCHEMA, system=system, max_tokens=48000, task="questions")
     by_req: dict[int, dict] = {}
     for q in result.get("questions", []):
         if 1 <= q["req"] <= len(requests) and q["req"] not in by_req and _valid(q, requests[q["req"] - 1]["type"]):
@@ -289,7 +289,7 @@ def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, le
 
 
 def cost_estimate(n_new: int) -> float:
-    return ai.estimate_cost("cards", 6000 + 2500 * n_new, 700 * n_new) if n_new else 0.0
+    return ai.estimate_cost("questions", 6000 + 2500 * n_new, 700 * n_new) if n_new else 0.0
 
 
 # ---------------------------------------------------------------------------

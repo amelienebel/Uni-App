@@ -73,7 +73,8 @@ def estimate_cost(task: str, input_tokens: int, output_tokens: int) -> float:
 # Welches Modell für welche Aufgabe (änderbar unter Einstellungen → KI-Einstellungen)
 TASKS = {
     "summary": ("Zusammenfassungen der Folien", "claude-haiku-5-5"),
-    "cards": ("Karteikarten & Definitionen", "claude-sonnet-5-5"),
+    "cards": ("Minithemen, Karteikarten & Definitionen", "claude-sonnet-5-5"),
+    "questions": ("Fragen für Checks & Wochentraining", "claude-sonnet-5-5"),
     "tutor": ("Tutor-Chat", "claude-sonnet-5-5"),
     "check": ("Antworten & Karten prüfen", "claude-haiku-5-5"),
     "default": ("Alles andere (Quiz, Lösungsvergleich, Abtippen, Karten-Nachfragen …)", "claude-sonnet-5-5"),

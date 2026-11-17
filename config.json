@@ -793,6 +793,7 @@
         }
       ],
       "deadlines": {
+        "sheet_lecture_offset": 1,
         "upload_weekday": 1,
         "prep_weekday": 0,
         "review_weekday": 3,
@@ -1019,67 +1020,67 @@
         {
           "week_of": "2026-10-26",
           "chapter_id": "k2",
-          "title": "Übung/Tutorium: Kap. 2 und 3 – Ökon. Methoden, Optimierung"
+          "title": "Übung: Kap. 2 und 3 – Ökon. Methoden, Optimierung"
         },
         {
           "week_of": "2026-11-02",
           "chapter_id": "k4",
-          "title": "Übung/Tutorium: Kap. 4 – Nachfrage, Angebot, Gleichgewicht"
+          "title": "Übung: Kap. 4 – Nachfrage, Angebot, Gleichgewicht"
         },
         {
           "week_of": "2026-11-09",
           "chapter_id": "k5",
-          "title": "Übung/Tutorium: Kap. 5 – Konsumenten und Anreize I"
+          "title": "Übung: Kap. 5 – Konsumenten und Anreize I"
         },
         {
           "week_of": "2026-11-16",
           "chapter_id": "k5",
-          "title": "Übung/Tutorium: Kap. 5 – Konsumenten und Anreize II"
+          "title": "Übung: Kap. 5 – Konsumenten und Anreize II"
         },
         {
           "week_of": "2026-11-23",
           "chapter_id": "k6",
-          "title": "Übung/Tutorium: Kap. 6 – Verkäufer und Anreize"
+          "title": "Übung: Kap. 6 – Verkäufer und Anreize"
         },
         {
           "week_of": "2026-11-30",
           "chapter_id": "k7",
-          "title": "Übung/Tutorium: Kap. 7 – Vollständiger Wettbewerb"
+          "title": "Übung: Kap. 7 – Vollständiger Wettbewerb"
         },
         {
           "week_of": "2026-12-07",
           "chapter_id": "k8",
-          "title": "Übung/Tutorium: Kap. 8 – Handel"
+          "title": "Übung: Kap. 8 – Handel"
         },
         {
           "week_of": "2026-12-14",
           "chapter_id": "k13",
-          "title": "Übung/Tutorium: Kap. 13 – Spieltheorie"
+          "title": "Übung: Kap. 13 – Spieltheorie"
         },
         {
           "week_of": "2026-12-21",
           "chapter_id": "k9",
-          "title": "Übung/Tutorium: Kap. 9 – Externalitäten (Do-Übung erst am 07.01.)"
+          "title": "Übung: Kap. 9 – Externalitäten (Do-Übung erst am 07.01.)"
         },
         {
           "week_of": "2027-01-11",
           "chapter_id": "k10",
-          "title": "Übung/Tutorium: Kap. 10 – Der Staat"
+          "title": "Übung: Kap. 10 – Der Staat"
         },
         {
           "week_of": "2027-01-18",
           "chapter_id": "k11",
-          "title": "Übung/Tutorium: Kap. 11 – Märkte für Produktionsfaktoren"
+          "title": "Übung: Kap. 11 – Märkte für Produktionsfaktoren"
         },
         {
           "week_of": "2027-01-25",
           "chapter_id": "k12",
-          "title": "Übung/Tutorium: Kap. 12 – Monopol und Preisdiskriminierung"
+          "title": "Übung: Kap. 12 – Monopol und Preisdiskriminierung"
         },
         {
           "week_of": "2027-02-01",
           "chapter_id": "kwdh",
-          "title": "Übung/Tutorium: Altklausur"
+          "title": "Übung: Altklausur"
         }
       ],
       "tasks": [],

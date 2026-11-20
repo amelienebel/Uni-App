@@ -11,10 +11,10 @@ import streamlit as st
 from utils import planner
 from utils import spaced_repetition as sr
 from utils.config import WEEKDAYS, get_module
-from utils.storage import (in_timetable, days_until_exam, get_exam_date, get_schedule, lecture_breaks,
+from utils.storage import (chapter_number, days_until_exam, get_exam_date, get_schedule, lecture_breaks,
                            load_module, load_settings, load_todos, save_todos, semester_dates, today)
 from views import cards_center
-from views.common import park_button, parked_list, NEXT_GROUP, grouped, group_header, prio_button, prio_of, sort_todos, is_mobile, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
+from views.common import park_button, parked_list, NEXT_GROUP, grouped, group_header, prio_button, prio_of, kind_icon, todo_text, custom_todo_form, delete_custom_todo, goto, micon, open_todo, todo_module, toggle_todo
 
 SLOTS = [8, 10, 12, 14, 16, 18]
 SLOT_LABELS = {s: f"{s:02d}–{s + 2:02d}" for s in SLOTS}
@@ -278,9 +278,6 @@ def render(cfg: dict) -> None:
         st.rerun()
 
     schedule = get_schedule(cfg)
-    events = [e for e in planner.week_events(schedule, monday)
-              if e.get("module_id") in modules_data and sem_start <= e["date"] <= sem_end and in_timetable(e)
-              and not planner.break_for(e["date"], breaks)]
     todos = planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end, settings["learning"], breaks)
     todo_state = load_todos()
     if monday <= now <= monday + timedelta(days=6):  # Liegengebliebenes aus früheren Wochen wandert mit
@@ -294,12 +291,6 @@ def render(cfg: dict) -> None:
     parked = [t for t in todos if planner.is_parked(todo_state, t["key"])
               and not planner.todo_done(t, modules_data, todo_state)]
     todos = [t for t in todos if t not in parked]
-    new_min = int(settings["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
-    card_counts = {day: ({} if planner.LEARNING_V2 else _card_counts(modules_data, day, now, new_min)) for day in
-                   (monday + timedelta(days=i) for i in range(7))}
-    placed: dict[tuple[date, int | None], list[dict]] = {}
-    for t in sort_todos(todos):
-        placed.setdefault(_placement(t, monday), []).append(t)
     days = [monday + timedelta(days=i) for i in range(7)]
     calendar: dict[date, list[str]] = {}
     for entry in cfg["app"].get("calendar", []):
@@ -313,66 +304,20 @@ def render(cfg: dict) -> None:
 
         progress.week_boards(cfg, monday, key=f"w{monday:%Y%m%d}")
 
-    if "dash_list_view" not in st.session_state:  # auf dem Handy automatisch als Liste
-        st.session_state["dash_list_view"] = is_mobile()
-    list_view = st.toggle("Listenansicht (fürs Handy)", key="dash_list_view")
-
-    # --- Stundenplan-Raster ---------------------------------------------------
-    if not list_view:
-        grid = st.container(key="ttgrid")
-        widths = [0.6] + [1] * 7
-        header = grid.columns(widths)
-        header[0].markdown("&nbsp;")
-        for col, day in zip(header[1:], days):
-            with col:
-                with st.container(key=f"head_{'today' if day == now else 'day'}_{day:%Y%m%d}"):
-                    st.markdown(f"**{WEEKDAYS[day.weekday()][:2]} {day:%d.%m.}**")
-                    if planner.break_for(day, breaks):
-                        st.caption("frei")
-                    for mid in modules_data:
-                        if get_exam_date(mid) == day:
-                            st.error(f"Klausur {get_module(cfg, mid)['short']}")
-                    for entry in calendar.get(day, []):
-                        st.warning(entry)
-        used = {_slot_of(e.get("start", "")) for e in events} | {s for (_d, s) in placed}
-        for slot in [x for x in SLOTS if x in used] + [None] + ([] if planner.LEARNING_V2 else ["cards"]):
-            row = grid.columns(widths)
-            row[0].markdown("**Karteikarten**" if slot == "cards" else f"**{SLOT_LABELS[slot]}**" if slot is not None
-                            else "**To-dos**")
-            if slot == "cards":
-                for col, day in zip(row[1:], days):
-                    with col:
-                        with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_cards"):
-                            for mid, n in card_counts[day].items():
-                                _card_chip(cfg, mid, n, day == now, f"{day:%Y%m%d}_c_{mid}")
-                continue
-            for col, day in zip(row[1:], days):
-                with col:
-                    with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_{slot or 'x'}"):
-                        if slot is not None:
-                            for i, ev in enumerate(e for e in events if e["date"] == day
-                                                   and _slot_of(e.get("start", "")) == slot):
-                                _event_card(cfg, ev, f"{day:%Y%m%d}_{slot}_{i}")
-                        for j, t in enumerate(placed.get((day, slot), [])):
-                            _todo_chip(t, cfg, modules_data, todo_state, now, f"{day:%Y%m%d}_{slot or 'x'}_{j}")
-    else:
+    # Stundenplan nur noch auf „Heute“ – hier nur Klausuren und Kalender-Hinweise der Woche
+    for day in days:
+        notes = [f"Klausur {get_module(cfg, mid)['short']}" for mid in modules_data if get_exam_date(mid) == day]
+        notes += calendar.get(day, [])
+        for note in notes:
+            st.warning(f"{WEEKDAYS[day.weekday()]}, {day:%d.%m.}: {note}")
+    if not planner.LEARNING_V2:  # altes System: Karteikarten je Tag
+        new_min = int(settings["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
         for day in days:
-            day_events = [e for e in events if e["date"] == day]
-            day_todos = [t for (d, _s), ts in placed.items() if d == day for t in ts]
-            if not day_events and not day_todos and not calendar.get(day) and not card_counts[day]:
-                continue
-            with st.container(key=f"cell_{'today' if day == now else 'day'}_{day:%Y%m%d}_list", border=True):
-                st.markdown(f"**{WEEKDAYS[day.weekday()]}, {day:%d.%m.}**")
-                for entry in calendar.get(day, []):
-                    st.warning(entry)
-                for i, ev in enumerate(day_events):
-                    _event_card(cfg, ev, f"{day:%Y%m%d}_l{i}")
-                for j, t in enumerate(day_todos):
-                    _todo_chip(t, cfg, modules_data, todo_state, now, f"{day:%Y%m%d}_l{j}")
-                if card_counts[day]:
-                    st.caption("Karteikarten")
-                    for mid, n in card_counts[day].items():
-                        _card_chip(cfg, mid, n, day == now, f"{day:%Y%m%d}_lc_{mid}")
+            counts = _card_counts(modules_data, day, now, new_min)
+            if counts:
+                st.caption(f"Karteikarten · {WEEKDAYS[day.weekday()]}, {day:%d.%m.}")
+                for mid, n in counts.items():
+                    _card_chip(cfg, mid, n, day == now, f"{day:%Y%m%d}_c_{mid}")
 
     # --- Aufgaben dieser Woche (abhaken & verschieben) ---------------------------
     h1, h2 = st.columns([3, 1], vertical_alignment="bottom")
@@ -401,8 +346,9 @@ def render(cfg: dict) -> None:
     with st.expander("Kapitelstatus aller Module", expanded=False):
         rows = []
         for module in cfg["modules"]:
-            for i, ch in enumerate(modules_data[module["id"]]["chapters"], start=1):
-                rows.append({"Modul": module["short"], "Kapitel": f"{i}. {ch['title']}",
+            for ch in modules_data[module["id"]]["chapters"]:
+                nr = chapter_number(modules_data[module["id"]], ch["id"])
+                rows.append({"Modul": module["short"], "Kapitel": f"{nr}. {ch['title']}",
                              **({"Vorbereitet": ch["status"]["vorbereitet"]} if planner.PREP_ENABLED else {}),
                              "Nachbereitet": ch["status"]["nachbereitet"], "Übung": ch["status"]["uebung"]})
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)

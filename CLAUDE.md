@@ -23,8 +23,9 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
 - `config.json` – Module (Farbe, Material-Symbol, Stundenplan, Kapitel inkl. `nr`, Vorlesungen, Übungen, Fristen-Wochentage `deadlines`,
   Klausurformat `exam_format`: mc_multi / sc4 / open / mixed, VWL und I&F = open (freie Aufgaben) → Karten-Prompt und Quiz), Kalender.
   Mathe-Tutorium: Raum M 110 (Hauptgebäude, Geschw.-Scholl-Pl. 1); `storage.ROOM_MOVES` korrigiert alte Räume auch im
-  gespeicherten Stundenplan. VWL-Übung und -Tutorium erscheinen nicht im Stundenplan (Heute, Wochenübersicht:
-  `storage.HIDDEN_FROM_TIMETABLE`/`in_timetable`), Übungsblätter, To-dos und Modulseite bleiben.
+  gespeicherten Stundenplan. Im Stundenplan stehen nur Vorlesungen (`storage.in_timetable`: keine Übungen/Tutorien), und er steht nur noch
+  auf „Heute“ (Wochenübersicht ohne Raster, nur Klausur-/Kalender-Hinweise und Aufgabenliste); Übungsblätter,
+  To-dos und Modulseite bleiben. I&F-Kapitel mit `nr` (k1 = 1, k2 = 3 … k4 = 5, syllabus_version 3).
 - `utils/` – `storage.py` (JSON in `data/`, Cloud-Sync), `cloud_sync.py` (GitHub-Repo, PDFs werden erst bei Bedarf geladen),
   `units.py` (Vorlesungen/Übungen = Einheiten), `planner.py` (To-dos, Fristen), `learning.py` (Folienanalyse, Karten
   inkl. Abdeckung jeder Seite und Prüfdurchgang, Definitionen, Seiten mit Abbildungen genau lesen),
@@ -87,8 +88,9 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   „schlecht“ → sofort fällig (`sessions.map_feedback`, Haiku). Archiv nur Hinweis (Reihenfolge, Einstieg MC bei
   „sicher“), gilt nicht als abgefragt.
 - **Fragenspeicher** (`utils/question_bank.py`): Frage höchstens 3-mal, mind. 1 andere Session dazwischen; Klausurstil-
-  Profil je Modul (einmal erzeugt) + Regeln im gecachten Systemprompt; nur Folien der benötigten Minithemen; alle
-  neuen Fragen einer Session in einer Anfrage, inkl. 3 Tipps, Begründung je Option, Musterlösung. Kein Formel-Tippen:
+  Profil je Modul (einmal erzeugt) + Regeln im gecachten Systemprompt; nur Folien der benötigten Minithemen; neue
+  Fragen in Paketen à 6 (`sessions.generate_batched`, jedes Paket sofort gespeichert, abgeschnitten → halbieren,
+  Fortschrittsbalken), inkl. 3 Tipps, Begründung je Option, Musterlösung. Kein Formel-Tippen:
   Rechnen nur als Rechenweg-Auswahl oder Kopfrechnen mit glattem Ergebnis (Zahlfeld, exakt); Taschenrechner/Notizblatt
   bestimmen den Aufwand. Freitext bewertet Haiku (`grade_text`).
 - **Sessions** (`utils/sessions.py`, Ansicht `views/session_ui.py`, Fokus-Modus): Checks siehe oben (~30 Min je 15
@@ -162,10 +164,12 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
 - Blatt/Musterlösung hochladen ordnet NICHT automatisch zu (Nutzerin will erst Rückmeldung eintragen; Zuordnung beim
   Speichern der Rückmeldung oder per Knopf „Zuordnen“).
 - Eigene Modellwahl „Fragen für Checks & Wochentraining“ (`ai.TASKS["questions"]`, `question_bank.generate`).
-- **Heute** zeigt nur heute Fälliges und Überfälliges (nichts für morgen).
+- **Heute** zeigt heute Fälliges und Überfälliges, darunter eigener Abschnitt „Morgen“ (am Sonntag aus der
+  nächsten Woche).
 - **Zurückstellen** (`common.park_button`/`set_parked`/`parked_list`, todos.json → `_parked`, `planner.is_parked`):
   überfällige To-dos mit Pause-Knopf aus Heute und Wochenübersicht nehmen; dort unten aufklappbar „Zurückgestellt“
-  mit Zurückholen; im Modul bleiben sie als graue Schritt-Pille (Status `parked`) anklickbar und zählen nicht als „hängt“.
+  mit Zurückholen; auf den Wochenablauf-Karten unter „Aus früheren Wochen“ je Schritt ein Pause-Knopf und
+  „Alle zurückstellen“ (`progress.lecture_steps(with_keys=True)`); im Modul bleiben sie als graue Schritt-Pille (Status `parked`) anklickbar und zählen nicht als „hängt“.
 - **Nacharbeit-Minithemen:** Popover „Minithemen für den Chat“ (`nacharbeit.minitopic_list`, MT 1, MT 2 … in der
   gleichen Reihenfolge wie beim Zuordnen); der Tutor-Prompt verlangt [MT n · Folie X–Y] je Stichpunkt und jedes
   Minithema genau einmal; `MAP_PROMPT` übernimmt MT-Nummern direkt. Nicht erwähnte Minithemen werden grau gelistet.

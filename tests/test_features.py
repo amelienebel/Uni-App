@@ -625,7 +625,9 @@ def test_vwl_sessions_hidden_from_timetable_but_kept():
     assert not storage.in_timetable({"module_id": "vwl", "type": "Übung"})
     assert not storage.in_timetable({"module_id": "vwl", "type": "Tutorium"})
     assert storage.in_timetable({"module_id": "vwl", "type": "Vorlesung"})
-    assert storage.in_timetable({"module_id": "mathe", "type": "Tutorium"})
+    assert not storage.in_timetable({"module_id": "mathe", "type": "Tutorium"})  # nur noch Vorlesungen
+    assert not storage.in_timetable({"module_id": "invfin", "type": "Übung"})
+    assert storage.in_timetable({"module_id": "mathe", "type": "Vorlesung"})
     _, exs = units.all_units(cfg, get_module(cfg, "vwl"), storage.load_module("vwl"))
     assert exs  # Übungen (und ihre To-dos) bleiben bestehen
 
@@ -664,3 +666,31 @@ def test_quiz_option_breakdown_and_hint(monkeypatch):
     _run(at)
     text = " ".join(m.value for m in at.markdown)
     assert "Deine Wahl · falsch" in text and "verwechselt mit sigma" in text and "Richtig · nicht gewählt" in text
+
+
+def test_invfin_chapter_numbers():
+    from utils import storage
+
+    data = storage.load_module("invfin")
+    assert storage.chapter_number(data, "k4") == 5
+    assert storage.chapter_number(data, "k1") == 1 and storage.chapter_number(data, "k3") == 4
+
+
+def test_questions_generated_in_batches(monkeypatch):
+    from utils import ai, sessions
+    from utils import question_bank as qb
+
+    calls = []
+
+    def fake(cfg, module_id, chunk, settings, names):
+        calls.append(len(chunk))
+        if len(chunk) > 3:
+            raise ai.TruncatedError("zu lang")
+        return [{"id": f"q{r['slot']}"} for r in chunk]
+
+    monkeypatch.setattr(qb, "generate", fake)
+    seen = []
+    reqs = [{"slot": i, "mt": {}, "type": "sc"} for i in range(14)]
+    out = sessions.generate_batched({}, "mathe", reqs, {}, {}, progress=lambda d, t: seen.append((d, t)))
+    assert sorted(out) == list(range(14)) and all(out[i]["id"] == f"q{i}" for i in range(14))
+    assert max(c for c in calls if c <= 3) <= 3 and seen[-1] == (14, 14)

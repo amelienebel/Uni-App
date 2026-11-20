@@ -290,8 +290,36 @@ def new_questions_needed(data: dict, slots: list[dict], settings: dict) -> int:
     return missing
 
 
+GENERATE_BATCH = 6  # neue Fragen je KI-Anfrage – große Checks (z. B. 30 Minithemen) laufen in Paketen
+
+
+def generate_batched(cfg: dict, module_id: str, requests: list[dict], settings: dict, names: dict[str, str],
+                     progress=None) -> dict[int, dict | None]:
+    """Neue Fragen in kleinen Paketen erzeugen: jedes Paket wird sofort im Fragenspeicher gesichert (ein Neustart nach
+    einem Fehler nimmt die schon erstellten Fragen wieder), bei abgeschnittener Antwort wird das Paket halbiert.
+    Gibt {slot: Frage oder None} zurück."""
+    queue = [requests[i:i + GENERATE_BATCH] for i in range(0, len(requests), GENERATE_BATCH)]
+    out: dict[int, dict | None] = {}
+    total = len(requests)
+    while queue:
+        chunk = queue.pop(0)
+        try:
+            fresh = qb.generate(cfg, module_id, chunk, settings, names)
+        except ai.TruncatedError:
+            if len(chunk) == 1:
+                raise
+            half = len(chunk) // 2
+            queue[:0] = [chunk[:half], chunk[half:]]
+            continue
+        for r, q in zip(chunk, fresh):
+            out[r["slot"]] = q
+        if progress:
+            progress(len(out), total)
+    return out
+
+
 def build(cfg: dict, module_id: str, kind: str, slots: list[dict], settings: dict, label: str,
-          lecture_id: str | None = None, part: int | None = None) -> dict:
+          lecture_id: str | None = None, part: int | None = None, progress=None) -> dict:
     """Legt eine Session an (Fragen aus dem Speicher oder neu erzeugt). Wirft ai.AIError."""
     data = load_module(module_id)
     lecs = lectures(cfg, module_id, data)
@@ -310,10 +338,11 @@ def build(cfg: dict, module_id: str, kind: str, slots: list[dict], settings: dic
     for attempt in range(2):
         if not requests:
             break
-        fresh = qb.generate(cfg, module_id, requests, settings, names)
+        fresh = generate_batched(cfg, module_id, requests, settings, names, progress)
         data = load_module(module_id)
         still = []
-        for r, q in zip(requests, fresh):
+        for r in requests:
+            q = fresh.get(r["slot"])
             if q:
                 picked[r["slot"]] = q
             else:
@@ -341,7 +370,7 @@ def build(cfg: dict, module_id: str, kind: str, slots: list[dict], settings: dic
     return session
 
 
-def start_check(cfg: dict, module_id: str, lec: dict, settings: dict, part: int = 1) -> dict:
+def start_check(cfg: dict, module_id: str, lec: dict, settings: dict, part: int = 1, progress=None) -> dict:
     data = load_module(module_id)
     if not topics.minitopics(data, lec["id"]):
         raise ai.AIError("Für diese Vorlesung gibt es noch keine Minithemen – erst den Upload abschließen.")
@@ -352,10 +381,11 @@ def start_check(cfg: dict, module_id: str, lec: dict, settings: dict, part: int 
     if not slots:
         raise ai.AIError("Für diese Hälfte gibt es keine Minithemen.")
     module = get_module(cfg, module_id)
-    return build(cfg, module_id, "check", slots, settings, check_label(module, lec, part), lec["id"], part)
+    return build(cfg, module_id, "check", slots, settings, check_label(module, lec, part), lec["id"], part,
+                 progress=progress)
 
 
-def start_training(cfg: dict, module_id: str, n: int, settings: dict) -> dict:
+def start_training(cfg: dict, module_id: str, n: int, settings: dict, progress=None) -> dict:
     data = load_module(module_id)
     held = held_lectures(cfg, module_id, data)
     ensure_feedback_mapped(cfg, module_id)
@@ -367,7 +397,7 @@ def start_training(cfg: dict, module_id: str, n: int, settings: dict) -> dict:
                          "Minithemen der früheren Vorlesungen anlegen.")
     module = get_module(cfg, module_id)
     return build(cfg, module_id, "training", slots, {**settings, "n": n},
-                 f"Wochentraining {next_training_number(data)} {module['short']}")
+                 f"Wochentraining {next_training_number(data)} {module['short']}", progress=progress)
 
 
 def discard(module_id: str, session_id: str) -> None:

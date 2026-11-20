@@ -148,7 +148,8 @@ HIDDEN_FROM_TIMETABLE = {("vwl", "Übung"), ("vwl", "Tutorium")}
 
 
 def in_timetable(event: dict) -> bool:
-    return (event.get("module_id"), event.get("type")) not in HIDDEN_FROM_TIMETABLE
+    """Im Stundenplan stehen nur noch die Vorlesungen (keine Übungen/Tutorien)."""
+    return event.get("type") == "Vorlesung" and (event.get("module_id"), event.get("type")) not in HIDDEN_FROM_TIMETABLE
 
 
 # Umgezogene Räume: gilt auch für einen in den Einstellungen gespeicherten Stundenplan

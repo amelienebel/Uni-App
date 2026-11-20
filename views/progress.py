@@ -27,9 +27,11 @@ def _finished_dates(data: dict, kind: str) -> list[date]:
     return out
 
 
-def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict], state: dict) -> list[tuple]:
+def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict], state: dict,
+                  with_keys: bool = False) -> list[tuple]:
     """[(Name, Status, Ziel)] in fester Reihenfolge Upload · Nacharbeit · Check 1 · Übungsblatt · Check 2 ·
-    Wochentraining; Status done / open / overdue / na; Ziel = wohin ein Klick führt."""
+    Wochentraining; Status done / open / overdue / na; Ziel = wohin ein Klick führt. `with_keys` hängt die
+    To-do-Schlüssel des Schritts an (zum Zurückstellen)."""
     from utils import nacharbeit
 
     now = today()
@@ -56,6 +58,8 @@ def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict
 
     legacy = sessions.is_legacy(data, lec["id"])
     whole = sessions.single_check(data, lec["id"])
+    keys = {"Upload": [lkey("nachbereitet")], "Nacharbeit": [lkey("nacharbeit")], "Check 1": [lkey("check")],
+            "Check 2": [lkey("check2")]}
     steps = [("Upload", status(key("nachbereitet"), due("upload"), todo_key=lkey("nachbereitet")),
               ("lecture", "nachbereitet"))]
     steps.append(("Nacharbeit", status(key("nacharbeit") or nacharbeit.has_summary(data, lec["id"]),
@@ -68,6 +72,7 @@ def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict
         sheets = [e for e in exs if e.get("index") == ex["index"]]  # mit Tutoriumsblatt (VWL): beide gelöst
         undone = [e["plan_key"] for e in sheets if not state.get(e["plan_key"])]
         parked = bool(undone) and all(planner.is_parked(state, k) for k in undone)
+        keys["Übungsblatt"] = undone
         steps.append(("Übungsblatt", status(not undone, due("uebung"), todo_key=undone[0] if parked else None),
                       ("exercise", next((e["id"] for e in sheets if not state.get(e["plan_key"])), ex["id"]))))
     else:
@@ -80,10 +85,13 @@ def lecture_steps(cfg: dict, module: dict, data: dict, lec: dict, exs: list[dict
     window = next((w for w in planner.training_windows(cfg, module, schedule, breaks)
                    if w.get("lecture_date") == lec["date"]), None)
     if window:
+        keys["Wochentraining"] = [window["key"]]
         trained = bool(state.get(window["key"])) or any(d >= window["start"] for d in _finished_dates(data, "training"))
         steps.append(("Wochentraining", status(trained, window["due"], todo_key=window["key"]), ("training", None)))
     else:
         steps.append(("Wochentraining", "na", ("training", None)))
+    if with_keys:
+        return [(name, st_, target, keys.get(name, [])) for name, st_, target in steps]
     return steps
 
 
@@ -193,9 +201,9 @@ def week_cycle(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[
         end = planner.step_due(module, lec["date"], "training")
         if start > sunday:
             continue
-        steps = lecture_steps(cfg, module, data, lec, exs, state)
+        steps = lecture_steps(cfg, module, data, lec, exs, state, with_keys=True)
         if end >= monday:
-            current.append((lec, steps))
+            current.append((lec, [s[:3] for s in steps]))
         elif monday <= today() + timedelta(days=6):  # nur bis zur aktuellen Woche: was ist hängen geblieben?
             late = [s for s in steps if s[1] == "overdue"]
             if late:
@@ -207,6 +215,13 @@ def _cycle_counts(cycle: dict) -> tuple[int, int, int]:
     steps = [s for _, ss in cycle["current"] for s in ss if s[1] not in ("na", "optional", "parked")]
     done = sum(1 for s in steps if s[1] == "done")
     return done, len(steps), sum(len(ss) for _, ss in cycle["stuck"])
+
+
+def _park_steps(keys: list[str]) -> None:
+    from views.common import set_parked
+
+    for k in keys:
+        set_parked(k, True)
 
 
 def _lecture_label(lec: dict) -> str:
@@ -256,11 +271,19 @@ def week_board(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[
                                           key=f"bdold_{module_id}_{key}_{safe}"):
                             st.button(f"VL {lec['nr']}", key=f"bdoldopen_{module_id}_{key}_{safe}", type="tertiary",
                                       on_click=open_unit, args=(module_id, lec["id"]), help=lec["topic"])
-                            for i, (name, state_, target) in enumerate(steps):
+                            for i, (name, state_, target, keys) in enumerate(steps):
                                 st.button(name, key=f"stp_{state_}_bdo_{module_id}_{key}_{safe}_{i}",
                                           icon=f":material/{STEP_ICONS[name]}:", width="content",
                                           on_click=_go if target else None,
                                           args=(module_id, lec["id"], target) if target else None)
+                                if keys:
+                                    st.button("", key=f"bdpark_{module_id}_{key}_{safe}_{i}",
+                                              icon=":material/pause_circle:", type="tertiary",
+                                              help=f"{name} zurückstellen", on_click=_park_steps, args=(keys,))
+                    all_keys = [k for _, steps in cycle["stuck"] for *_, keys in steps for k in keys]
+                    if all_keys:
+                        st.button("Alle zurückstellen", key=f"bdparkall_{module_id}_{key}", type="tertiary",
+                                  icon=":material/pause_circle:", on_click=_park_steps, args=(all_keys,))
 
 
 def week_boards(cfg: dict, monday: date, key: str) -> None:

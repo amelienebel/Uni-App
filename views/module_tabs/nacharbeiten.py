@@ -303,11 +303,17 @@ def settings_inputs(key: str, with_n: bool = False) -> dict:
 
 
 def start_check(cfg: dict, module_id: str, lec: dict, settings: dict, part: int = 1) -> None:
+    bar = st.empty()
+
+    def progress(done: int, total: int) -> None:
+        bar.progress(done / total, text=f"{done} von {total} neuen Fragen erstellt")
+
     with st.spinner(f"Stelle deinen Check {part} zusammen …"):
         try:
-            session = sessions.start_check(cfg, module_id, lec, settings, part)
+            session = sessions.start_check(cfg, module_id, lec, settings, part, progress=progress)
         except ai.AIError as exc:
-            st.error(str(exc))
+            bar.empty()
+            st.error(f"{exc} Schon erstellte Fragen bleiben gespeichert.")
             return
     session_ui.open_session(module_id, session["id"])
     st.session_state["nav"] = PAGES["cards"]

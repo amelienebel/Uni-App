@@ -618,46 +618,54 @@
         {
           "id": "k1",
           "title": "Einführung, Zeitwert des Geldes und Zinssätze",
-          "week": 1
+          "week": 1,
+          "nr": 1
         },
         {
           "id": "k2",
           "title": "Investitionsentscheidungen und Investitionsplanung",
-          "week": 2
+          "week": 2,
+          "nr": 3
         },
         {
           "id": "k3",
           "title": "Bewertung von Anleihen und Aktien",
-          "week": 4
+          "week": 4,
+          "nr": 4
         },
         {
           "id": "k4",
           "title": "Kapitalmärkte und die Bewertung des Risikos",
-          "week": 6
+          "week": 6,
+          "nr": 5
         },
         {
           "id": "k5",
           "title": "Optimale Portfolioallokation und das CAPM",
-          "week": 7
+          "week": 7,
+          "nr": 6
         },
         {
           "id": "k6",
           "title": "Anlegerverhalten und Kapitalmarkteffizienz",
-          "week": 10
+          "week": 10,
+          "nr": 7
         },
         {
           "id": "k7",
           "title": "Kapitalstruktur",
-          "week": 12
+          "week": 12,
+          "nr": 8
         },
         {
           "id": "k8",
           "title": "Q&A und Klausurvorbereitung",
-          "week": 13
+          "week": 13,
+          "nr": 9
         }
       ],
       "base_formulas": [],
-      "syllabus_version": 2,
+      "syllabus_version": 3,
       "lecturer": "Prof. Dr. Ralf Elsas-Nicolle",
       "literature": "Berk & DeMarzo: Grundlagen der Finanzwirtschaft (5. Aufl., Pearson)",
       "exam_note": "Klausur 08.02.2027, 12:30–13:30 Uhr (GOP). Anmeldung im LSF zwingend erforderlich!",

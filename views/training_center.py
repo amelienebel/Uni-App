@@ -131,11 +131,17 @@ def render(cfg: dict) -> None:
             label = f"Wochentraining {sessions.next_training_number(data)} starten"
             if st.button(label, key="tr_go", type="primary", icon=":material/play_arrow:", width="stretch",
                          disabled=not slots or (not ai.is_available() and new > 0)):
+                bar = st.empty()
+
+                def _progress(done: int, total: int) -> None:
+                    bar.progress(done / total, text=f"{done} von {total} neuen Fragen erstellt")
+
                 with st.spinner("Stelle dein Wochentraining zusammen …"):
                     try:
-                        session = sessions.start_training(cfg, module_id, n, settings)
+                        session = sessions.start_training(cfg, module_id, n, settings, progress=_progress)
                     except ai.AIError as exc:
-                        st.error(str(exc))
+                        bar.empty()
+                        st.error(f"{exc} Schon erstellte Fragen bleiben gespeichert.")
                         return
                 session_ui.open_session(module_id, session["id"])
                 st.rerun()

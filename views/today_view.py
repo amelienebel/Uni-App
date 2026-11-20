@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 
 import streamlit as st
 
@@ -64,14 +65,22 @@ def render(cfg: dict) -> None:
                                    load_settings()["learning"], state, breaks)
     todos += planner.generate_todos(cfg, modules_data, schedule, monday, sem_start, sem_end,
                                     load_settings()["learning"], breaks)
-    todos += planner.custom_todos(state, end=now)
-    seen, open_todos, parked = set(), [], []
+    tomorrow = now + timedelta(days=1)
+    if planner.monday_of(tomorrow) != monday:  # Sonntag: morgen gehört zur nächsten Woche
+        todos += planner.generate_todos(cfg, modules_data, schedule, planner.monday_of(tomorrow), sem_start,
+                                        sem_end, load_settings()["learning"], breaks)
+    todos += planner.custom_todos(state, end=tomorrow)
+    seen, open_todos, parked, next_day = set(), [], [], []
     for t in todos:
         if t["key"] in seen or t["kind"] in ("Wiederholung", "Klausurvorbereitung"):
             continue
         seen.add(t["key"])
-        if not planner.todo_done(t, modules_data, state) and t["due"] <= now:
+        if planner.todo_done(t, modules_data, state):
+            continue
+        if t["due"] <= now:
             (parked if planner.is_parked(state, t["key"]) else open_todos).append(t)
+        elif t["due"] == tomorrow:
+            next_day.append(t)
     open_todos.sort(key=lambda t: (t["due"], t["module_id"] or "", t.get("step", 9)))
     new_min = int(load_settings()["learning"].get("new_per_day", sr.DEFAULT_NEW_PER_DAY))
     card_plan = {mid: sr.daily_plan(d["cards"], days_until_exam(mid), new_min) for mid, d in modules_data.items()}
@@ -116,6 +125,12 @@ def render(cfg: dict) -> None:
             group_header(name, len(items))
             for t in items:
                 _todo_row(cfg, t, modules_data, state, now, with_kind=name == NEXT_GROUP)
+        if next_day:
+            st.subheader(":material/event_upcoming: Morgen")
+            for name, items in grouped(next_day):
+                group_header(name, len(items))
+                for t in items:
+                    _todo_row(cfg, t, modules_data, state, now, with_kind=name == NEXT_GROUP)
         parked_list(cfg, parked, "today")
 
         # --- Klausur-Lernplan --------------------------------------------------------

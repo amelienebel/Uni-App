@@ -112,7 +112,7 @@ def _hints_form(module_id: str, data: dict, lec: dict) -> None:
                 mode, skip_text = reads[doc_id]
                 doc = next(d for d in docs if d["id"] == doc_id)
                 scopes[doc_id] = {**scopes.get(doc_id, {}), "from": int(first), "to": int(max(first, last)),
-                                  "read": mode, "text_only": topics.parse_pages(skip_text, topics.n_pages(doc))}
+                                  "read": mode, "read_v": topics.READ_VERSION, "text_only": topics.parse_pages(skip_text, topics.n_pages(doc))}
             notes.update({"scope": {"mode": "all"}, "card_hint": hint, "emphasized": important, "skip": skip,
                           "text": text, "updated_at": now_iso()})
             save_module(module_id)

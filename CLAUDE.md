@@ -85,7 +85,8 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   (`question_bank.TOOLS`, keine Schalter mehr). Selbstbewertung nach „Zurück“ änderbar (`sessions.rerate`: Stand
   vor der Frage aus `item.mastery_before` wiederherstellen, neu buchen; Schnappschüsse fertiger Sessions werden beim
   nächsten Start entfernt). Neue Fragen nach Folienreihenfolge gepackt (gleiche Folien nur einmal je Paket);
-  genaues Lesen der Folien mit effort low. Session hat `part`; alte Checks ohne `part` = ganze Vorlesung
+  genaues Lesen der Folien mit effort low; Voreinstellung „Genau lesen“ = Nur mit Abbildungen
+  (`topics.READ_DEFAULT`; alte gespeicherte „Alle“ ohne `read_v` 2 gelten als Nur mit Abbildungen). Session hat `part`; alte Checks ohne `part` = ganze Vorlesung
   (`sessions.single_check` → keine Nacharbeit-/Check-2-To-dos). Check 2 fällig am Tag nach dem Übungsblatt
   (`planner.check2_due` = `step_due(…, "check2")`).
 - **Wissensstand je Minithema** (`utils/mastery.py`): FSRS je Minithema, Leiter Single → Multiple Choice → Freitext
@@ -101,7 +102,7 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
 - **Sessions** (`utils/sessions.py`, Ansicht `views/session_ui.py`, Fokus-Modus): Checks siehe oben (~30 Min je 15
   Fragen); Wochentraining 5/10/15 Fragen, fortlaufend nummeriert, Auswahl (`sessions.training_focus`): Probleme aus
   Checks (letzte Antwort falsch/teilweise/schwer, `mastery.is_problem`) → Übungs-Schwächen → offene Nacharbeit →
-  offen aus Checks; gut ein Drittel reserviert für Wiederholung (`REVIEW_SHARE` 0,35; fällig laut FSRS → nie gefragt aus alten VL → schwächste). Selbstbewertung Schwer (rot) /
+  offen aus Checks; 60 % reserviert für Wiederholung (`REVIEW_SHARE` 0,6: 5 → 3, 10 → 6, 15 → 9; Rest auffüllbar; fällig laut FSRS → nie gefragt aus alten VL → schwächste). Selbstbewertung Schwer (rot) /
   Mittel (orange) / Einfach (grün), auch nach falscher Antwort. Seiten: `views/check_center.py` (PAGES["cards"]),
   `views/training_center.py` (PAGES["quiz"]).
 - **To-dos** (`planner.generate_todos` → `planner.lecture_steps_todos`, `units.open_tasks`): je VL in fester

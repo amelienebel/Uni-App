@@ -5,7 +5,7 @@ Check 1 fragt die erste Hälfte der Minithemen ab, Check 2 die zweite (Hälfte a
 Minithema der Vorlesung. Ein Check dauert etwa 30 Minuten: reicht die Zeit nicht, werden Fragetypen vereinfacht;
 bleibt Zeit, bekommt zuerst eine zweite Frage, was beim Nacharbeiten, in der Übung oder in Check 1 gehakt hat.
 Wochentraining (pro Modul, fortlaufend nummeriert): 5/10/15 Fragen, Schwerpunkt auf Problemen aus den Checks, dann
-Übung und Nacharbeit; gut ein Drittel bleibt für die Wiederholung älterer Themen (fällig laut Spaced Repetition).
+Übung und Nacharbeit; gut die Hälfte (60 %) bleibt für die Wiederholung älterer Themen (fällig laut Spaced Repetition).
 Taschenrechner und Notizblatt stehen immer zur Verfügung.
 """
 
@@ -21,7 +21,7 @@ from utils.storage import (days_until_exam, get_schedule, lecture_breaks, load_m
 
 CHECK_SIZE = 15  # Zusatzfragen höchstens bis hierhin (für die Abdeckung dürfen es mehr Minithemen sein)
 CHECK_MINUTES = 30  # ein Check dauert etwa so lange
-REVIEW_SHARE = 0.35  # Anteil im Wochentraining, der für die Wiederholung älterer Minithemen reserviert ist
+REVIEW_SHARE = 0.6  # Anteil im Wochentraining, der für die Wiederholung älterer Minithemen reserviert ist
 TRAINING_SIZES = (5, 10, 15)
 MAX_FREITEXT_FIRST_CHECK = 3
 _IMPORTANCE_RANK = {"hoch": 0, "normal": 1, "niedrig": 2}
@@ -271,15 +271,17 @@ def plan_training(data: dict, held: list[dict], n: int, settings: dict, day: dat
     keys = ("checks", "uebung", "nacharbeit", "blatt", "offen", "training")
     for key in keys:
         take(sorted(focus[key], key=newest), n - reserve)
+    # Wiederholung: zuerst Minithemen aus älteren Vorlesungen (vor mehr als einer Woche), dann die der letzten Woche
+    recent = {lec["id"] for lec in held if (day - lec["date"]).days <= 7}
     take(sorted(mastery.next_due(data, mts, day),
-                key=lambda m: (not mastery.in_exercise(data, m),
+                key=lambda m: (m["lecture_id"] in recent, not mastery.in_exercise(data, m),
                                mastery.retrievability(mastery.peek(data, m["id"]), day) or 0.0)), n)
     legacy_new = [m for m in mts if m["id"] not in done and not mastery.covered(data, m)
                   and is_legacy(data, m["lecture_id"])]
     take(sorted(legacy_new, key=lambda m: (_HINT_RANK.get((mastery.archive_hint(data, m["id"]) or {}).get("label")),
                                            order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))), n)
     asked = [m for m in mts if mastery.covered(data, m)]
-    take(sorted(asked, key=lambda m: (mastery.score(data, m, day) + (-0.15 if mastery.in_exercise(data, m) else 0),
+    take(sorted(asked, key=lambda m: (m["lecture_id"] in recent, mastery.score(data, m, day) + (-0.15 if mastery.in_exercise(data, m) else 0),
                                       order[m["lecture_id"]])), n)
     for key in keys:
         take(sorted(focus[key], key=newest), n)

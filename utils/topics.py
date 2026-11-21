@@ -258,16 +258,22 @@ def format_pages(pages: list[int]) -> str:
     return ", ".join(out)
 
 
+READ_DEFAULT = "figures"  # spart Token: reine Textfolien liest die App ohne KI
+READ_VERSION = 2  # ab hier gespeicherte Wahl gilt; ältere „Alle Folien“ (damals Voreinstellung) → nur Abbildungen
+
+
 def read_settings(notes: dict, doc: dict) -> dict:
     own = (notes.get("scopes") or {}).get(doc["id"]) or {}
-    return {"mode": own.get("read", "all") if own.get("read") in READ_MODES else "all",
-            "text_only": [int(p) for p in own.get("text_only", [])]}
+    mode = own.get("read") if own.get("read") in READ_MODES else READ_DEFAULT
+    if mode == "all" and own.get("read_v", 1) < READ_VERSION:
+        mode = READ_DEFAULT
+    return {"mode": mode, "text_only": [int(p) for p in own.get("text_only", [])]}
 
 
 def set_read(module_id: str, lec_id: str, doc_id: str, mode: str, text_only: list[int]) -> None:
     data = load_module(module_id)
     entry = lecture_notes(data, lec_id).setdefault("scopes", {}).setdefault(doc_id, {})
-    entry.update({"read": mode, "text_only": sorted(set(text_only))})
+    entry.update({"read": mode, "read_v": READ_VERSION, "text_only": sorted(set(text_only))})
     save_module(module_id)
 
 

@@ -131,11 +131,18 @@ def _hints(module_id: str, session: dict, idx: int, q: dict, key: str, answered:
 
 
 def _self_grade(cfg: dict, module_id: str, session: dict, idx: int, key: str) -> None:
+    """Einschätzung schwer/mittel/einfach – bei schon bewerteten Fragen (Zurück) ist die gewählte markiert und
+    lässt sich ändern."""
+    current = session["items"][idx].get("self")
     st.markdown("**Wie schwer war das für dich?**")
     cols = st.columns(3)
     for col, grade in zip(cols, mastery.SELF_GRADES):
-        if col.button(GRADE_STYLE[grade], key=f"sg_{grade}_{key}", width="stretch"):
-            sessions.rate(cfg, module_id, session, idx, grade)
+        picked = grade == current
+        dim = "_dim" if current and not picked else ""
+        if col.button(GRADE_STYLE[grade], key=f"sg_{grade}_{key}{dim}", width="stretch",
+                      icon=":material/check:" if picked else None):
+            if not picked:
+                sessions.rate(cfg, module_id, session, idx, grade)
             st.rerun()
 
 
@@ -224,7 +231,7 @@ def render(cfg: dict) -> None:
         if "answer" in item:
             _result(q, item)
         if item.get("self"):
-            st.caption(f"Deine Einschätzung: {GRADE_STYLE.get(item['self'], item['self'])}")
+            _self_grade(cfg, module_id, session, idx, key)
         st.button("Weiter" if idx + 1 < cur else "Zur aktuellen Frage", key=f"{key}_fwd", type="primary",
                   icon=":material/arrow_forward:", width="stretch", on_click=_view, args=(vkey, idx + 1, cur))
         return

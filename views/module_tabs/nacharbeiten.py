@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from utils import ai, mastery, move, planner, sessions, topics
+from utils import ai, mastery, move, planner, question_bank as qb, sessions, topics
 from utils.config import get_module, load_config
 from utils.storage import load_module, load_todos, now_iso, save_module, save_todos
 from utils.units import lecture_notes
@@ -296,9 +296,7 @@ def settings_inputs(key: str, with_n: bool = False) -> dict:
     if with_n:
         out["n"] = st.segmented_control("Anzahl Fragen", list(sessions.TRAINING_SIZES), default=10,
                                         key=f"{key}_n", format_func=str) or 10
-    c1, c2 = st.columns(2)
-    out["calculator"] = c1.toggle("Taschenrechner", key=f"{key}_calc")
-    out["notepad"] = c2.toggle("Notizblatt", key=f"{key}_pad")
+    out.update(qb.TOOLS)  # Taschenrechner und Notizblatt sind immer da
     return out
 
 

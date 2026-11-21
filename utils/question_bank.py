@@ -26,6 +26,7 @@ MINUTES = {"sc": 1.0, "mc": 1.5, "zahl": 2.5, "freitext": 3.5}
 TYPE_LABELS = {"sc": "Single Choice", "mc": "Multiple Choice", "zahl": "Kopfrechnen", "freitext": "Freitext"}
 CALC_RANK = {"keins": 0, "rechenweg": 0, "kopf": 1, "notizblatt": 2, "taschenrechner": 3}
 MATERIAL_CHARS = 60000
+TOOLS = {"calculator": True, "notepad": True}  # Taschenrechner und Notizblatt stehen immer zur Verfügung
 
 
 def max_calc(settings: dict) -> int:

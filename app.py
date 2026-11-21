@@ -229,6 +229,7 @@ st.markdown("""
   [class*="st-key-sg_"] button { min-height: 3rem; font-weight: 700; }
   [class*="st-key-sg_"] button:hover { filter: brightness(1.08); color: #fff; }
   [class*="st-key-sg_"] button p { color: #fff; }
+  [class*="st-key-sg_"][class*="_dim"] button { opacity: 0.35; }
   [class*="st-key-explain_"] { background: rgba(91, 127, 204, 0.06); }
   [class*="st-key-explain_"] p { margin-bottom: 0.6rem; line-height: 1.55; }
   /* Priorität 1–3 je Aufgabe und Kategorien je Tag */

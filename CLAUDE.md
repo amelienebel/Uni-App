@@ -79,8 +79,13 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   offen bis zur sicheren richtigen Antwort; `mastery.weak_notes` fließt in neue Fragen und die Korrektur ein).
 - **Check 1 / Check 2** (Reiter „Checks“, Seite „Checks“): `sessions.halves` teilt die Minithemen an einer
   Themengrenze nahe der Mitte (nach Check 1 bleibt dessen Hälfte fest, `part_ids`); jedes Minithema der Hälfte
-  kommt dran (auch > 15 Fragen), Schwaches aus Nacharbeit/Übung bekommt eine zweite Frage, bei wenig Stoff bis 15
-  aufgefüllt (max. 3 je Minithema). Session hat `part`; alte Checks ohne `part` = ganze Vorlesung
+  kommt genau einmal dran, alles in ~30 Min (`CHECK_MINUTES`, `sessions._fit_minutes`: zu lang → Freitext → MC → SC).
+  Nur wenn Zeit bleibt: zweite Frage für Schwaches aus Nacharbeit/Übung, Übungsstoff, in Check 2 Probleme aus Check 1,
+  dann Auffüllen bis 15 (max. 3 je Minithema). Taschenrechner und Notizblatt gelten immer als vorhanden
+  (`question_bank.TOOLS`, keine Schalter mehr). Selbstbewertung nach „Zurück“ änderbar (`sessions.rerate`: Stand
+  vor der Frage aus `item.mastery_before` wiederherstellen, neu buchen; Schnappschüsse fertiger Sessions werden beim
+  nächsten Start entfernt). Neue Fragen nach Folienreihenfolge gepackt (gleiche Folien nur einmal je Paket);
+  genaues Lesen der Folien mit effort low. Session hat `part`; alte Checks ohne `part` = ganze Vorlesung
   (`sessions.single_check` → keine Nacharbeit-/Check-2-To-dos). Check 2 fällig am Tag nach dem Übungsblatt
   (`planner.check2_due` = `step_due(…, "check2")`).
 - **Wissensstand je Minithema** (`utils/mastery.py`): FSRS je Minithema, Leiter Single → Multiple Choice → Freitext
@@ -92,11 +97,11 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   Fragen in Paketen à 6 (`sessions.generate_batched`, jedes Paket sofort gespeichert, abgeschnitten → halbieren,
   Fortschrittsbalken), inkl. 3 Tipps, Begründung je Option, Musterlösung. Kein Formel-Tippen:
   Rechnen nur als Rechenweg-Auswahl oder Kopfrechnen mit glattem Ergebnis (Zahlfeld, exakt); Taschenrechner/Notizblatt
-  bestimmen den Aufwand. Freitext bewertet Haiku (`grade_text`).
+  immer vorhanden. Freitext bewertet Haiku (`grade_text`).
 - **Sessions** (`utils/sessions.py`, Ansicht `views/session_ui.py`, Fokus-Modus): Checks siehe oben (~30 Min je 15
   Fragen); Wochentraining 5/10/15 Fragen, fortlaufend nummeriert, Auswahl (`sessions.training_focus`): Probleme aus
   Checks (letzte Antwort falsch/teilweise/schwer, `mastery.is_problem`) → Übungs-Schwächen → offene Nacharbeit →
-  offen aus Checks; etwa ein Viertel reserviert für Wiederholung (fällig → nie gefragt aus alten VL → schwächste). Selbstbewertung Schwer (rot) /
+  offen aus Checks; gut ein Drittel reserviert für Wiederholung (`REVIEW_SHARE` 0,35; fällig laut FSRS → nie gefragt aus alten VL → schwächste). Selbstbewertung Schwer (rot) /
   Mittel (orange) / Einfach (grün), auch nach falscher Antwort. Seiten: `views/check_center.py` (PAGES["cards"]),
   `views/training_center.py` (PAGES["quiz"]).
 - **To-dos** (`planner.generate_todos` → `planner.lecture_steps_todos`, `units.open_tasks`): je VL in fester

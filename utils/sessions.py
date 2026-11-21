@@ -1,15 +1,17 @@
 """Checks und Wochentraining: Fragen auswählen, Session anlegen, Antworten auswerten, Wissensstand buchen.
 
 Ablauf je Vorlesung: 1 Upload · 2 Nacharbeit (Tutor-Chat) · 3 Check 1 · 4 Übungsblatt · 5 Check 2 · 6 Wochentraining.
-Check 1 fragt die erste Hälfte der Minithemen ab, Check 2 die zweite (Hälfte an einer Themengrenze). Jedes Minithema
-der Hälfte kommt dran (darum auch mal mehr als 15 Fragen); was beim Nacharbeiten oder in der Übung gehakt hat,
-bekommt eine zweite Frage; bei wenig Minithemen wird bis 15 aufgefüllt (höchstens 3 Fragen je Minithema).
+Check 1 fragt die erste Hälfte der Minithemen ab, Check 2 die zweite (Hälfte an einer Themengrenze) – zusammen jedes
+Minithema der Vorlesung. Ein Check dauert etwa 30 Minuten: reicht die Zeit nicht, werden Fragetypen vereinfacht;
+bleibt Zeit, bekommt zuerst eine zweite Frage, was beim Nacharbeiten, in der Übung oder in Check 1 gehakt hat.
 Wochentraining (pro Modul, fortlaufend nummeriert): 5/10/15 Fragen, Schwerpunkt auf Problemen aus den Checks, dann
-Übung und Nacharbeit; etwa ein Viertel bleibt für die Wiederholung älterer Themen (fällig laut Spaced Repetition).
+Übung und Nacharbeit; gut ein Drittel bleibt für die Wiederholung älterer Themen (fällig laut Spaced Repetition).
+Taschenrechner und Notizblatt stehen immer zur Verfügung.
 """
 
 from __future__ import annotations
 
+import copy
 from datetime import date
 
 from utils import ai, mastery, planner, question_bank as qb, topics, units
@@ -17,8 +19,9 @@ from utils.config import get_module
 from utils.storage import (days_until_exam, get_schedule, lecture_breaks, load_module, load_todos, new_id, now_iso,
                            save_module, save_todos, today)
 
-CHECK_SIZE = 15
-CHECK_MINUTES = 30
+CHECK_SIZE = 15  # Zusatzfragen höchstens bis hierhin (für die Abdeckung dürfen es mehr Minithemen sein)
+CHECK_MINUTES = 30  # ein Check dauert etwa so lange
+REVIEW_SHARE = 0.35  # Anteil im Wochentraining, der für die Wiederholung älterer Minithemen reserviert ist
 TRAINING_SIZES = (5, 10, 15)
 MAX_FREITEXT_FIRST_CHECK = 3
 _IMPORTANCE_RANK = {"hoch": 0, "normal": 1, "niedrig": 2}
@@ -149,17 +152,35 @@ def _next_level(level: str, mt: dict) -> str:
     return mastery.LEVELS[min(top, mastery.LEVELS.index(level) + 1)]
 
 
+def _fit_minutes(slots: list[dict], settings: dict, limit: float) -> None:
+    """Fragetypen so weit vereinfachen, bis die Fragen in die Zeit passen: erst Freitext → Multiple Choice, dann
+    Multiple Choice → Single Choice (von hinten, wichtige Minithemen zuletzt)."""
+    def total() -> float:
+        return sum(qb.MINUTES[s["type"]] for s in slots)
+
+    order = sorted(range(len(slots)), key=lambda i: (-_IMPORTANCE_RANK.get(slots[i]["mt"].get("importance"), 1), -i))
+    for src, dst in (("freitext", "mc"), ("mc", "sc"), ("zahl", "sc")):
+        for i in order:
+            if total() <= limit:
+                return
+            slot = slots[i]
+            if slot["type"] == src:
+                slot["level"], slot["type"] = dst, qb.question_type(slot["mt"], dst, settings)
+
+
 def plan_check(data: dict, lec_id: str, settings: dict, part: int = 1) -> list[dict]:
-    """Jedes Minithema der Hälfte mindestens einmal; was beim Nacharbeiten oder in der Übung gehakt hat oder im
-    Übungsblatt dran kam, bekommt eine zweite Frage eine Stufe höher; bei wenig Minithemen bis 15 auffüllen (höchstens 3 Fragen je Minithema)."""
+    """Jedes Minithema der Hälfte genau einmal (Check 1 + Check 2 decken so die ganze Vorlesung ab), alles in etwa
+    CHECK_MINUTES Minuten: passt es nicht, werden Fragetypen vereinfacht. Bleibt Zeit, bekommen zuerst Minithemen
+    eine zweite Frage, die beim Nacharbeiten, in der Übung oder im vorigen Check gehakt haben, dann Übungsstoff,
+    dann wichtige (höchstens 3 Fragen je Minithema; aufgefüllt wird nur bis CHECK_SIZE Fragen)."""
     mts = part_minitopics(data, lec_id, part)
     if not mts:
         return []
     weak = [m for m in mts if mastery.has_open_nacharbeit(data, m) or mastery.has_open_flag(data, m)]
-    slots = [{"mt": m, "level": mastery.current_level(data, m)} for m in mts]
-    # Schon im ersten Check ein paar Freitext-Fragen zu wichtigen Erklär-Themen (nicht, wo es gehakt hat)
-    free = 0
     weak_ids = {m["id"] for m in weak}
+    slots = [{"mt": m, "level": mastery.current_level(data, m)} for m in mts]
+    # ein paar Freitext-Fragen zu wichtigen Erklär-Themen (nicht, wo es gehakt hat) – fallen weg, wenn die Zeit knapp ist
+    free = 0
     for slot in slots:
         mt = slot["mt"]
         if free >= MAX_FREITEXT_FIRST_CHECK:
@@ -168,37 +189,43 @@ def plan_check(data: dict, lec_id: str, settings: dict, part: int = 1) -> list[d
                 and mt["id"] not in weak_ids:
             slot["level"] = "freitext"
             free += 1
-    for mt in weak:
-        slots.append({"mt": mt, "level": _next_level(mastery.current_level(data, mt), mt)})
-    # Was im Übungsblatt dran kam, ist klausurrelevant: zweite Frage (solange der Check nicht ausufert)
-    for mt in mts:
-        if mastery.in_exercise(data, mt) and mt["id"] not in weak_ids and len(slots) < CHECK_SIZE + 5:
-            slots.append({"mt": mt, "level": _next_level(mastery.current_level(data, mt), mt)})
-    # Wenig Minithemen: weitere Fragen auf der nächsten Stufe – Übungsstoff, wichtige und Anwendungen zuerst
-    target = min(CHECK_SIZE, 3 * len(mts))
-    rounds = 0
-    while len(slots) < target and rounds < 3:
-        rounds += 1
-        extra = sorted(mts, key=lambda m: (not mastery.in_exercise(data, m),
-                                           _IMPORTANCE_RANK.get(m.get("importance"), 1),
-                                           m.get("kind") != "anwendung"))
-        for mt in extra:
-            if len(slots) >= target:
-                break
-            used = [s["level"] for s in slots if s["mt"]["id"] == mt["id"]]
-            if len(used) > rounds:
-                continue
-            level = _next_level(max(used, key=mastery.LEVELS.index), mt) if used else mastery.current_level(data, mt)
-            slots.append({"mt": mt, "level": level})
     for slot in slots:
         slot["type"] = qb.question_type(slot["mt"], slot["level"], settings)
-    # Zeitrahmen (~30 Minuten je 15 Fragen): Freitext zur Not auf Multiple Choice zurückstufen
-    limit = CHECK_MINUTES * max(1.0, len(slots) / CHECK_SIZE)
-    for slot in reversed(slots):
-        if sum(qb.MINUTES[s["type"]] for s in slots) <= limit:
+    _fit_minutes(slots, settings, CHECK_MINUTES)
+
+    # Zusatzfragen nur, solange die Zeit reicht
+    def used_minutes() -> float:
+        return sum(qb.MINUTES[s["type"]] for s in slots)
+
+    def add(mt: dict, fill: bool = False) -> bool:
+        if (fill and len(slots) >= CHECK_SIZE) or sum(1 for s in slots if s["mt"]["id"] == mt["id"]) >= 3:
+            return False
+        used = [s["level"] for s in slots if s["mt"]["id"] == mt["id"]]
+        level = _next_level(max(used, key=mastery.LEVELS.index), mt) if used else mastery.current_level(data, mt)
+        qtype = qb.question_type(mt, level, settings)
+        if used_minutes() + qb.MINUTES[qtype] > CHECK_MINUTES:
+            if level == "sc" or used_minutes() + qb.MINUTES["sc"] > CHECK_MINUTES:
+                return False
+            level, qtype = "sc", qb.question_type(mt, "sc", settings)
+        slots.append({"mt": mt, "level": level, "type": qtype})
+        return True
+
+    earlier = [m for m in topics.minitopics(data, lec_id) if m["id"] not in {x["id"] for x in mts}
+               and mastery.is_problem(data, m, "check")] if part == 2 else []
+    for mt in weak + [m for m in mts if mastery.in_exercise(data, m) and m["id"] not in weak_ids]:
+        add(mt)
+    for mt in earlier:  # Check 2: was in Check 1 falsch oder schwer war, noch einmal
+        add(mt)
+    target = min(CHECK_SIZE, 3 * len(mts))
+    for _ in range(3):
+        if len(slots) >= target:
             break
-        if slot["type"] == "freitext":
-            slot["level"], slot["type"] = "mc", qb.question_type(slot["mt"], "mc", settings)
+        for mt in sorted(mts, key=lambda m: (not mastery.in_exercise(data, m),
+                                             _IMPORTANCE_RANK.get(m.get("importance"), 1),
+                                             m.get("kind") != "anwendung")):
+            if len(slots) >= target:
+                break
+            add(mt, fill=True)
     return slots
 
 
@@ -226,7 +253,7 @@ def plan_training(data: dict, held: list[dict], n: int, settings: dict, day: dat
     mts = [m for m in topics.minitopics(data) if m["lecture_id"] in order]
     done = checked_ids(data)
     focus = training_focus(data, mts)
-    reserve = n // 4 if n >= 5 else 0  # Wiederholung älterer Themen
+    reserve = max(1, round(n * REVIEW_SHARE)) if n >= 5 else 0  # Wiederholung älterer Themen (Spaced Repetition)
     chosen: list[dict] = []
     ids: set[str] = set()
 
@@ -335,6 +362,9 @@ def build(cfg: dict, module_id: str, kind: str, slots: list[dict], settings: dic
         else:
             requests.append({"slot": len(picked), "mt": slot["mt"], "type": slot["type"]})
         picked.append(q)
+    # gleiche und benachbarte Minithemen ins selbe Paket → dieselben Folien gehen nur einmal mit
+    order = {m["id"]: i for i, m in enumerate(topics.minitopics(data))}
+    requests.sort(key=lambda r: (order.get(r["mt"]["id"], len(order)), r["slot"]))
     for attempt in range(2):
         if not requests:
             break
@@ -364,6 +394,10 @@ def build(cfg: dict, module_id: str, kind: str, slots: list[dict], settings: dic
     if part:
         session["part"] = part
         session["part_ids"] = sorted({slot["mt"]["id"] for slot in slots})
+    for old in data.get("sessions", []):  # gemerkte Stände für „Einschätzung ändern“ nur in der laufenden Session
+        if old.get("finished_at"):
+            for it in old["items"]:
+                it.pop("mastery_before", None)
     data.setdefault("sessions", []).append(session)
     data["session_counter"] = session_no
     save_module(module_id)
@@ -442,24 +476,62 @@ def submit(cfg: dict, module_id: str, session: dict, idx: int, answer) -> dict:
     return item
 
 
+def _book(data: dict, module_id: str, session: dict, item: dict, mt: dict) -> None:
+    """Antwort + Selbstbewertung im Wissensstand buchen; vorher den Stand merken (für eine spätere Änderung)."""
+    before = (data.get("mastery") or {}).get(mt["id"])
+    item["mastery_before"] = copy.deepcopy(before) if before is not None else None
+    item["status_before"] = mastery.status(data, mt)
+    mastery.record(data, mt, item.get("correct"), item["self"], source=session["kind"],
+                   question_id=item["question_id"], level_asked=item["level"],
+                   hints_used=item.get("hints_used", 0), days_to_exam=days_until_exam(module_id))
+    item["status_after"] = mastery.status(data, mt)
+
+
 def rate(cfg: dict, module_id: str, session: dict, idx: int, self_grade: str) -> bool:
-    """Selbstbewertung speichern und Wissensstand buchen. True = Session damit abgeschlossen."""
+    """Selbstbewertung speichern und Wissensstand buchen. True = Session damit abgeschlossen.
+    War die Frage schon bewertet (Zurück → andere Einschätzung), wird die alte Buchung ersetzt."""
     data = load_module(module_id)
     item = session["items"][idx]
+    if item.get("self"):
+        rerate(module_id, session, idx, self_grade)
+        return current_index(session) >= len(session["items"])
     item["self"] = self_grade
     mt = topics.find_minitopic(data, item["minitopic_id"])
     if mt and not item.get("void"):  # wegen eines bestätigten Fehlers nicht gewertet
-        item["status_before"] = mastery.status(data, mt)
-        mastery.record(data, mt, item.get("correct"), self_grade, source=session["kind"],
-                       question_id=item["question_id"], level_asked=item["level"],
-                       hints_used=item.get("hints_used", 0), days_to_exam=days_until_exam(module_id))
-        item["status_after"] = mastery.status(data, mt)
+        _book(data, module_id, session, item, mt)
     done = current_index(session) >= len(session["items"])
     if done:
         session["finished_at"] = now_iso()
         _mark_todos(cfg, module_id, session)
     save_module(module_id)
     return done
+
+
+def rerate(module_id: str, session: dict, idx: int, self_grade: str) -> None:
+    """Einschätzung einer schon bewerteten Frage ändern: Wissensstand des Minithemas auf den Stand vor dieser Frage
+    zurücksetzen und diese sowie spätere Antworten zum selben Minithema in dieser Session neu buchen."""
+    data = load_module(module_id)
+    item = session["items"][idx]
+    if item.get("self") == self_grade:
+        return
+    item["self"] = self_grade
+    mt = topics.find_minitopic(data, item["minitopic_id"])
+    if mt and not item.get("void") and "mastery_before" in item:
+        later = [it for it in session["items"][idx + 1:] if it["minitopic_id"] == mt["id"] and it.get("self")
+                 and not it.get("void")]
+        store = data.setdefault("mastery", {})
+        if item["mastery_before"] is None:
+            store.pop(mt["id"], None)
+        else:
+            store[mt["id"]] = copy.deepcopy(item["mastery_before"])
+        for it in [item] + later:
+            _book(data, module_id, session, it, mt)
+    elif mt:  # ältere Session ohne gemerkten Stand: nur die Einschätzung im Verlauf anpassen
+        for h in reversed(mastery.peek(data, mt["id"]).get("history", [])):
+            if h.get("question_id") == item["question_id"]:
+                h["self"] = self_grade
+                break
+    save_module(module_id)
 
 
 def summary(session: dict) -> dict:

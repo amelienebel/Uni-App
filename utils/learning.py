@@ -919,7 +919,7 @@ def read_pages_visual(cfg: dict, module_id: str, doc: dict, pages: list[int], up
     result = ai.complete_json([ai.pdf_block(buf.getvalue()),
                                {"type": "text", "text": PAGES_PROMPT.format(
                                    n=len(pages), module=module["name"], pages=", ".join(map(str, pages)))}],
-                              PAGES_SCHEMA, max_tokens=32000, task="summary")
+                              PAGES_SCHEMA, max_tokens=32000, effort="low", task="summary")  # Abschreiben: kein langes Nachdenken
     texts = get_document_pages(doc)
     texts += [""] * (len(reader.pages) - len(texts))
     for slide in result.get("slides", []):

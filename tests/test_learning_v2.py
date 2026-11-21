@@ -388,7 +388,19 @@ def test_check_session_end_to_end(monkeypatch):
         if idx == 1:  # Zurück: vorherige Frage ansehen (nur lesen), dann wieder zur aktuellen
             at.button(key="v2_back").click()
             _run(at)
-            assert any("Einschätzung: Mittel" in c.value for c in at.caption)
+            sid = session["id"]
+            assert at.button(key=f"sg_mittel_v2_{sid}_1")  # gewählte Einschätzung markiert …
+            assert at.button(key=f"sg_schwer_v2_{sid}_1_dim")
+            data = at.session_state["_module_invfin"]
+            mt_id = sessions.find_session(data, sid)["items"][1]["minitopic_id"]
+            asked = mastery.peek(data, mt_id)["asked"]
+            at.button(key=f"sg_schwer_v2_{sid}_1_dim").click()  # … und lässt sich ändern
+            _run(at)
+            data = at.session_state["_module_invfin"]
+            item = sessions.find_session(data, sid)["items"][1]
+            assert item["self"] == "schwer" and mastery.peek(data, mt_id)["asked"] == asked  # ersetzt, nicht doppelt
+            assert mastery.peek(data, mt_id)["history"][-1]["self"] == "schwer"
+            assert at.button(key=f"sg_schwer_v2_{sid}_1")
             at.button(key="v2_back").click()
             _run(at)
             at.button(key=f"v2_{session['id']}_0_fwd").click()
@@ -782,3 +794,22 @@ def test_invfin_sheets_due_one_lecture_later():
     # Wochentraining-Schlüssel bleiben an der ursprünglichen Zuordnung (erledigte Trainings bleiben erledigt)
     keys = {w["lecture_date"]: w["key"] for w in planner.training_windows(cfg, module, sched, breaks)}
     assert keys[date(2026, 10, 27)] == planner.exercise_key("invfin", sheets[0]) + ":training"
+
+
+def test_check_fits_thirty_minutes_and_covers_all():
+    from utils import question_bank as qb, sessions
+
+    mts = [{"id": f"m{i}", "lecture_id": "L", "topic_id": "t", "title": f"M{i}", "importance": "hoch",
+            "kind": "wissen"} for i in range(25)]
+    data = {"topics": {}, "mastery": {}, "sessions": []}
+    import pytest
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(sessions, "part_minitopics", lambda d, lid, part: mts)
+    mp.setattr(sessions.topics, "minitopics", lambda d, lid=None, **k: mts)
+    try:
+        slots = sessions.plan_check(data, "L", dict(qb.TOOLS), 1)
+    finally:
+        mp.undo()
+    assert {s["mt"]["id"] for s in slots} == {m["id"] for m in mts}  # jedes Minithema dran
+    assert sum(qb.MINUTES[s["type"]] for s in slots) <= sessions.CHECK_MINUTES

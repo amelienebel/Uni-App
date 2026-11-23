@@ -183,6 +183,19 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   Dateien, Hinweise, Minithemen, Wissensstand, Fragen, Definitionen, Checks, Nacharbeit, Erledigt-Stand; Verweise alter Karten
   im Quellmodul werden gelöst).
 - Check/Training: „Zurück“ zeigt frühere Fragen nur zum Lesen (`session_ui._view`), „Weiter“ führt zur aktuellen.
+- **Blatt-Rückmeldung & Selbstbewertung (seit 23.11.2026, `mastery.record`):** falsch/schwer nie am selben Tag
+  wieder (mind. 1 Tag); offene Blatt-Schwäche begrenzt den Abstand (`FLAG_MAX_INTERVAL`: schlecht 2, ging so 4 Tage)
+  und die Stufe (`FLAG_CAP`), gilt erst nach sicheren richtigen Antworten ohne Tipp an verschiedenen Tagen als
+  bearbeitet (`FLAG_SURE_NEEDED`: schlecht 2, ging so 1; falsch → von vorn); erneutes Zuordnen übernimmt den
+  Bearbeitet-Stand (gleiches Blatt + Art). Einstieg: schwächste Einschätzung aus Nacharbeit/Blatt zählt. Check 2:
+  Blatt-Schwächen (auch aus der Hälfte von Check 1) zuerst als Zusatzfragen (`sessions._flag_rank`); Wochentraining:
+  „lief schlecht“ vor Problemen aus Checks (`uebung_schlecht`).
+- Antwortmöglichkeiten als große Karten (Container `ansopts_L_…` mit Buchstaben, `ansopts_N_…` ohne; CSS in `app.py`,
+  Farbe `--optc` aus `qcard_`). To-do-Kästchen in `tdrow_` als runde Abhak-Kreise (nur CSS).
+- Wochenablauf-Karten: „Aus früheren Wochen“ ohne Wochentrainings (`progress.week_cycle`).
+- Mathe VL 8 vorverlegt auf 23.11. (30.11. entfällt): `storage.LECTURE_MOVES` verschiebt gespeicherte Daten und
+  To-do-Schlüssel einmalig (`lecture_moves` in den Moduldaten); `planner.lecture_cancelled` blendet Vorlesungstermine
+  ohne Eintrag im Kursplan auf „Heute“ aus.
 
 ## Regeln für KI-Inhalte
 - Karteikarten nur aus Folien/Skript + Nachbereitung; Altklausuren und Übungsblätter des Moduls fließen immer als

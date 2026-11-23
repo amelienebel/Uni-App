@@ -14,6 +14,10 @@
     ],
     "calendar": [
       {
+        "date": "2026-11-30",
+        "text": "Mathe-Vorlesung entfällt (Einheit 8 war schon am 23.11.)"
+      },
+      {
         "date": "2026-12-07",
         "text": "Klausuranmeldung im LSF startet (bis 08.01.)"
       },
@@ -105,7 +109,7 @@
         {
           "id": "e8",
           "title": "Einheit 8",
-          "week": 8
+          "week": 7
         },
         {
           "id": "e9",
@@ -162,7 +166,7 @@
           "topic": "7. Vorlesung"
         },
         {
-          "date": "2026-11-30",
+          "date": "2026-11-23",
           "chapter_id": "e8",
           "topic": "8. Vorlesung"
         },
@@ -269,7 +273,7 @@
           "due": "2027-01-11"
         }
       ],
-      "syllabus_version": 2,
+      "syllabus_version": 3,
       "exam_note": "Klausur 12.02.2027. Die Lösungsvorschläge werden meist freitags um 14:00 Uhr in Moodle freigeschaltet.",
       "deadlines": {
         "upload_weekday": 0,

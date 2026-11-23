@@ -262,6 +262,41 @@ def _apply_syllabus_update(data: dict, module_cfg: dict, default: dict) -> bool:
     return True
 
 
+# Verschobene Vorlesungen (alter Termin → neuer Termin): gespeicherte Dateien, Hinweise, Minithemen, Checks und
+# Erledigt-Häkchen wandern einmalig mit (Einheiten-ID „vl:<Datum>“ und To-do-Schlüssel enthalten das Datum)
+LECTURE_MOVES = {"mathe": [("2026-11-30", "2026-11-23")]}
+
+
+def _apply_lecture_moves(module_id: str, data: dict) -> bool:
+    done = list(data.get("lecture_moves") or [])
+    changed = False
+    for old, new in LECTURE_MOVES.get(module_id, []):
+        tag = f"{old}>{new}"
+        if tag in done:
+            continue
+        moved = json.loads(json.dumps(data, ensure_ascii=False).replace(f"vl:{old}", f"vl:{new}"))
+        data.clear()
+        data.update(moved)
+        todos = load_todos()
+        prefix_old, prefix_new = f"{module_id}:vl:{old}", f"{module_id}:vl:{new}"
+        renamed = {k: v for k, v in todos.items() if isinstance(k, str) and k.startswith(prefix_old)}
+        for k, v in renamed.items():
+            todos.pop(k)
+            todos.setdefault(prefix_new + k[len(prefix_old):], v)
+        for k in ("_prio", "_parked"):
+            if isinstance(todos.get(k), dict):
+                todos[k] = {(prefix_new + x[len(prefix_old):] if x.startswith(prefix_old) else x): y
+                            for x, y in todos[k].items()}
+            elif isinstance(todos.get(k), list):
+                todos[k] = [prefix_new + x[len(prefix_old):] if isinstance(x, str) and x.startswith(prefix_old)
+                            else x for x in todos[k]]
+        save_todos()
+        done.append(tag)
+        changed = True
+    data["lecture_moves"] = done
+    return changed
+
+
 def load_module(module_id: str) -> dict:
     key = f"_module_{module_id}"
     if key not in st.session_state:
@@ -272,6 +307,7 @@ def load_module(module_id: str) -> dict:
         data.setdefault("chapters", [])
         data.setdefault("formulas", [])
         migrated = _apply_syllabus_update(data, module_cfg, default)
+        migrated = _apply_lecture_moves(module_id, data) or migrated
         # Neue Blatt-Zuordnung aus config.json: von Hand gesetzte Kapitel der Übungen einmalig verwerfen
         ex_version = int(module_cfg.get("exercise_chapters_version", 0))
         if ex_version > int(data.get("exercise_chapters_version", 0)):

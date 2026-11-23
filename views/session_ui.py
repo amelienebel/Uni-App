@@ -76,14 +76,15 @@ def _answer_input(q: dict, key: str, item: dict):
     stored = item.get("answer")
     if q["type"] == "sc":
         idx = stored[0] if done and stored else None
-        choice = st.radio("Antwort", list(range(len(q["options"]))), index=idx, key=f"{key}_sc", disabled=done,
-                          format_func=lambda j: f"{chr(65 + j)})  {q['options'][j]}", label_visibility="collapsed")
+        with st.container(key=f"ansopts_L_{key}"):
+            choice = st.radio("Antwort", list(range(len(q["options"]))), index=idx, key=f"{key}_sc", disabled=done,
+                              format_func=lambda j: q["options"][j], label_visibility="collapsed")
         return [] if choice is None else [choice]
     if q["type"] == "mc":
         st.caption("Eine oder mehrere Antworten sind richtig.")
-        return [j for j, opt in enumerate(q["options"])
-                if st.checkbox(f"{chr(65 + j)})  {opt}", key=f"{key}_mc_{j}", disabled=done,
-                               value=bool(done and j in (stored or [])))]
+        with st.container(key=f"ansopts_L_{key}"):
+            return [j for j, opt in enumerate(q["options"])
+                    if st.checkbox(opt, key=f"{key}_mc_{j}", disabled=done, value=bool(done and j in (stored or [])))]
     if q["type"] == "zahl":
         return st.text_input("Ergebnis", value=stored or "" if done else None, key=f"{key}_num", disabled=done,
                              placeholder="Zahl eintippen, z. B. 120 oder 0,25")

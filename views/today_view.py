@@ -103,6 +103,7 @@ def render(cfg: dict) -> None:
         # --- Termine ---------------------------------------------------------------
         st.subheader(":material/event: Termine heute")
         events = [e for e in planner.week_events(schedule, monday) if e["date"] == now and in_timetable(e)
+                  and not planner.lecture_cancelled(cfg, e)
                   and sem_start <= now <= sem_end and not planner.break_for(now, breaks)]
         if not events:
             st.caption("Heute keine Veranstaltungen.")

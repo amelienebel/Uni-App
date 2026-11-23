@@ -171,6 +171,49 @@ st.markdown("""
   [class*="st-key-doneoff_"] button { background: transparent; border: 1.5px dashed rgba(128, 128, 128, 0.55);
     color: inherit; opacity: 0.85; }
   [class*="st-key-doneoff_"] button:hover { border-style: solid; border-color: #2e9d5b; color: #2e9d5b; opacity: 1; }
+  /* Antwortmöglichkeiten (Checks, Training, Quiz): jede Option als große, antippbare Karte statt kleinem Kästchen */
+  [class*="st-key-ansopts_"] { counter-reset: ansopt; gap: 0.5rem; }
+  [class*="st-key-ansopts_"] [data-testid="stRadioGroup"] { gap: 0.5rem; width: 100%; counter-reset: ansopt; }
+  [class*="st-key-ansopts_"] [data-testid="stRadioGroup"] > div { width: 100%; }
+  [class*="st-key-ansopts_"] [data-testid="stElementContainer"], [class*="st-key-ansopts_"] [data-testid="stRadio"],
+  [class*="st-key-ansopts_"] [data-testid="stCheckbox"] { width: 100% !important; max-width: 100% !important; }
+  [class*="st-key-ansopts_"] label[data-testid="stRadioOption"], [class*="st-key-ansopts_"] [data-testid="stCheckbox"] > label {
+    counter-increment: ansopt; display: flex; align-items: center; gap: 0.75rem; width: 100%; box-sizing: border-box;
+    margin: 0; padding: 0.75rem 1rem; border: 1.5px solid rgba(128, 128, 128, 0.32); border-radius: 0.9rem;
+    background: rgba(128, 128, 128, 0.04); cursor: pointer; transition: all 0.15s ease; }
+  [class*="st-key-ansopts_"] label[data-testid="stRadioOption"] > div { gap: 0; width: 100%; }
+  [class*="st-key-ansopts_"] label[data-testid="stRadioOption"] > div > div:first-child,
+  [class*="st-key-ansopts_"] [data-testid="stCheckbox"] > label > div:not([data-testid]) { display: none !important; }
+  [class*="st-key-ansopts_L_"] label[data-testid="stRadioOption"]::before,
+  [class*="st-key-ansopts_L_"] [data-testid="stCheckbox"] > label::before {
+    content: counter(ansopt, upper-alpha); flex: 0 0 auto; display: inline-flex; align-items: center;
+    justify-content: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; font-weight: 700; font-size: 0.9rem;
+    border: 1.5px solid rgba(128, 128, 128, 0.45); color: inherit; transition: all 0.15s ease; }
+  [class*="st-key-ansopts_"] [data-testid="stCheckbox"] > label::before { border-radius: 0.45rem; }
+  [class*="st-key-ansopts_"] label[data-testid="stRadioOption"] p, [class*="st-key-ansopts_"] [data-testid="stCheckbox"] p {
+    margin: 0; font-size: 1rem; line-height: 1.45; }
+  [class*="st-key-ansopts_"] [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] { width: 100%; }
+  [class*="st-key-ansopts_"] label[data-testid="stRadioOption"]:hover, [class*="st-key-ansopts_"] [data-testid="stCheckbox"] > label:hover {
+    border-color: var(--optc, #3B6FD8); background: color-mix(in srgb, var(--optc, #3B6FD8) 6%, transparent); }
+  [class*="st-key-ansopts_"] label[data-testid="stRadioOption"]:has(input:checked),
+  [class*="st-key-ansopts_"] [data-testid="stCheckbox"] > label:has(input:checked) {
+    border: 2px solid var(--optc, #3B6FD8); background: color-mix(in srgb, var(--optc, #3B6FD8) 13%, transparent); }
+  [class*="st-key-ansopts_L_"] label[data-testid="stRadioOption"]:has(input:checked)::before,
+  [class*="st-key-ansopts_L_"] [data-testid="stCheckbox"] > label:has(input:checked)::before {
+    background: var(--optc, #3B6FD8); border-color: var(--optc, #3B6FD8); color: #fff; }
+  [class*="st-key-ansopts_"] label:has(input:disabled) { cursor: default; opacity: 0.85; }
+  [class*="st-key-ansopts_"] label:has(input:disabled):hover:not(:has(input:checked)) {
+    border-color: rgba(128, 128, 128, 0.32); background: rgba(128, 128, 128, 0.04); }
+  /* To-dos abhaken (Heute, Wochenübersicht): runder Kreis statt kleinem Kästchen, erledigt grün mit Haken */
+  [class*="st-key-tdrow_"] [data-testid="stCheckbox"] > label > div:not([data-testid]) {
+    width: 1.5rem !important; height: 1.5rem !important; min-width: 1.5rem; border-radius: 50% !important;
+    border: 2px solid rgba(128, 128, 128, 0.55) !important; background: transparent !important;
+    background-image: none !important; transition: all 0.15s ease; box-shadow: none !important; }
+  [class*="st-key-tdrow_"] [data-testid="stCheckbox"] > label:hover > div:not([data-testid]) {
+    border-color: #2e9d5b !important; background: rgba(46, 157, 91, 0.12) !important; }
+  [class*="st-key-tdrow_"] [data-testid="stCheckbox"] > label:has(input:checked) > div:not([data-testid]) {
+    border-color: #2e9d5b !important; background: #2e9d5b url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round' d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 75% no-repeat !important; }
+  [class*="st-key-tdrow_"] [data-testid="stCheckbox"] > label > div:not([data-testid]) > * { display: none; }
   /* Allgemeines Design: ruhiger Kopf, Kacheln, Pillen-Reiter, weiche Übergänge */
   [data-testid="stAppDeployButton"], .st-key-watchdog { display: none; }
   .block-container { padding-top: 3rem; padding-bottom: 4rem; }
@@ -360,7 +403,7 @@ for _m in cfg["modules"]:
         f"[class*='st-key-ckhead_{_id}'] [data-testid='stIconMaterial'] {{color: {_c};}}",
         f".st-key-trhead_{_id} {{border-left: 6px solid {_c}; background: {_c}14; border-radius: 0.8rem; "
         f"padding: 0.7rem 1rem;}}",
-        f".st-key-qcard_{_id} {{border-left: 6px solid {_c} !important;}}",
+        f".st-key-qcard_{_id} {{border-left: 6px solid {_c} !important; --optc: {_c};}}",
         f".st-key-sesshead_{_id} {{border-bottom: 3px solid {_c}; padding-bottom: 0.2rem;}}",
         f"[class*='st-key-ckhead_{_id}'] {{border-bottom: 2px solid {_c}55; margin-top: 0.6rem;}}",
     ]

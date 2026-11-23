@@ -176,7 +176,8 @@ def plan_check(data: dict, lec_id: str, settings: dict, part: int = 1) -> list[d
     mts = part_minitopics(data, lec_id, part)
     if not mts:
         return []
-    weak = [m for m in mts if mastery.has_open_nacharbeit(data, m) or mastery.has_open_flag(data, m)]
+    weak = sorted([m for m in mts if mastery.has_open_nacharbeit(data, m) or mastery.has_open_flag(data, m)],
+                  key=lambda m: _flag_rank(data, m))
     weak_ids = {m["id"] for m in weak}
     slots = [{"mt": m, "level": mastery.current_level(data, m)} for m in mts]
     # ein paar Freitext-Fragen zu wichtigen Erklär-Themen (nicht, wo es gehakt hat) – fallen weg, wenn die Zeit knapp ist
@@ -210,9 +211,15 @@ def plan_check(data: dict, lec_id: str, settings: dict, part: int = 1) -> list[d
         slots.append({"mt": mt, "level": level, "type": qtype})
         return True
 
-    earlier = [m for m in topics.minitopics(data, lec_id) if m["id"] not in {x["id"] for x in mts}
-               and mastery.is_problem(data, m, "check")] if part == 2 else []
-    for mt in weak + [m for m in mts if mastery.in_exercise(data, m) and m["id"] not in weak_ids]:
+    other = [m for m in topics.minitopics(data, lec_id) if m["id"] not in {x["id"] for x in mts}] if part == 2 else []
+    # Check 2 (nach dem Übungsblatt): was im Blatt schlecht/so lala lief – auch aus der Hälfte von Check 1 –
+    # kommt vor allem anderen dran, danach die Probleme aus Check 1
+    sheet_weak = sorted([m for m in other if mastery.has_open_flag(data, m)], key=lambda m: _flag_rank(data, m))
+    earlier = [m for m in other if mastery.is_problem(data, m, "check") and not mastery.has_open_flag(data, m)]
+    for mt in [m for m in weak if mastery.has_open_flag(data, m)] + sheet_weak:
+        add(mt)
+    for mt in [m for m in weak if not mastery.has_open_flag(data, m)] \
+            + [m for m in mts if mastery.in_exercise(data, m) and m["id"] not in weak_ids]:
         add(mt)
     for mt in earlier:  # Check 2: was in Check 1 falsch oder schwer war, noch einmal
         add(mt)
@@ -227,6 +234,11 @@ def plan_check(data: dict, lec_id: str, settings: dict, part: int = 1) -> list[d
                 break
             add(mt, fill=True)
     return slots
+
+
+def _flag_rank(data: dict, mt: dict) -> int:
+    """Reihenfolge nach Rückmeldung zum Übungsblatt: lief schlecht → ging so → Rest."""
+    return {"schlecht": 0, "mittel": 1}.get(mastery.open_flag_kind(data, mt), 2)
 
 
 def open_from_checks(data: dict) -> list[dict]:
@@ -268,7 +280,9 @@ def plan_training(data: dict, held: list[dict], n: int, settings: dict, day: dat
     def newest(m: dict) -> tuple:
         return (not mastery.in_exercise(data, m), -order[m["lecture_id"]], _IMPORTANCE_RANK.get(m.get("importance"), 1))
 
-    keys = ("checks", "uebung", "nacharbeit", "blatt", "offen", "training")
+    # Rückmeldung zum Übungsblatt „lief schlecht“ zuerst, dann Probleme aus Checks, dann „ging so“ …
+    focus["uebung_schlecht"] = [m for m in focus["uebung"] if mastery.open_flag_kind(data, m) == "schlecht"]
+    keys = ("uebung_schlecht", "checks", "uebung", "nacharbeit", "blatt", "offen", "training")
     for key in keys:
         take(sorted(focus[key], key=newest), n - reserve)
     # Wiederholung: zuerst Minithemen aus älteren Vorlesungen (vor mehr als einer Woche), dann die der letzten Woche

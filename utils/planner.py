@@ -322,6 +322,16 @@ def sync_chapter_status(module_cfg: dict, module_data: dict, chapter_id: str | N
             ch["status"][field] = all(todo_state.get(k) for k in keys)
 
 
+def lecture_cancelled(cfg: dict, event: dict) -> bool:
+    """Regulärer Vorlesungstermin, an dem laut Kursplan keine Vorlesung ist (Ausfall, z. B. vorverlegt)."""
+    if event.get("type") != "Vorlesung":
+        return False
+    module = next((m for m in cfg["modules"] if m["id"] == event.get("module_id")), None)
+    if not module or not module.get("lectures"):
+        return False
+    return event["date"] not in {lec["date"] for lec in lectures_of(module)}
+
+
 def week_events(schedule: list[dict], monday: date) -> list[dict]:
     events = []
     for event in schedule:

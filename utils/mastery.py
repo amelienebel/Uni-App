@@ -80,12 +80,11 @@ def archive_hint(data: dict, mt_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def start_level(data: dict, mt: dict) -> str:
-    rating = nacharbeit_rating(data, mt)
-    if rating:
-        return "mc" if rating == "sicher" else "sc"
-    ex = exercise_rating(data, mt)
-    if ex:
-        return "mc" if ex == "gut" else "sc"
+    """Einstieg: Multiple Choice nur, wenn nichts dagegen spricht – die schwächste Einschätzung zählt
+    (Nacharbeit „sicher“, aber Übung „lief schlecht“ → Single Choice)."""
+    rating, ex = nacharbeit_rating(data, mt), exercise_rating(data, mt)
+    if rating or ex:
+        return "mc" if rating in (None, "sicher") and ex in (None, "gut") else "sc"
     hint = archive_hint(data, mt["id"])
     return "mc" if hint and hint["label"] == "sicher" else "sc"
 
@@ -167,7 +166,32 @@ def record(data: dict, mt: dict, correct, self_grade: str, *, source: str, quest
     fsrs["priority"] = _PRIORITY.get(mt.get("importance"), "normal")
     stable_before = (fsrs.get("stability") or 0) >= 7
     sr.review(fsrs, fsrs_grade(correct, self_grade, hints_used), days_to_exam, today)
-    if e.get("exercise_hits") and fsrs.get("interval", 0) > 1:  # kam im Übungsblatt dran → klausurrelevant → öfter
+    sure = correct is True and self_grade != "schwer" and not hints_used
+    for flag in e["exercise_flags"]:
+        if not flag.get("open"):
+            continue
+        if sure:
+            # Schwäche aus der Übung gilt als bearbeitet nach sicheren richtigen Antworten an verschiedenen Tagen:
+            # „lief schlecht“ braucht zwei, „ging so“ eine
+            days = set(flag.get("sure_days") or [])
+            days.add(today.isoformat())
+            flag["sure_days"] = sorted(days)
+            if len(days) >= FLAG_SURE_NEEDED.get(flag["kind"], 1):
+                flag["open"] = False
+                flag["closed"] = today.isoformat()
+        elif correct is not True:
+            flag["sure_days"] = []  # wieder falsch → von vorn
+    nach = e.get("nacharbeit")
+    if nach and nach.get("open") and sure:
+        nach["open"] = False  # ebenso eine Schwäche aus der Nacharbeit
+    if fsrs.get("interval", 0) < 1:  # falsch/schwer: nicht noch am selben Tag, sondern ab morgen wieder
+        fsrs["interval"] = 1
+        fsrs["due"] = (today + timedelta(days=1)).isoformat()
+    if _weakest_open_flag(e) and fsrs["interval"] > FLAG_MAX_INTERVAL[_weakest_open_flag(e)]:
+        # Schwäche aus dem Übungsblatt noch offen → bald wieder (auch wenn die Antwort „einfach“ war)
+        fsrs["interval"] = FLAG_MAX_INTERVAL[_weakest_open_flag(e)]
+        fsrs["due"] = (today + timedelta(days=fsrs["interval"])).isoformat()
+    elif e.get("exercise_hits") and fsrs.get("interval", 0) > 1:  # kam im Übungsblatt dran → klausurrelevant → öfter
         fsrs["interval"] = max(1, round(fsrs["interval"] * EXERCISE_INTERVAL))
         fsrs["due"] = (today + timedelta(days=fsrs["interval"])).isoformat()
     top = LEVELS.index(top_level(mt))
@@ -176,17 +200,14 @@ def record(data: dict, mt: dict, correct, self_grade: str, *, source: str, quest
         idx -= 1
     elif correct is True and self_grade in ("mittel", "einfach") and not hints_used:
         idx += 2 if self_grade == "einfach" and stable_before else 1
+    flag = _weakest_open_flag(e)
+    if flag:  # solange die Schwäche aus dem Blatt offen ist: „schlecht“ höchstens Single, „ging so“ höchstens Multiple
+        top = min(top, LEVELS.index(FLAG_CAP[flag]))
     e["level"] = LEVELS[max(0, min(top, idx))]
     e["asked"] += 1
     e["first_asked"] = e["first_asked"] or today.isoformat()
     e["history"].append({"date": today.isoformat(), "source": source, "question_id": question_id,
                          "level": level_asked, "correct": correct, "self": self_grade, "hints": hints_used})
-    for flag in e["exercise_flags"]:
-        if flag.get("open") and correct is True and self_grade != "schwer":
-            flag["open"] = False  # Schwäche aus der Übung gilt nach einer sicheren Antwort als bearbeitet
-    nach = e.get("nacharbeit")
-    if nach and nach.get("open") and correct is True and self_grade != "schwer":
-        nach["open"] = False  # ebenso eine Schwäche aus der Nacharbeit
     return e
 
 
@@ -195,6 +216,21 @@ EXERCISE_COLORS = {"gut": "#2E9D5B", "mittel": "#E08A1E", "schlecht": "#D6455D"}
 WEAK_KINDS = ("mittel", "schlecht")
 EXERCISE_INTERVAL = 0.6  # Abstand bis zur nächsten Abfrage bei Übungsstoff (kürzer = häufiger)
 _EX_ORDER = ["schlecht", "mittel", "gut"]
+# Offene Schwäche aus dem Übungsblatt: höchstens so viele Tage bis zur nächsten Abfrage …
+FLAG_MAX_INTERVAL = {"schlecht": 2, "mittel": 4}
+# … und so viele sichere richtige Antworten (an verschiedenen Tagen), bis sie als bearbeitet gilt
+FLAG_SURE_NEEDED = {"schlecht": 2, "mittel": 1}
+FLAG_CAP = {"schlecht": "sc", "mittel": "mc"}
+
+
+def _weakest_open_flag(e: dict) -> str | None:
+    kinds = {f["kind"] for f in e.get("exercise_flags", []) if f.get("open") and f["kind"] in WEAK_KINDS}
+    return next((k for k in _EX_ORDER if k in kinds), None)
+
+
+def open_flag_kind(data: dict, mt: dict) -> str | None:
+    """Schwächste noch offene Rückmeldung aus den Übungsblättern (schlecht/mittel) oder None."""
+    return _weakest_open_flag(peek(data, mt["id"]))
 
 
 def apply_exercise_flag(data: dict, mt: dict, exercise_id: str, kind: str, text: str,
@@ -206,11 +242,16 @@ def apply_exercise_flag(data: dict, mt: dict, exercise_id: str, kind: str, text:
     e = entry(data, mt["id"])
     if any(f["exercise_id"] == exercise_id and f["kind"] == kind and f["text"] == text for f in e["exercise_flags"]):
         return
+    # Neu zugeordnet (z. B. anderer Wortlaut): war diese Schwäche aus demselben Blatt schon bearbeitet, bleibt sie es
+    prev = [f for f in e["exercise_flags"] if f["exercise_id"] == exercise_id and f["kind"] == kind]
+    if prev:
+        e["exercise_flags"].append({**prev[-1], "text": text})
+        return
     e["exercise_flags"].append({"exercise_id": exercise_id, "kind": kind, "text": text, "date": today.isoformat(),
                                 "open": kind in WEAK_KINDS})
     if kind not in WEAK_KINDS:
         return
-    cap = "sc" if kind == "schlecht" else "mc"
+    cap = FLAG_CAP[kind]
     if e.get("level") and LEVELS.index(e["level"]) > LEVELS.index(cap):
         e["level"] = cap
     if e.get("asked"):

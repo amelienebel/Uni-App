@@ -39,12 +39,14 @@ def answer_input(q: dict, key: str, stored: dict | None = None) -> list[int] | s
         options = list(range(len(q["options"])))
         if q["type"] == "mc_multi":
             st.caption("Eine oder mehrere Antworten sind richtig.")
-            return [j for j in options if st.checkbox(q["options"][j], key=f"{key}_{j}{'_done' if done else ''}",
-                                                      value=j in (stored or {}).get("picked", []), disabled=done)]
+            with st.container(key=f"ansopts_N_{key}"):
+                return [j for j in options if st.checkbox(q["options"][j], key=f"{key}_{j}{'_done' if done else ''}",
+                                                          value=j in (stored or {}).get("picked", []), disabled=done)]
         picked = (stored or {}).get("picked") or []
-        choice = st.radio("Antwort", options, key=f"{key}{'_done' if done else ''}", disabled=done,
-                          index=picked[0] if picked else None, format_func=lambda j: q["options"][j],
-                          label_visibility="collapsed")
+        with st.container(key=f"ansopts_N_{key}"):
+            choice = st.radio("Antwort", options, key=f"{key}{'_done' if done else ''}", disabled=done,
+                              index=picked[0] if picked else None, format_func=lambda j: q["options"][j],
+                              label_visibility="collapsed")
         return [] if choice is None else [choice]
     return st.text_area("Deine Lösung", key=f"{key}{'_done' if done else ''}", height=130, disabled=done,
                         value=(stored or {}).get("text", ""), label_visibility="collapsed",

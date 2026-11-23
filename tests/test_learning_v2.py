@@ -813,3 +813,71 @@ def test_check_fits_thirty_minutes_and_covers_all():
         mp.undo()
     assert {s["mt"]["id"] for s in slots} == {m["id"] for m in mts}  # jedes Minithema dran
     assert sum(qb.MINUTES[s["type"]] for s in slots) <= sessions.CHECK_MINUTES
+
+
+def test_exercise_feedback_spacing_and_self_rating():
+    """Blatt „lief schlecht“: bald wieder, höchstens Single Choice, offen bis zu zwei sicheren Antworten an
+    verschiedenen Tagen; falsch/schwer nie am selben Tag erneut; erneutes Zuordnen öffnet Bearbeitetes nicht wieder."""
+    from utils import mastery
+
+    d0 = date(2026, 11, 23)
+    data, mt = {}, {"id": "w1", "kind": "wissen"}
+    mastery.record(data, mt, False, "schwer", source="check", question_id="q", level_asked="sc", today=d0)
+    assert data["mastery"]["w1"]["fsrs"]["due"] == (d0 + timedelta(days=1)).isoformat()  # morgen, nicht heute
+    mastery.apply_exercise_flag(data, mt, "ex1", "schlecht", "Vorzeichen", today=d0)
+    mastery.record(data, mt, True, "einfach", source="check", question_id="q", level_asked="sc", today=d0)
+    e = data["mastery"]["w1"]
+    assert mastery.has_open_flag(data, mt)  # eine sichere Antwort reicht bei „schlecht“ nicht
+    assert e["fsrs"]["interval"] <= mastery.FLAG_MAX_INTERVAL["schlecht"] and e["level"] == "sc"
+    d1 = d0 + timedelta(days=2)
+    mastery.record(data, mt, True, "mittel", source="training", question_id="q", level_asked="sc", today=d1)
+    assert not mastery.has_open_flag(data, mt) and e["level"] == "mc"
+    # erneute Zuordnung mit anderem Wortlaut: bleibt bearbeitet
+    mastery.apply_exercise_flag(data, mt, "ex1", "schlecht", "Vorzeichen vertauscht", today=d1)
+    assert not mastery.has_open_flag(data, mt)
+    # Nacharbeit „sicher“, aber Blatt „ging so“ → Einstieg Single Choice (schwächste Einschätzung zählt)
+    other = {"id": "w2", "kind": "wissen"}
+    mastery.apply_nacharbeit(data, other, "sicher", "", today=d0)
+    mastery.apply_exercise_flag(data, other, "ex1", "mittel", "mit Hilfe", today=d0)
+    assert mastery.start_level(data, other) == "sc"
+
+
+def test_check2_and_training_use_sheet_feedback():
+    from utils import mastery, sessions
+
+    from utils import topics
+
+    raw = [{"id": f"t{i}", "title": f"MT {i}", "kind": "wissen", "importance": "normal", "slides": []} for i in range(6)]
+    data = {"topics": {"vl:2026-11-02": {"topics": [{"id": "T", "title": "T", "minitopics": raw}]}},
+            "sessions": [{"id": "s1", "kind": "check", "lecture_id": "vl:2026-11-02", "part": 1,
+                          "part_ids": ["t0", "t1", "t2"], "finished_at": "x", "items": []}]}
+    mts = topics.minitopics(data)
+    assert len(mts) == 6
+    mastery.apply_exercise_flag(data, mts[0], "ex1", "schlecht", "nicht gekonnt")  # aus der Hälfte von Check 1
+    ids = [s["mt"]["id"] for s in sessions.plan_check(data, "vl:2026-11-02", {}, part=2)]
+    assert ids[:3] == ["t3", "t4", "t5"] and ids[3] == "t0"  # erste Zusatzfrage: Blatt-Schwäche aus Hälfte 1
+    held = [{"id": "vl:2026-11-02", "date": date(2026, 11, 2), "nr": 1, "topic": ""}]
+    mastery.apply_exercise_flag(data, mts[5], "ex1", "mittel", "so lala")
+    first = [s["mt"]["id"] for s in sessions.plan_training(data, held, 5, {}, day=date(2026, 11, 23))]
+    assert first[0] == "t0" and "t5" in first
+
+
+def test_mathe_lecture_8_moved_to_23_11(monkeypatch):
+    from utils import planner, storage
+    from utils.config import get_module, load_config
+
+    cfg = load_config()
+    mathe = get_module(cfg, "mathe")
+    dates = [lec["date"] for lec in planner.lectures_of(mathe)]
+    assert date(2026, 11, 23) in dates and date(2026, 11, 30) not in dates
+    ev = {"module_id": "mathe", "type": "Vorlesung", "date": date(2026, 11, 30)}
+    assert planner.lecture_cancelled(cfg, ev) and not planner.lecture_cancelled(cfg, {**ev, "date": date(2026, 11, 23)})
+    # schon gespeicherte Daten zum alten Termin wandern mit
+    todos = {"mathe:vl:2026-11-30:nachbereitet": True, "_prio": {"mathe:vl:2026-11-30:nacharbeit": 1}}
+    monkeypatch.setattr(storage, "load_todos", lambda: todos)
+    monkeypatch.setattr(storage, "save_todos", lambda: None)
+    data = {"notes": {"vl:2026-11-30": {"text": "x"}}, "documents": [{"unit": "vl:2026-11-30"}]}
+    assert storage._apply_lecture_moves("mathe", data)
+    assert "vl:2026-11-23" in data["notes"] and data["documents"][0]["unit"] == "vl:2026-11-23"
+    assert todos["mathe:vl:2026-11-23:nachbereitet"] and "mathe:vl:2026-11-23:nacharbeit" in todos["_prio"]
+    assert not storage._apply_lecture_moves("mathe", data)  # nur einmal

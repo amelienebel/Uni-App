@@ -205,7 +205,8 @@ def week_cycle(cfg: dict, module: dict, data: dict, lecs: list[dict], exs: list[
         if end >= monday:
             current.append((lec, [s[:3] for s in steps]))
         elif monday <= today() + timedelta(days=6):  # nur bis zur aktuellen Woche: was ist hängen geblieben?
-            late = [s for s in steps if s[1] == "overdue"]
+            # Wochentrainings früherer Wochen nicht nachtragen (die macht sie bei Bedarf zu einem anderen Zeitpunkt)
+            late = [s for s in steps if s[1] == "overdue" and s[0] != "Wochentraining"]
             if late:
                 stuck.append((lec, late))
     return {"current": current, "stuck": stuck}

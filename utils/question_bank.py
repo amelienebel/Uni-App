@@ -12,6 +12,7 @@ Kosten sparen:
 
 from __future__ import annotations
 
+import random
 import re
 from decimal import Decimal, InvalidOperation
 
@@ -91,7 +92,7 @@ def style_profile(cfg: dict, module_id: str, data: dict) -> str:
     text = ""
     if material.strip() and ai.is_available():
         text = ai.complete(STYLE_PROMPT.format(module=module["name"], exam_format=exam_format(module)["label"],
-                                               material=material), max_tokens=6000, effort="low", task="cards")
+                                               material=material), max_tokens=6000, effort="low", task="summary")
     data["style_profile"] = {"key": key, "text": text.strip(), "created_at": now_iso()}
     save_module(module_id)
     return text.strip()
@@ -133,8 +134,10 @@ Du schreibst Klausur-Übungsfragen für eine BWL-Studentin (LMU, 1. Semester) �
 
 Fragetypen:
 - "sc": Single Choice, genau 4 Optionen, genau eine richtig (correct_indices = [Index 0–3]).
-- "mc": Multiple Choice, genau 5 Optionen, eine oder mehrere richtig (correct_indices = alle richtigen, 0–4;
-  die Zahl der richtigen variiert).
+- "mc": Multiple Choice, genau 5 Optionen, GENAU so viele richtig wie „richtige=k“ in der Auftragszeile verlangt
+  (1 bis 5 – auch nur eine oder alle fünf sind erlaubt; correct_indices = alle richtigen, 0–4).
+- Die Optionen werden danach zufällig gemischt: nirgends (Frage, Optionen, Tipps, option_notes, explanation)
+  Buchstaben oder Positionen von Optionen nennen („A“, „Antwort b“, „die erste Option“, „A und C“).
 - "zahl": Kopfrechnen – die Antwort ist EINE Zahl mit eindeutigem, glattem Ergebnis (number_answer, z. B. "120"
   oder "0,25"); options leer. Kein Toleranzbereich, keine Einheit in number_answer.
 - "freitext": Erklärfrage, die man in Worten beantwortet (NIE Formeln oder Rechnungen tippen lassen).
@@ -231,6 +234,22 @@ def _valid(q: dict, want: str) -> bool:
     return bool(q["sample_answer"].strip())
 
 
+def shuffle_options(q: dict) -> None:
+    """Optionen (mit option_notes) zufällig mischen – so steht die richtige Single-Choice-Antwort auf jeder der 4
+    Positionen mit 25 % (die KI setzt sie sonst gehäuft auf A)."""
+    if q.get("type") not in ("sc", "mc") or not q.get("options"):
+        return
+    n = len(q["options"])
+    perm = list(range(n))
+    random.shuffle(perm)  # neue Position k zeigt die alte Option perm[k]
+    notes = q.get("option_notes") or []
+    q["options"] = [q["options"][j] for j in perm]
+    if len(notes) == n:
+        q["option_notes"] = [notes[j] for j in perm]
+    new_pos = {old: k for k, old in enumerate(perm)}
+    q["correct_indices"] = sorted({new_pos[i] for i in q.get("correct_indices", []) if i in new_pos})
+
+
 def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, lec_names: dict[str, str]) -> list[dict]:
     """requests = [{"mt": Minithema, "type": Fragetyp}] → neue, gespeicherte Fragen (gleiche Reihenfolge; None,
     wenn für einen Auftrag nichts Brauchbares kam). Wirft ai.AIError."""
@@ -240,6 +259,9 @@ def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, le
     data = load_module(module_id)
     style = style_profile(cfg, module_id, data) or "(keine Altklausuren – Stil deutscher Uni-Klausuren, 1. Semester)"
     lines = []
+    for r in requests:  # Multiple Choice: Zahl der richtigen gleich verteilt 1–5
+        if r["type"] == "mc" and not r.get("n_correct"):
+            r["n_correct"] = random.randint(1, 5)
     for i, r in enumerate(requests, start=1):
         mt = r["mt"]
         from utils.mastery import weak_notes
@@ -251,7 +273,8 @@ def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, le
         from utils.mastery import exercise_hits
 
         tasks = [t for h in exercise_hits(data, mt) for t in h.get("tasks", [])][:4]
-        lines.append(f"[{i}] type={r['type']} · Minithema: {mt['title']} (Thema: {mt['topic']}; "
+        lines.append(f"[{i}] type={r['type']}" + (f" · richtige={r['n_correct']}" if r.get("n_correct") else "")
+                     + f" · Minithema: {mt['title']} (Thema: {mt['topic']}; "
                      f"{lec_names.get(mt['lecture_id'], '')}) · Art: {mt.get('kind', 'wissen')}\n"
                      f"    Kerninhalt: {mt.get('summary', '')}"
                      + (f"\n    Hat gehakt (Nacharbeit/Übung – gezielt abfragen): {' | '.join(flags)}" if flags else "")
@@ -276,6 +299,7 @@ def generate(cfg: dict, module_id: str, requests: list[dict], settings: dict, le
         if not q:
             out.append(None)
             continue
+        shuffle_options(q)
         stored = {"id": new_id(), "minitopic_id": r["mt"]["id"], "lecture_id": r["mt"]["lecture_id"],
                   "type": q["type"], "question": q["question"].strip(), "options": q["options"],
                   "correct_indices": sorted(set(q["correct_indices"])) if q["type"] in ("sc", "mc") else [],

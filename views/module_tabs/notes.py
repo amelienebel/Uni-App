@@ -1,4 +1,4 @@
-"""Reiter: Notizen – Fragen fürs Tutorium/die Übung und allgemeine Notizen zum Modul."""
+"""Reiter: Notizen – allgemeine Notizen zum Modul (Fragen fürs Tutorium nicht mehr angezeigt, Daten bleiben)."""
 
 from __future__ import annotations
 
@@ -62,11 +62,6 @@ def render(cfg: dict, module_id: str) -> None:
     data = load_module(module_id)
     notes = _notes(data)
     st.subheader("Notizen")
-    st.markdown("#### Fragen fürs Tutorium / die Übung")
-    st.caption("Alle Fragen aus dem Modul – auch die, die du direkt bei einer Übung notiert hast.")
-    question_list(module_id, data, key_prefix="nq", show_done=True)
-
-    st.markdown("#### Sonstige Notizen")
     with st.form(f"general_notes_{module_id}"):
         c1, c2 = st.columns(2)
         todo = c1.text_area("Organisatorisches & Erinnerungen", notes["todo"], height=200,

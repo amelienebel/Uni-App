@@ -40,7 +40,7 @@ Keine Secrets (API-Key, GitHub-Token, App-Passwort) ins Repo.
   Antwortfeld löst auf; „Lernen“ auf Heute/Wochenplan/Modulseiten öffnet direkt den Focus Mode via `start_focus`),
   `quiz_center.py` (Quiz: Fragen zu gewählten Vorlesungen, Focus Mode Frage für Frage, Mehr Infos, Tutor-Rückfragen),
   Formelsammlung entfernt (keine Seite, Modul-Reiter heißt nur „Notizen“, kein Formel-Schritt; `formulas.py`/
-  `formulas_tab.py` und die Daten bleiben ungenutzt erhalten), `settings_view.py` (mit Reitern
+  `formulas_tab.py` und die Daten bleiben ungenutzt erhalten; Notizen ohne „Fragen fürs Tutorium“, Daten bleiben), `settings_view.py` (mit Reitern
   Export und Backup aus `export_view.py`), Abhak-Knöpfe statt Kästchen (`common.done_button`: grün mit Haken / gestrichelt offen; Ablauf, Vorlesungs- und
   Übungsseite). Übungsseite nur Blatt, Musterlösung, „Rückmeldung zum Blatt“ (Lief gut / Ging so / Lief schlecht,
   Felder good/mid/bad, `units.exercise_feedback`, data["exercise_feedback"][unit_id]; kein Chat-Prompt, keine Fragen
@@ -77,8 +77,10 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   (SICHER / WACKELIG / NICHT VERSTANDEN / NICHT GESCHAFFT / ALS NÄCHSTES ÜBEN) einfügen → data["nacharbeit"][VL],
   Haiku ordnet sie den Minithemen zu (`map_summary` → `mastery.apply_nacharbeit`: sicher → Einstieg MC, sonst SC und
   offen bis zur sicheren richtigen Antwort; `mastery.weak_notes` fließt in neue Fragen und die Korrektur ein).
-- **Check 1 / Check 2** (Reiter „Checks“, Seite „Checks“): `sessions.halves` teilt die Minithemen an einer
-  Themengrenze nahe der Mitte (nach Check 1 bleibt dessen Hälfte fest, `part_ids`); jedes Minithema der Hälfte
+- **Check 1 / Check 2** (Reiter „Checks“, Seite „Checks“): `sessions.halves` verteilt die Minithemen gemischt auf
+  beide Checks (seit 28.11.2026: je Thema abwechselnd, zufällig aber fest je Vorlesung, Unterschied höchstens 1, Check 1
+  bei Gleichstand eins mehr, je Check Folienreihenfolge; nach Check 1 bleibt dessen Auswahl fest, `part_ids`);
+  Fragen eines Checks in zufälliger Reihenfolge; jedes Minithema der Hälfte
   kommt genau einmal dran, alles in ~30 Min (`CHECK_MINUTES`, `sessions._fit_minutes`: zu lang → Freitext → MC → SC).
   Nur wenn Zeit bleibt: zweite Frage für Schwaches aus Nacharbeit/Übung, Übungsstoff, in Check 2 Probleme aus Check 1,
   dann Auffüllen bis 15 (max. 3 je Minithema). Taschenrechner und Notizblatt gelten immer als vorhanden
@@ -96,7 +98,9 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
 - **Fragenspeicher** (`utils/question_bank.py`): Frage höchstens 3-mal, mind. 1 andere Session dazwischen; Klausurstil-
   Profil je Modul (einmal erzeugt) + Regeln im gecachten Systemprompt; nur Folien der benötigten Minithemen; neue
   Fragen in Paketen à 6 (`sessions.generate_batched`, jedes Paket sofort gespeichert, abgeschnitten → halbieren,
-  Fortschrittsbalken), inkl. 3 Tipps, Begründung je Option, Musterlösung. Kein Formel-Tippen:
+  Fortschrittsbalken), inkl. 3 Tipps, Begründung je Option, Musterlösung. Optionen werden nach dem Erzeugen gemischt
+  (`question_bank.shuffle_options`: Single Choice 25 % je Position); Multiple Choice verlangt je Frage zufällig
+  1–5 richtige (`richtige=k` in der Auftragszeile); Prompt verbietet Buchstaben-/Positionsverweise. Kein Formel-Tippen:
   Rechnen nur als Rechenweg-Auswahl oder Kopfrechnen mit glattem Ergebnis (Zahlfeld, exakt); Taschenrechner/Notizblatt
   immer vorhanden. Freitext bewertet Haiku (`grade_text`).
 - **Sessions** (`utils/sessions.py`, Ansicht `views/session_ui.py`, Fokus-Modus): Checks siehe oben (~30 Min je 15
@@ -210,7 +214,9 @@ Karteikarten-/Quiz-System mit allen Lernständen wieder her (Code bleibt; Tests 
   oder Grund fürs Überspringen. „Karten ausdünnen“ (`learning.propose_slim`/`apply_slim`) räumt bestehende Karten
   einer Einheit auf – erst Vorschlag, dann Übernehmen.
 - Karten entstehen nur auf Klick (nach der Nachbereitung), nie automatisch.
-- Modelle: Zusammenfassung Haiku 5.5, Karten Sonnet 5.5, Tutor Sonnet 5.5, Antwort-/Kartenprüfung Haiku 5.5
+- Modelle (Nutzung sparen, Qualität halten): Haiku für Lesen, Zusammenfassen, Klausurstil-Profil, Zuordnen, Bewerten
+  (`summary`/`check`, models_version 4 setzt beide einmalig auf Haiku); Sonnet bleibt für Minithemen, Fragen und
+  Fehlerprüfung gemeldeter Fragen. Zusammenfassung Haiku 5.5, Karten Sonnet 5.5, Tutor Sonnet 5.5, Antwort-/Kartenprüfung Haiku 5.5
   (änderbar in den Einstellungen). Kein Opus (aus `ai.MODELS` entfernt, gespeicherte Opus-Wahl → Sonnet, models_version 3).
 - Quiz: jede Frage hat `hint` (Tipp zum Aufklappen: Zeichen/Notation, Ansatz, ohne Lösung; fehlt er, holt „Tipp
   anzeigen“ ihn per Haiku) und `option_notes` (je Option richtig/falsch + warum, `quiz_center.option_breakdown`).

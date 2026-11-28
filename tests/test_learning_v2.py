@@ -258,7 +258,11 @@ def test_plan_check_and_training_priorities(monkeypatch):
     topics.create_topics(cfg, "invfin", lec, lecs)
     mts = topics.minitopics(data, lec["id"])
     first, second = sessions.halves(data, lec["id"])
-    assert [m["id"] for m in first + second] == [m["id"] for m in mts] and first and second
+    assert sorted(m["id"] for m in first + second) == sorted(m["id"] for m in mts) and first and second
+    assert abs(len(first) - len(second)) <= 1 and not {m["id"] for m in first} & {m["id"] for m in second}
+    order = [m["id"] for m in mts]  # je Check Folienreihenfolge, aber quer gemischt
+    assert [order.index(m["id"]) for m in first] == sorted(order.index(m["id"]) for m in first)
+    assert sessions.halves(data, lec["id"]) == (first, second)  # fest je Vorlesung
     slots = sessions.plan_check(data, lec["id"], {}, 1)
     assert {s["mt"]["id"] for s in slots} == {m["id"] for m in first}  # nur die erste Hälfte, jedes Minithema
     assert len(slots) == min(sessions.CHECK_SIZE, 3 * len(first))
@@ -274,13 +278,14 @@ def test_plan_check_and_training_priorities(monkeypatch):
     monkeypatch.undo()
     # Nach Check 1: Probleme aus dem Check haben im Training Vorrang, dann offene Minithemen
     data["sessions"] = [{"id": "s", "kind": "check", "lecture_id": lec["id"], "finished_at": "2026-11-01T10:00",
-                         "part": 1, "part_ids": [m["id"] for m in first], "items": []}]
+                         "part": 1, "part_ids": [m["id"] for m in mts], "items": []}]
     assert sessions.check_done(data, lec["id"], 1) and not sessions.check_done(data, lec["id"], 2)
+    other = next(m for m in mts if m["id"] != first[0]["id"])
     mastery.record(data, first[0], True, "einfach", source="check", question_id="q", level_asked="sc")
-    mastery.record(data, first[1], False, "schwer", source="check", question_id="q", level_asked="sc")
+    mastery.record(data, other, False, "schwer", source="check", question_id="q", level_asked="sc")
     held = [x for x in lecs if x["date"] <= lec["date"]]
     plan = sessions.plan_training(data, held, 1, {})
-    assert [s["mt"]["id"] for s in plan] == [first[1]["id"]]
+    assert [s["mt"]["id"] for s in plan] == [other["id"]]
     assert not mastery.has_open_nacharbeit(data, first[0])  # sicher richtig beantwortet → erledigt
 
 
@@ -366,10 +371,10 @@ def test_check_session_end_to_end(monkeypatch):
         idx = sessions.current_index(sess)
         q = sessions.question(data, sess["items"][idx]["question_id"])
         if q["type"] == "sc":
-            at.radio[0].set_value(1)
+            at.radio[0].set_value(q["correct_indices"][0])
         elif q["type"] == "mc":
-            at.checkbox(key=f"v2_{session['id']}_{idx}_mc_0").check()
-            at.checkbox(key=f"v2_{session['id']}_{idx}_mc_2").check()
+            for i in q["correct_indices"]:
+                at.checkbox(key=f"v2_{session['id']}_{idx}_mc_{i}").check()
         elif q["type"] == "zahl":
             at.text_input(key=f"v2_{session['id']}_{idx}_num").input("100")
         else:
@@ -881,3 +886,24 @@ def test_mathe_lecture_8_moved_to_23_11(monkeypatch):
     assert "vl:2026-11-23" in data["notes"] and data["documents"][0]["unit"] == "vl:2026-11-23"
     assert todos["mathe:vl:2026-11-23:nachbereitet"] and "mathe:vl:2026-11-23:nacharbeit" in todos["_prio"]
     assert not storage._apply_lecture_moves("mathe", data)  # nur einmal
+
+
+def test_choice_options_shuffled_evenly():
+    """Single Choice: richtige Antwort gleich verteilt auf A–D; Multiple Choice: 1–5 richtige werden verlangt."""
+    from collections import Counter
+
+    from utils import question_bank as qb
+
+    pos = Counter()
+    for _ in range(4000):
+        q = {"type": "sc", "options": ["r", "f1", "f2", "f3"], "option_notes": ["R", "F1", "F2", "F3"],
+             "correct_indices": [0]}
+        qb.shuffle_options(q)
+        i = q["correct_indices"][0]
+        assert q["options"][i] == "r" and q["option_notes"][i] == "R"
+        pos[i] += 1
+    assert all(850 < pos[i] < 1150 for i in range(4))
+    q = {"type": "mc", "options": list("abcde"), "option_notes": list("ABCDE"), "correct_indices": [1, 3]}
+    qb.shuffle_options(q)
+    assert sorted(q["options"][i] for i in q["correct_indices"]) == ["b", "d"]
+    assert "richtige=k" in qb.QUESTIONS_SYSTEM and "auch nur eine oder alle fünf" in qb.QUESTIONS_SYSTEM

@@ -640,6 +640,10 @@ def test_no_opus_models():
     assert ai._settings("tutor")[0] == "claude-sonnet-5-5"
     assert all("opus" not in m for m in storage.load_settings()["ai"]["models"].values())
     assert not any("opus" in m for m in ai.MODELS)
+    settings["ai"] = {"models": {"check": "claude-sonnet-5-5", "summary": "claude-sonnet-5-5",
+                                 "questions": "claude-sonnet-5-5"}, "models_version": 3}
+    assert ai._settings("check")[0] == ai._settings("summary")[0] == "claude-haiku-5-5"
+    assert ai._settings("questions")[0] == "claude-sonnet-5-5"  # Fragen bleiben bei Sonnet (Qualität)
 
 
 @pytest.mark.usefixtures("old_system")

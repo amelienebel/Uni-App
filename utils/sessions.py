@@ -1,8 +1,8 @@
 """Checks und Wochentraining: Fragen auswählen, Session anlegen, Antworten auswerten, Wissensstand buchen.
 
 Ablauf je Vorlesung: 1 Upload · 2 Nacharbeit (Tutor-Chat) · 3 Check 1 · 4 Übungsblatt · 5 Check 2 · 6 Wochentraining.
-Check 1 fragt die erste Hälfte der Minithemen ab, Check 2 die zweite (Hälfte an einer Themengrenze) – zusammen jedes
-Minithema der Vorlesung. Ein Check dauert etwa 30 Minuten: reicht die Zeit nicht, werden Fragetypen vereinfacht;
+Check 1 und Check 2 fragen je etwa die Hälfte der Minithemen ab, quer über die ganze Vorlesung gemischt (`halves`) –
+zusammen jedes Minithema der Vorlesung. Ein Check dauert etwa 30 Minuten: reicht die Zeit nicht, werden Fragetypen vereinfacht;
 bleibt Zeit, bekommt zuerst eine zweite Frage, was beim Nacharbeiten, in der Übung oder in Check 1 gehakt hat.
 Wochentraining (pro Modul, fortlaufend nummeriert): 5/10/15 Fragen, Schwerpunkt auf Problemen aus den Checks, dann
 Übung und Nacharbeit; gut die Hälfte (60 %) bleibt für die Wiederholung älterer Themen (fällig laut Spaced Repetition).
@@ -12,6 +12,7 @@ Taschenrechner und Notizblatt stehen immer zur Verfügung.
 from __future__ import annotations
 
 import copy
+import random
 from datetime import date
 
 from utils import ai, mastery, planner, question_bank as qb, topics, units
@@ -87,27 +88,35 @@ def running_check(data: dict, lec_id: str, part: int | None = None) -> dict | No
 
 
 def halves(data: dict, lec_id: str) -> tuple[list[dict], list[dict]]:
-    """Minithemen einer Vorlesung in zwei Hälften (Folienreihenfolge, Schnitt an einer Themengrenze nahe der Mitte).
-    Ist Check 1 schon gelaufen, bleibt seine Hälfte fest; alles andere (auch neue Minithemen) gehört zu Check 2."""
+    """Minithemen einer Vorlesung auf Check 1 und Check 2 verteilt – gemischt statt erste/zweite Hälfte: die
+    Minithemen jedes Themas werden (zufällig, aber je Vorlesung fest) auf beide Checks aufgeteilt, beide Checks
+    bleiben gleich groß (Unterschied höchstens 1) und zusammen kommt jedes Minithema dran. Innerhalb eines Checks
+    bleibt die Folienreihenfolge. Ist Check 1 schon gelaufen, bleibt seine Auswahl fest; alles andere (auch neue
+    Minithemen) gehört zu Check 2."""
     mts = topics.minitopics(data, lec_id)
     fixed = next((s.get("part_ids") for s in finished(data, "check", lec_id) if _part(s) == 1 and s.get("part_ids")),
                  None)
     if fixed:
         ids = set(fixed)
         return [m for m in mts if m["id"] in ids], [m for m in mts if m["id"] not in ids]
-    n = len(mts)
-    if n <= 1:
+    if len(mts) <= 1:
         return mts, []
-    bounds, prev = [], None
+    rnd = random.Random(lec_id)
+    chosen: tuple[list[int], list[int]] = ([], [])
+    groups: list[list[int]] = []
     for i, m in enumerate(mts):
-        if prev is not None and m["topic_id"] != prev:
-            bounds.append(i)
-        prev = m["topic_id"]
-    cut = (n + 1) // 2
-    near = [b for b in bounds if abs(b - n / 2) <= max(1, n * 0.15)]
-    if near:
-        cut = min(near, key=lambda b: (abs(b - n / 2), b))
-    return mts[:cut], mts[cut:]
+        if groups and mts[groups[-1][0]]["topic_id"] == m["topic_id"]:
+            groups[-1].append(i)
+        else:
+            groups.append([i])
+    for grp in groups:
+        diff = len(chosen[0]) - len(chosen[1])
+        start = 1 if diff > 0 else 0  # bei Gleichstand bekommt Check 1 das Minithema mehr
+        grp = grp[:]
+        rnd.shuffle(grp)
+        for k, i in enumerate(grp):
+            chosen[(start + k) % 2].append(i)
+    return [mts[i] for i in sorted(chosen[0])], [mts[i] for i in sorted(chosen[1])]
 
 
 def part_minitopics(data: dict, lec_id: str, part: int) -> list[dict]:
@@ -404,6 +413,8 @@ def build(cfg: dict, module_id: str, kind: str, slots: list[dict], settings: dic
                       slot["mt"]["lecture_id"], "level": slot["level"], "type": stored["type"], "hints_used": 0})
     if not items:
         raise ai.AIError("Es konnten keine Fragen erstellt werden – bitte noch einmal versuchen.")
+    if kind == "check":  # Themen im Check durchmischt statt stur nach Folien
+        random.shuffle(items)
     session = {"id": new_id(), "kind": kind, "lecture_id": lecture_id, "label": label, "no": session_no,
                "number": next_training_number(data) if kind == "training" else None,
                "settings": settings, "started_at": now_iso(), "finished_at": None, "items": items}

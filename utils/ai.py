@@ -72,11 +72,11 @@ def estimate_cost(task: str, input_tokens: int, output_tokens: int) -> float:
 
 # Welches Modell für welche Aufgabe (änderbar unter Einstellungen → KI-Einstellungen)
 TASKS = {
-    "summary": ("Zusammenfassungen der Folien", "claude-haiku-5-5"),
+    "summary": ("Folien lesen, Zusammenfassungen & Klausurstil", "claude-haiku-5-5"),
     "cards": ("Minithemen, Karteikarten & Definitionen", "claude-sonnet-5-5"),
     "questions": ("Fragen für Checks & Wochentraining", "claude-sonnet-5-5"),
     "tutor": ("Tutor-Chat", "claude-sonnet-5-5"),
-    "check": ("Antworten & Karten prüfen", "claude-haiku-5-5"),
+    "check": ("Antworten bewerten, Nacharbeit & Übungsblatt zuordnen", "claude-haiku-5-5"),
     "default": ("Alles andere (Quiz, Lösungsvergleich, Abtippen, Karten-Nachfragen …)", "claude-sonnet-5-5"),
 }
 
@@ -95,6 +95,11 @@ def _settings(task: str | None = None) -> tuple[str, str]:
             if value not in MODELS:
                 ai_settings["models"][key] = "claude-sonnet-5-5"
         ai_settings["models_version"] = 3
+        save_settings()
+    if ai_settings.get("models_version", 1) < 4:  # Lesen, Zuordnen, Bewerten: Haiku reicht (spart Nutzung)
+        for key in ("summary", "check"):
+            ai_settings["models"][key] = "claude-haiku-5-5"
+        ai_settings["models_version"] = 4
         save_settings()
     models = ai_settings["models"]
     task = task if task in TASKS else "default"
